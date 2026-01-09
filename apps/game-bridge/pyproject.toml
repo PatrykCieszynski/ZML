@@ -1,0 +1,48 @@
+[project]
+name = "zml-game-bridge"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.128.0",
+    "mss>=10.1.0",
+    "numpy>=2.4.0",
+    "opencv-python>=4.11.0.86",
+    "pydantic>=2.12.5",
+    "pydantic-settings>=2.12.0",
+    "pytesseract>=0.3.13",
+    "pywin32>=311",
+    "uvicorn[standard]>=0.40.0",
+]
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.408",
+    "pytest>=9.0.2",
+    "ruff>=0.14.11",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+ignore = ["E501"]  # if you want line-length enforced, remove this
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "tab"
+
+

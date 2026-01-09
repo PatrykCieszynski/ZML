@@ -7,8 +7,18 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "pnpm -r dev",
+    "dev:ui": "pnpm --filter @zml/ui dev",
+    "dev:desktop": "pnpm --filter @zml/desktop dev",
+    "dev:bridge": "cd apps/game-bridge && uv run python -m zml_game_bridge.main",
+    "dev": "concurrently -k \"pnpm dev:ui\" \"pnpm dev:bridge\" \"wait-on http://localhost:5173 && wait-on http-get://127.0.0.1:17171/health && pnpm dev:desktop\"",
     "build": "pnpm -r build",
-    "lint": "pnpm -r lint"
+    "lint": "pnpm -r --if-present lint"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.4",
+    "prettier": "^3.7.4",
+    "wait-on": "^9.0.3"
   }
 }
