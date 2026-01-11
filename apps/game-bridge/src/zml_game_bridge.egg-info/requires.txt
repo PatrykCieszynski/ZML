@@ -1,9 +1,0 @@
-fastapi>=0.128.0
-mss>=10.1.0
-numpy>=2.4.0
-opencv-python>=4.11.0.86
-pydantic>=2.12.5
-pydantic-settings>=2.12.0
-pytesseract>=0.3.13
-pywin32>=311
-uvicorn[standard]>=0.40.0
