@@ -1,23 +1,38 @@
 import os
+import threading
 from pathlib import Path
+from threading import Thread
 
-from zml_game_bridge.events.envelope import EventEnvelope
+from zml_game_bridge.app.db_writer import DbWriter
+from zml_game_bridge.app.event_gateway import EventGateway
+from zml_game_bridge.events.bus_in_memory import InMemoryEventBus
 from zml_game_bridge.inputs.chat.runner import start_chat_input
-from zml_game_bridge.storage.event_store import EventStore
 
 # TODO get path from config
 local_app_data = os.getenv("LOCALAPPDATA") or str(Path.home())
 db_path = Path(local_app_data) / "zabu-mining-log" / "db" / "events.sqlite3"
 
-def open_event_store() -> EventStore:
-    store = EventStore(db_path)
-    store.open()
-    return store
-
-def sink_print(envelope: EventEnvelope) -> None:
-    print(envelope)
 
 if __name__ == "__main__":
-    event_store = open_event_store()
     p = Path("../testing/chat.log")
-    start_chat_input(p, sink=sink_print, db_store=event_store, start_at_end=True)
+    memory_bus = InMemoryEventBus()
+    event_gateway = EventGateway()
+    db_writer = DbWriter(db_path=db_path, gateway=event_gateway, bus=memory_bus)
+
+    stop_event = threading.Event()
+    t_db_writer = Thread(target=db_writer.run, kwargs={"stop_event": stop_event})
+    t_chat = Thread(target=start_chat_input, kwargs={"path": p, "event_sink": event_gateway.emit, "stop_event": stop_event, "start_at_end": True})
+
+    t_db_writer.start()
+    t_chat.start()
+    sub = memory_bus.subscribe(lambda env: print(f"New event stored: {env}"))
+    try:
+        while t_chat.is_alive() or t_db_writer.is_alive():
+            t_chat.join(timeout=0.2)
+            t_db_writer.join(timeout=0.2)
+    except KeyboardInterrupt:
+        stop_event.set()
+        t_chat.join()
+        t_db_writer.join()
+    finally:
+        stop_event.set()
