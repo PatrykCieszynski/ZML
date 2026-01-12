@@ -4,11 +4,12 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 
+from zml_game_bridge.events.base import EventBase
 from zml_game_bridge.inputs.chat.model import ChannelType
 
 
 @dataclass(frozen=True, slots=True)
-class ChatEventBase:
+class ChatEventBase(EventBase):
     event_dt: datetime
     channel_type: ChannelType
     channel_token: str
