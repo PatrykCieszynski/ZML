@@ -213,5 +213,5 @@ if __name__ == "__main__":
 	# Example: append ~200 mixed lines with small delays for tailing tests
 	generate_chat_log(
 		path="chat.log",
-		cfg=GenConfig(total_lines=200, sleep_ms_min=20, sleep_ms_max=80, seed=42),
+		cfg=GenConfig(total_lines=25, sleep_ms_min=100, sleep_ms_max=200, seed=42),
 	)
