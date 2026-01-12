@@ -1,9 +1,0 @@
-pyproject.toml
-src/zml_game_bridge/__init__.py
-src/zml_game_bridge/app.py
-src/zml_game_bridge/main.py
-src/zml_game_bridge.egg-info/PKG-INFO
-src/zml_game_bridge.egg-info/SOURCES.txt
-src/zml_game_bridge.egg-info/dependency_links.txt
-src/zml_game_bridge.egg-info/requires.txt
-src/zml_game_bridge.egg-info/top_level.txt

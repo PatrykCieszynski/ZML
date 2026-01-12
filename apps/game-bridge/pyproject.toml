@@ -20,6 +20,7 @@ dependencies = [
 dev = [
     "pyright>=1.1.408",
     "pytest>=9.0.2",
+    "pytest-timeout>=2.4.0",
     "ruff>=0.14.11",
 ]
 
@@ -43,6 +44,9 @@ ignore = ["E501"]  # if you want line-length enforced, remove this
 
 [tool.ruff.format]
 quote-style = "double"
-indent-style = "tab"
+indent-style = "space"
 
-
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+timeout = 3
