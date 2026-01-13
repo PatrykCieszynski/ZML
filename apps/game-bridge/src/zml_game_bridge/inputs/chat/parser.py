@@ -25,28 +25,27 @@ def classify_channel(channel_token: str) -> ChannelType:
     return ChannelType.UNKNOWN
 
 
-def parse_chat_line(
-    raw_line: str
-) -> ChatLine | None:
+def parse_chat_line(raw_line: str) -> ChatLine | None:
     raw = raw_line.rstrip("\r\n")
-    m = _HEADER_RE.match(raw)
+    m = _HEADER_RE.fullmatch(raw)
     if not m:
-        # MVP: skip non-header lines (e.g. tower continuation)
         return None
 
     ts_str = m.group("ts")
-    channel_token = m.group("channel")
-    speaker = m.group("speaker")
-    msg = m.group("msg")
+    channel_token = m.group("channel").strip()
+    speaker = m.group("speaker").strip()
+    msg = m.group("msg").strip()
 
-    # NOTE: dt is "EU time" (naive). We treat it as a label, not a timezone-aware timestamp.
-    event_dt = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
+    try:
+        event_dt = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return None
 
     return ChatLine(
         event_dt=event_dt,
         channel_type=classify_channel(channel_token),
         channel_token=channel_token,
         speaker=speaker,
-        message=msg.strip(),
+        message=msg,
         raw=raw,
     )

@@ -13,6 +13,10 @@ class EventGateway:
 
     def emit(self, event: EventBase) -> None:
         """Blocking by default (backpressure)."""
+        # TODO: Backpressure policy:
+        # - block indefinitely (current)
+        # - block with timeout + drop
+        # - non-blocking drop (put_nowait)
         self._q.put(event)
 
     def take(self, *, timeout_s: float) -> EventBase | None:

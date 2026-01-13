@@ -8,3 +8,4 @@ class EventEnvelope:
     event_dt: str | None
     event_type: str
     payload_json: str
+    schema_version: int = 1

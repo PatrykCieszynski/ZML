@@ -27,7 +27,11 @@ class DbWriter:
                 if event is None:
                     continue
 
-                # TODO batch commits
+                # TODO: Decide policy on DB failure:
+                # - retry? (how many times)
+                # - drop event? (metrics)
+                # - stop whole runtime? (fail-fast)
+                # Also: log exceptions with enough context (event_type).
                 event_envelope = event_store.append(event)
                 self.bus.publish(event_envelope)
         finally:
