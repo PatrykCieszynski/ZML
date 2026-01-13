@@ -1,9 +1,12 @@
+import asyncio
 import json
 import os
 from collections.abc import Iterator
 from pathlib import Path
+from typing import AsyncIterator
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
+from starlette.responses import StreamingResponse
 
 from zml_game_bridge.api.dto import EventEnvelopeDto
 from zml_game_bridge.events.envelope import EventEnvelope
@@ -57,3 +60,51 @@ def after(
 ) -> list[EventEnvelopeDto]:
     rows = db.read_after(after_event_id, limit=limit)
     return [_to_dto(r) for r in rows]
+
+
+@router.get("/stream")
+async def events_stream(request: Request) -> StreamingResponse:
+    runtime = request.app.state.runtime
+    #TODO property/getter
+    hub = runtime._sse_hub
+
+    if hub is None:
+        async def empty() -> AsyncIterator[str]:
+            yield "event: error\ndata: {\"error\":\"sse hub not configured\"}\n\n"
+        return StreamingResponse(empty(), media_type="text/event-stream")
+
+    client = hub.register()
+
+    async def gen() -> AsyncIterator[str]:
+        try:
+            yield ": connected\n\n"
+
+            while True:
+                if await request.is_disconnected():
+                    break
+
+                try:
+                    env: EventEnvelope = await asyncio.wait_for(client.queue.get(), timeout=15.0)
+                except asyncio.TimeoutError:
+                    yield ": keep-alive\n\n"
+                    continue
+
+                dto = _to_dto(env)
+                data = dto.model_dump_json(exclude={"event_id", "event_type"})  # pydantic v2
+
+                # SSE format:
+                # id: <...>
+                # event: <...>
+                # data: <json>
+                yield f"id: {dto.event_id}\n"
+                yield f"event: {dto.event_type}\n"
+                yield f"data: {data}\n\n"
+        finally:
+            hub.unregister(client.client_id)
+
+    headers = {
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",  # nginx: disable buffering
+    }
+    return StreamingResponse(gen(), media_type="text/event-stream", headers=headers)

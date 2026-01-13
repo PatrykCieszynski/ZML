@@ -82,10 +82,10 @@ def _documents_via_registry() -> Optional[Path]:
 class Settings:
     host: str = "127.0.0.1"
     port: int = 17171
-    reload: bool = True
+    reload: bool = False
 
     # Paths
     db_path: Path = Path(os.getenv("LOCALAPPDATA") or os.getenv("APPDATA") or str(Path.home())) / "zabu-mining-log" / "db" / "zabu-mining-log.sqlite3"
-    chat_log_path: Path | None = find_entropia_chat_log()
-
+    # chat_log_path: Path | None = find_entropia_chat_log()
+    chat_log_path: Path = Path("testing/chat.log")
 

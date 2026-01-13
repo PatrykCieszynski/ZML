@@ -42,7 +42,7 @@ class EnhancerBroke(ChatEventBase):
 
 
 @dataclass(frozen=True, slots=True)
-class PositionPing(ChatEventBase):
+class PlayerPosWaypoint(ChatEventBase):
     planet_name: str
     x: int
     y: int

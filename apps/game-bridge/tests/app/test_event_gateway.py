@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from zml_game_bridge.app.event_gateway import EventGateway
+from zml_game_bridge.app.event_channel import EventChannel
 
 
 @dataclass(frozen=True, slots=True)
@@ -11,7 +11,7 @@ class DummyEvent:
 
 
 def test_gateway_emit_then_take_returns_same_event() -> None:
-    gw = EventGateway(maxsize=10)
+    gw = EventChannel(maxsize=10)
     ev = DummyEvent(x=123)
 
     gw.emit(ev)  # type: ignore[arg-type]
@@ -21,7 +21,7 @@ def test_gateway_emit_then_take_returns_same_event() -> None:
 
 
 def test_gateway_take_timeout_returns_none() -> None:
-    gw = EventGateway(maxsize=10)
+    gw = EventChannel(maxsize=10)
 
     got = gw.take(timeout_s=0.01)
     assert got is None
