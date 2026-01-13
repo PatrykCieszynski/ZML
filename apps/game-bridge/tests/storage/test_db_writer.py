@@ -5,7 +5,7 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-import zml_game_bridge.app.db_writer as db_writer_mod
+import zml_game_bridge.storage.db_writer as db_writer_mod
 from zml_game_bridge.app.event_gateway import EventGateway
 from zml_game_bridge.events.bus_in_memory import InMemoryEventBus
 from zml_game_bridge.events.envelope import EventEnvelope

@@ -14,6 +14,11 @@ def start_chat_input(
     poll_interval_s: float = 0.05,
 ) -> None:
     # TODO: Decide whether to swallow interpreter exceptions or fail-fast.
+    # TODO translate deeds in ItemReceived lines to resource type for multi resource mining (It seems the order is preserved)
+    # 2026-01-12 15:18:40 [System] [] You received Mineral Resource Deed x (1) Value: 0.0000 PED
+    # 2026-01-12 15:18:40 [System] [] You received Energy Matter Resource Deed x (1) Value: 0.0000 PED
+    # 2026-01-12 15:18:40 [System] [] You have claimed a resource! (Zorn Star Ore)
+    # 2026-01-12 15:18:40 [System] [] You have claimed a resource! (Blue Crystal)
     for line in tail_lines(path, start_at_end=start_at_end, poll_interval_s=poll_interval_s, stop_event=stop_event):
         chat_line = parse_chat_line(line)
         if chat_line is None:
