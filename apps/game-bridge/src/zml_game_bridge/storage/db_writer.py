@@ -3,17 +3,17 @@ from __future__ import annotations
 import threading
 from pathlib import Path
 
-from zml_game_bridge.app.event_gateway import EventGateway
-from zml_game_bridge.events.bus import EventBus
+from zml_game_bridge.app.event_channel import EventChannel
+from zml_game_bridge.events.bus import PersistedEventBus
 from zml_game_bridge.storage.event_store import EventStore
 
 
 class DbWriter:
     db_path: Path
-    gateway: EventGateway
-    bus: EventBus
+    gateway: EventChannel
+    bus: PersistedEventBus
 
-    def __init__(self, *, db_path: Path, gateway: EventGateway, bus: EventBus) -> None:
+    def __init__(self, *, db_path: Path, gateway: EventChannel, bus: PersistedEventBus) -> None:
         self.db_path = db_path
         self.gateway = gateway
         self.bus = bus

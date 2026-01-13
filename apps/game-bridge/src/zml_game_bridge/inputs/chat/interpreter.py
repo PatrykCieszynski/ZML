@@ -11,7 +11,7 @@ from .events import (
     ChatEventBase,
     EnhancerBroke,
     ItemReceived,
-    PositionPing,
+    PlayerPosWaypoint,
     ResourceClaimed,
     ResourceDepleted,
     SkillGained,
@@ -146,7 +146,7 @@ def _try_match_resource_depleted(line: ChatLine) -> ResourceDepleted | None:
         raw=line.raw,
     )
 
-def _try_match_position_ping(line: ChatLine) -> PositionPing | None:
+def _try_match_position_ping(line: ChatLine) -> PlayerPosWaypoint | None:
     matches = RE_POSITION_PING.match(line.message)
     if matches is None:
         return None
@@ -163,7 +163,7 @@ def _try_match_position_ping(line: ChatLine) -> PositionPing | None:
     if x is None or y is None or z is None:
         return None
 
-    return PositionPing(
+    return PlayerPosWaypoint(
         event_dt=line.event_dt,
         channel_type=line.channel_type,
         channel_token=line.channel_token,

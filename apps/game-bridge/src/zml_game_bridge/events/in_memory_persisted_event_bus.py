@@ -1,10 +1,10 @@
 from threading import Lock
 
-from zml_game_bridge.events.bus import EventBus, EventHandler, Subscription
+from zml_game_bridge.events.bus import PersistedEventBus, EventHandler, Subscription
 from zml_game_bridge.events.envelope import EventEnvelope
 
 
-class InMemoryEventBus(EventBus):
+class InMemoryPersistedEventBus(PersistedEventBus):
     def __init__(self) -> None:
         self._handlers: dict[int, EventHandler] = {}
         self._next_id: int = 0

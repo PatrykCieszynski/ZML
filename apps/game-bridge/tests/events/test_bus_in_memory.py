@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from zml_game_bridge.events.bus_in_memory import InMemoryEventBus
+from zml_game_bridge.events.in_memory_persisted_event_bus import InMemoryPersistedEventBus
 from zml_game_bridge.events.envelope import EventEnvelope
 
 
@@ -15,7 +15,7 @@ def _env(i: int = 1) -> EventEnvelope:
 
 
 def test_bus_publish_delivers_to_subscriber() -> None:
-    bus = InMemoryEventBus()
+    bus = InMemoryPersistedEventBus()
     out: list[EventEnvelope] = []
 
     sub = bus.subscribe(lambda e: out.append(e))
@@ -26,7 +26,7 @@ def test_bus_publish_delivers_to_subscriber() -> None:
 
 
 def test_bus_unsubscribe_stops_delivery() -> None:
-    bus = InMemoryEventBus()
+    bus = InMemoryPersistedEventBus()
     out: list[EventEnvelope] = []
 
     sub = bus.subscribe(lambda e: out.append(e))
@@ -37,7 +37,7 @@ def test_bus_unsubscribe_stops_delivery() -> None:
 
 
 def test_bus_handler_exception_does_not_break_others() -> None:
-    bus = InMemoryEventBus()
+    bus = InMemoryPersistedEventBus()
     out: list[EventEnvelope] = []
 
     def bad(_e: EventEnvelope) -> None:

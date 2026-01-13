@@ -5,7 +5,7 @@ from queue import Queue, Empty
 from zml_game_bridge.events.base import EventBase
 
 
-class EventGateway:
+class EventChannel:
     _q: Queue[EventBase]
 
     def __init__(self, *, maxsize: int = 10_000) -> None:

@@ -10,14 +10,14 @@ EventHandler = Callable[[EventEnvelope], None]
 
 @dataclass(slots=True)
 class Subscription:
-    """A handle that allows unsubscribing from an EventBus."""
+    """A handle that allows unsubscribing from an PersistedEventBus."""
     unsubscribe: Callable[[], None]
 
     def close(self) -> None:
         self.unsubscribe()
 
 
-class EventBus(Protocol):
+class PersistedEventBus(Protocol):
     """Dispatches persisted EventEnvelope objects to subscribers."""
 
     def publish(self, envelope: EventEnvelope) -> None:

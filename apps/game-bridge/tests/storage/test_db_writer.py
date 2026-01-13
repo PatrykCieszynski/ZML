@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from typing import Any
 
 import zml_game_bridge.storage.db_writer as db_writer_mod
-from zml_game_bridge.app.event_gateway import EventGateway
-from zml_game_bridge.events.bus_in_memory import InMemoryEventBus
+from zml_game_bridge.app.event_channel import EventChannel
+from zml_game_bridge.events.in_memory_persisted_event_bus import InMemoryPersistedEventBus
 from zml_game_bridge.events.envelope import EventEnvelope
 
 
@@ -51,8 +51,8 @@ def test_db_writer_persists_and_publishes(monkeypatch) -> None:
     # Patch EventStore used by DbWriter
     monkeypatch.setattr(db_writer_mod, "EventStore", FakeEventStore)
 
-    bus = InMemoryEventBus()
-    gw = EventGateway(maxsize=10)
+    bus = InMemoryPersistedEventBus()
+    gw = EventChannel(maxsize=10)
     writer = db_writer_mod.DbWriter(db_path=":memory:", gateway=gw, bus=bus)  # db_path ignored by fake
 
     out: list[EventEnvelope] = []
@@ -88,8 +88,8 @@ def test_db_writer_persists_and_publishes(monkeypatch) -> None:
 def test_db_writer_no_event_no_publish(monkeypatch) -> None:
     monkeypatch.setattr(db_writer_mod, "EventStore", FakeEventStore)
 
-    bus = InMemoryEventBus()
-    gw = EventGateway(maxsize=10)
+    bus = InMemoryPersistedEventBus()
+    gw = EventChannel(maxsize=10)
     writer = db_writer_mod.DbWriter(db_path=":memory:", gateway=gw, bus=bus)
 
     out: list[EventEnvelope] = []

@@ -9,7 +9,7 @@ from zml_game_bridge.inputs.chat import interpreter as chat_interpreter
 from zml_game_bridge.inputs.chat.events import (
     EnhancerBroke,
     ItemReceived,
-    PositionPing,
+    PlayerPosWaypoint,
     ResourceClaimed,
     ResourceDepleted,
     SkillGained,
@@ -66,7 +66,7 @@ def test_interpret_system_resource_depleted() -> None:
 def test_interpret_system_position_ping() -> None:
     line = _mk_line("[Planet Cyrene, 138260, 76275, 110, Waypoint]")
     ev = chat_interpreter.interpret_chat_line(line)
-    assert isinstance(ev, PositionPing)
+    assert isinstance(ev, PlayerPosWaypoint)
     assert ev.planet_name == "Planet Cyrene"
     assert (ev.x, ev.y, ev.z) == (138260, 76275, 110)
 
@@ -74,7 +74,7 @@ def test_interpret_system_position_ping() -> None:
 def test_interpret_system_position_ping_allows_negative_coords() -> None:
     line = _mk_line("[Calypso, -1, 0, -999, Waypoint]")
     ev = chat_interpreter.interpret_chat_line(line)
-    assert isinstance(ev, PositionPing)
+    assert isinstance(ev, PlayerPosWaypoint)
     assert (ev.x, ev.y, ev.z) == (-1, 0, -999)
 
 
