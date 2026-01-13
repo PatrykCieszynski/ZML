@@ -12,6 +12,7 @@ from typing import Any
 
 from zml_game_bridge.events.base import EventBase
 from zml_game_bridge.events.envelope import EventEnvelope
+from zml_game_bridge.storage.db_open import open_sqlite
 
 _SCHEMA_DDL = """
 CREATE TABLE IF NOT EXISTS events (
@@ -27,7 +28,6 @@ CREATE TABLE IF NOT EXISTS events (
 
 CREATE INDEX IF NOT EXISTS idx_events_created_ts_ms ON events(created_ts_ms);
 CREATE INDEX IF NOT EXISTS idx_events_event_type ON events(event_type);
-CREATE INDEX IF NOT EXISTS idx_events_event_dt ON events(event_dt);
 """
 
 
@@ -43,7 +43,7 @@ class EventStore:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Open sqlite connection
-        self._conn = sqlite3.connect(self._db_path)
+        self._conn = open_sqlite(db_path=self._db_path)
 
         # Recommended pragmas (optional): WAL, foreign_keys, busy_timeout
         self._conn.execute("PRAGMA journal_mode=WAL")
