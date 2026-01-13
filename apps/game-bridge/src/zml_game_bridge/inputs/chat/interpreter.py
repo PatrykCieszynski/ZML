@@ -4,6 +4,8 @@ import re
 from collections.abc import Callable
 from decimal import Decimal, InvalidOperation
 
+from zml_game_bridge.common.types import Mpec
+
 from .model import ChatLine, ChannelType
 from .events import (
     ChatEventBase,
@@ -102,7 +104,7 @@ def _try_match_item_received(line: ChatLine) -> ItemReceived | None:
     value_ped_str = matches.group("value_ped")
 
     qty = _parse_int(qty_str)
-    value_mpec = _parse_mpec(value_ped_str)
+    value_mpec = _parse_ped_to_mpec(value_ped_str)
 
     if qty is None or value_mpec is None:
         return None
@@ -207,16 +209,16 @@ def _parse_int(s: str) -> int | None:
     except (ValueError, TypeError):
         return None
 
-def _parse_mpec(s: str) -> int | None:
+def _parse_ped_to_mpec(s: str) -> Mpec | None:
     ped = _parse_decimal(s)
     if ped is None:
         return None
 
-    mpec = ped * 1000
+    mpec = ped * Decimal("100000")
     if mpec != mpec.to_integral_value():
         return None  # refuse lossy conversion
 
-    return int(mpec)
+    return Mpec(int(mpec))
 
 
 _SYSTEM_MATCHERS: tuple[Callable[[ChatLine], ChatEventBase | None], ...] = (

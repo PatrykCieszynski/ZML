@@ -75,6 +75,7 @@ class EventStore:
         Policy:
         - If DB write fails -> raise (caller decides to drop/panic).
         """
+        # TODO batch commits
         assert self._conn is not None, "EventStore not opened"
 
         event_type = type(event).__name__

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 
+from zml_game_bridge.common.types import Mpec
 from zml_game_bridge.events.base import EventBase
 from zml_game_bridge.inputs.chat.model import ChannelType
 
@@ -25,7 +26,7 @@ class ResourceClaimed(ChatEventBase):
 class ItemReceived(ChatEventBase):
     item_name: str
     qty: int
-    value_mpec: int
+    value_mpec: Mpec
 
 
 @dataclass(frozen=True, slots=True)
