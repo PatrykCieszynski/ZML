@@ -8,7 +8,7 @@ from zml_game_bridge.events.bus import PersistedEventBus
 from zml_game_bridge.storage.event_store import EventStore
 
 
-class DbWriter:
+class EventPersister:
     db_path: Path
     gateway: EventChannel
     bus: PersistedEventBus

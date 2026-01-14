@@ -10,7 +10,7 @@ from starlette.responses import StreamingResponse
 
 from zml_game_bridge.api.dto import EventEnvelopeDto
 from zml_game_bridge.events.envelope import EventEnvelope
-from zml_game_bridge.storage.db_reader import DbReader
+from zml_game_bridge.storage.event_reader import EventReader
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -19,19 +19,19 @@ local_app_data = os.getenv("LOCALAPPDATA") or str(Path.home())
 db_path = Path(local_app_data) / "zabu-mining-log" / "db" / "zabu-mining-log.sqlite3"
 
 
-def get_db_reader() -> Iterator[DbReader]:
+def get_event_reader() -> Iterator[EventReader]:
     """
     FastAPI dependency:
     - opens DB
-    - yields DbReader
+    - yields EventReader
     - always closes
     """
-    db_reader = DbReader(db_path=db_path)
-    db_reader.open()
+    event_reader = EventReader(db_path=db_path)
+    event_reader.open()
     try:
-        yield db_reader
+        yield event_reader
     finally:
-        db_reader.close()
+        event_reader.close()
 
 def _to_dto(envelope: EventEnvelope) -> EventEnvelopeDto:
     return EventEnvelopeDto(
@@ -46,7 +46,7 @@ def _to_dto(envelope: EventEnvelope) -> EventEnvelopeDto:
 @router.get("/latest", response_model=list[EventEnvelopeDto])
 def latest(
     limit: int = Query(default=200, ge=1, le=2000),
-    db: DbReader = Depends(get_db_reader),
+    db: EventReader = Depends(get_event_reader),
 ) -> list[EventEnvelopeDto]:
     rows = db.read_latest(limit=limit)
     return [_to_dto(r) for r in rows]
@@ -56,7 +56,7 @@ def latest(
 def after(
     after_event_id: int,
     limit: int = Query(default=200, ge=1, le=2000),
-    db: DbReader = Depends(get_db_reader),
+    db: EventReader = Depends(get_event_reader),
 ) -> list[EventEnvelopeDto]:
     rows = db.read_after(after_event_id, limit=limit)
     return [_to_dto(r) for r in rows]

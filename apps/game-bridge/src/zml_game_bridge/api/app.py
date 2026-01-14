@@ -11,6 +11,7 @@ from zml_game_bridge.app.runtime import AppRuntime
 from zml_game_bridge.settings import Settings
 
 
+
 def create_app() -> FastAPI:
     settings = Settings()
     print(f"Starting ZML Game Bridge with settings: {settings.chat_log_path}")

@@ -5,7 +5,7 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-import zml_game_bridge.storage.db_writer as db_writer_mod
+import zml_game_bridge.app.event_persister as event_persister_mod
 from zml_game_bridge.app.event_channel import EventChannel
 from zml_game_bridge.events.in_memory_persisted_event_bus import InMemoryPersistedEventBus
 from zml_game_bridge.events.envelope import EventEnvelope
@@ -48,12 +48,12 @@ class FakeEventStore:
 
 
 def test_db_writer_persists_and_publishes(monkeypatch) -> None:
-    # Patch EventStore used by DbWriter
-    monkeypatch.setattr(db_writer_mod, "EventStore", FakeEventStore)
+    # Patch EventStore used by EventPersister
+    monkeypatch.setattr(event_persister_mod, "EventStore", FakeEventStore)
 
     bus = InMemoryPersistedEventBus()
     gw = EventChannel(maxsize=10)
-    writer = db_writer_mod.DbWriter(db_path=":memory:", gateway=gw, bus=bus)  # db_path ignored by fake
+    writer = event_persister_mod.EventPersister(db_path=":memory:", gateway=gw, bus=bus)  # db_path ignored by fake
 
     out: list[EventEnvelope] = []
     got = threading.Event()
@@ -67,7 +67,7 @@ def test_db_writer_persists_and_publishes(monkeypatch) -> None:
     # Emit one event
     gw.emit(DummyEvent(42))  # type: ignore[arg-type]
 
-    assert got.wait(timeout=1.0), "DbWriter didn't publish anything"
+    assert got.wait(timeout=1.0), "EventPersister didn't publish anything"
     stop.set()
     t.join(timeout=1.0)
 
@@ -86,11 +86,11 @@ def test_db_writer_persists_and_publishes(monkeypatch) -> None:
 
 
 def test_db_writer_no_event_no_publish(monkeypatch) -> None:
-    monkeypatch.setattr(db_writer_mod, "EventStore", FakeEventStore)
+    monkeypatch.setattr(event_persister_mod, "EventStore", FakeEventStore)
 
     bus = InMemoryPersistedEventBus()
     gw = EventChannel(maxsize=10)
-    writer = db_writer_mod.DbWriter(db_path=":memory:", gateway=gw, bus=bus)
+    writer = event_persister_mod.EventPersister(db_path=":memory:", gateway=gw, bus=bus)
 
     out: list[EventEnvelope] = []
     sub = bus.subscribe(lambda env: out.append(env))
