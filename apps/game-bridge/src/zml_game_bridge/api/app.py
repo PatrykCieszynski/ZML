@@ -6,6 +6,7 @@ from fastapi import FastAPI
 
 from zml_game_bridge.api.routes import register_routes
 from zml_game_bridge.api.sse_hub import SseHub
+from zml_game_bridge.api.ws_hub import OcrPositionHub
 from zml_game_bridge.app.runtime import AppRuntime
 from zml_game_bridge.settings import Settings
 
@@ -20,7 +21,10 @@ def create_app() -> FastAPI:
 
         loop = asyncio.get_running_loop()
         sse_hub = SseHub(loop)
+        position_hub = OcrPositionHub(loop)
+
         runtime.attach_sse_hub(sse_hub)
+        runtime.attach_position_hub(position_hub)
 
         app.state.runtime = runtime
         runtime.start()

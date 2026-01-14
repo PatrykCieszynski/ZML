@@ -5,7 +5,9 @@ from threading import Thread
 from pathlib import Path
 
 from zml_game_bridge.api.sse_hub import SseHub
+from zml_game_bridge.api.ws_hub import OcrPositionHub
 from zml_game_bridge.app.event_channel import EventChannel
+from zml_game_bridge.inputs.ocr.runner import start_ocr_input
 from zml_game_bridge.storage.db_writer import DbWriter
 from zml_game_bridge.events.in_memory_persisted_event_bus import (
     InMemoryPersistedEventBus,
@@ -24,19 +26,31 @@ class AppRuntime:
 
         self._t_db: Thread | None = None
         self._t_chat: Thread | None = None
+        self._t_ocr: Thread | None = None
 
         self._sub_print = None
         self._sub_sse = None
 
         self._sse_hub: SseHub | None = None
+        self._position_hub: OcrPositionHub | None = None
 
+    @property
+    def position_hub(self) -> OcrPositionHub:
+        if self._position_hub is None:
+            raise RuntimeError("Position hub not attached")
+        return self._position_hub
 
     def attach_sse_hub(self, hub: SseHub) -> None:
         self._sse_hub = hub
 
+    def attach_position_hub(self, hub: OcrPositionHub) -> None:
+        self._position_hub = hub
+
 
     def start(self) -> None:
         # TODO: idempotency guard (if already started -> return)
+
+        hub = self.position_hub
 
         self._t_db = Thread(
             target=self._db_writer.run,
@@ -60,6 +74,17 @@ class AppRuntime:
         )
         self._t_chat.start()
 
+
+        self._t_ocr = Thread(
+            target=start_ocr_input,
+            kwargs={
+                "position_sink": hub.publish_threadsafe,
+                "stop_event": self._stop_event,
+            },
+            daemon=True,
+        )
+        self._t_ocr.start()
+
         self._sub_print = self._bus.subscribe(lambda env: print(f"New event stored: {env}"))
 
         # SSE fan-out (if attached)
@@ -81,3 +106,5 @@ class AppRuntime:
             self._t_chat.join(timeout=2.0)
         if self._t_db is not None:
             self._t_db.join(timeout=2.0)
+        if self._t_ocr is not None:
+            self._t_ocr.join(timeout=2.0)

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 
+from zml_game_bridge.common.models import WorldPos
 from zml_game_bridge.common.types import Mpec
 from zml_game_bridge.events.base import EventBase
 from zml_game_bridge.inputs.chat.model import ChannelType
@@ -43,10 +44,7 @@ class EnhancerBroke(ChatEventBase):
 
 @dataclass(frozen=True, slots=True)
 class PlayerPosWaypoint(ChatEventBase):
-    planet_name: str
-    x: int
-    y: int
-    z: int
+    position: WorldPos
 
 
 @dataclass(frozen=True, slots=True)
