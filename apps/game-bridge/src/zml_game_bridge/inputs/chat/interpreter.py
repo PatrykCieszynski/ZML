@@ -16,6 +16,7 @@ from .events import (
     ResourceDepleted,
     SkillGained,
 )
+from ...common.models import WorldPos
 
 RE_ENHANCER_BROKE = re.compile(
     r"^Your enhancer (?P<enhancer_name>.+?) on your (?P<item_name>.+?) broke\."
@@ -168,10 +169,12 @@ def _try_match_position_ping(line: ChatLine) -> PlayerPosWaypoint | None:
         channel_type=line.channel_type,
         channel_token=line.channel_token,
         raw=line.raw,
-        planet_name=planet_name,
-        x=x,
-        y=y,
-        z=z
+        position=WorldPos(
+            planet_name=planet_name,
+            x=x,
+            y=y,
+            z=z
+        )
     )
 
 def _try_match_skill_gained(line: ChatLine) -> SkillGained | None:
