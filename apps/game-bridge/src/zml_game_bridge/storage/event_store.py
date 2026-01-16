@@ -7,27 +7,16 @@ from dataclasses import asdict, is_dataclass
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
-from pathlib import Path
 from typing import Any
 
 from zml_game_bridge.events.base import EventBase
 from zml_game_bridge.events.envelope import EventEnvelope
-from zml_game_bridge.storage.sqlite import open_sqlite
 
 
 class EventStore:
-    def __init__(self, db_path: Path) -> None:
-        self._db_path = db_path
-        self._conn: sqlite3.Connection | None = None
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self._conn: sqlite3.Connection | None = conn
 
-    def open(self) -> None:
-        self._conn = open_sqlite(self._db_path)
-
-    def close(self) -> None:
-        conn = self._conn
-        if conn is not None:
-            conn.close()
-            self._conn = None
 
     def append(self, event: EventBase) -> EventEnvelope:
         """
