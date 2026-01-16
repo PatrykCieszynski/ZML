@@ -4,10 +4,10 @@ import sqlite3
 from pathlib import Path
 
 from zml_game_bridge.events.envelope import EventEnvelope
-from zml_game_bridge.storage.db_open import open_sqlite
+from zml_game_bridge.storage.sqlite import open_sqlite
 
 
-class DbReader:
+class EventReader:
     def __init__(self, db_path: Path) -> None:
         self._db_path = db_path
         self._conn: sqlite3.Connection | None = None
@@ -21,7 +21,7 @@ class DbReader:
             self._conn = None
 
     def read_after(self, after_event_id: int, *, limit: int = 200) -> list[EventEnvelope]:
-        assert self._conn is not None, "DbReader not opened"
+        assert self._conn is not None, "EventReader not opened"
         cur = self._conn.execute(
             """
             SELECT event_id, created_ts_ms, event_dt, event_type, payload_json
@@ -45,7 +45,7 @@ class DbReader:
         ]
 
     def read_latest(self, *, limit: int = 200) -> list[EventEnvelope]:
-        assert self._conn is not None, "DbReader not opened"
+        assert self._conn is not None, "EventReader not opened"
         cur = self._conn.execute(
             """
             SELECT * FROM (

@@ -34,7 +34,7 @@ chat.log
         EventStore.append(EventBase) -> EventEnvelope
         PersistedEventBus.publish(EventEnvelope)
   -> API:
-        REST: DbReader queries SQLite
+        REST: EventReader queries SQLite
         SSE: SseHub subscribes to PersistedEventBus
 ```
 

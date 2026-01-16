@@ -7,12 +7,13 @@ from pathlib import Path
 from zml_game_bridge.api.sse_hub import SseHub
 from zml_game_bridge.api.ws_hub import OcrPositionHub
 from zml_game_bridge.app.event_channel import EventChannel
+from zml_game_bridge.app.db_writer_worker import DbWriterWorker
 from zml_game_bridge.inputs.ocr.runner import start_ocr_input
-from zml_game_bridge.storage.db_writer import DbWriter
 from zml_game_bridge.events.in_memory_persisted_event_bus import (
     InMemoryPersistedEventBus,
 )
 from zml_game_bridge.inputs.chat.runner import start_chat_input
+
 
 class AppRuntime:
     def __init__(self, *, db_path: Path, chat_log_path: Path | None) -> None:
@@ -22,7 +23,7 @@ class AppRuntime:
         self._stop_event = threading.Event()
         self._bus = InMemoryPersistedEventBus()
         self._gateway = EventChannel()
-        self._db_writer = DbWriter(db_path=self._db_path, gateway=self._gateway, bus=self._bus)
+        self._db_writer_worker = DbWriterWorker(db_path=self._db_path, gateway=self._gateway, bus=self._bus)
 
         self._t_db: Thread | None = None
         self._t_chat: Thread | None = None
@@ -53,7 +54,7 @@ class AppRuntime:
         hub = self.position_hub
 
         self._t_db = Thread(
-            target=self._db_writer.run,
+            target=self._db_writer_worker.run,
             kwargs={"stop_event": self._stop_event},
             daemon=True,
         )
