@@ -1,0 +1,5 @@
+sample_id,kind,expected,predicted,ok,ms_total
+14,lat,77777,7777,False,101.490
+148,lon,137534,137542,False,99.731
+163,lon,137547,137549,False,100.774
+168,lat,80930,8093,False,101.765
