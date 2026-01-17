@@ -9,7 +9,7 @@ from zml_game_bridge.inputs.chat.tailer import tail_lines
 def start_chat_input(
     path: Path,
     event_sink: EventSink,
-    stop_event: threading.Event | None = None,
+    stop_event: threading.Event,
     start_at_end: bool = False,
     poll_interval_s: float = 0.05,
 ) -> None:
