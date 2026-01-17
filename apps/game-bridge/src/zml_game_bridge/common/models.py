@@ -6,4 +6,4 @@ class WorldPos:
     planet_name: str | None
     x: int
     y: int
-    z: int
+    z: int | None

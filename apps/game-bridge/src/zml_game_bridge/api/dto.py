@@ -2,7 +2,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 from typing_extensions import Any
 
-from zml_game_bridge.inputs.ocr.model import OcrPosition
+from zml_game_bridge.inputs.ocr.pipelines.position.model import OcrPosition
 
 
 class EventEnvelopeDto(BaseModel):
@@ -23,7 +23,7 @@ class PositionDto(BaseModel):
     planet_name: str | None
     x: int
     y: int
-    z: int
+    z: int | None
 
     @classmethod
     def from_domain(cls, pos: OcrPosition) -> "PositionDto":

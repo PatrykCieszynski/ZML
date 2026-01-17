@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
-from zml_game_bridge.inputs.ocr.model import OcrPosition
+from zml_game_bridge.inputs.ocr.pipelines.position.model import OcrPosition
 
 
 class OcrPositionHub:
