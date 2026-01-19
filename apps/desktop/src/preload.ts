@@ -1,11 +1,12 @@
 import { contextBridge, ipcRenderer } from "electron";
-import { IPC_CMD, IPC_PUSH } from "@zml/shared";
-import type {
+import {
   BootstrapState,
   GetBootstrapStateReq,
+  IPC_CMD,
+  IPC_PUSH,
   OcrPositionEvent,
   PushPosition,
-  WindowType,
+  WindowType
 } from "@zml/shared";
 
 type Unsubscribe = () => void;

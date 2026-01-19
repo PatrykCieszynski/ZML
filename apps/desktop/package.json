@@ -3,26 +3,20 @@
   "private": true,
   "main": "dist/main.js",
   "scripts": {
-    "build:main": "tsc -p tsconfig.json",
-    "build:ui": "pnpm -w --filter @zml/ui build",
-    "copy:ui": "shx rm -rf dist/renderer && shx mkdir -p dist/renderer && shx cp -r ../ui/dist/* dist/renderer",
-    "build": "pnpm run build:main && pnpm run build:ui && pnpm run copy:ui",
-
-    "start": "pnpm run build && electron .",
-
-    "dev:main": "tsc -w -p tsconfig.json",
-    "dev:electron": "electron .",
-    "dev": "concurrently -k \"pnpm run dev:main\" \"pnpm run dev:electron\""
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
-    "shx": "^0.4.0",
     "concurrently": "^9.2.1",
+    "electron-vite": "^5.0.0",
+    "shx": "^0.4.0",
     "ts-node": "10.9.2",
     "typescript": "~5.9.3"
   },
   "dependencies": {
-    "electron": "39.2.7",
-    "@zml/shared": "workspace:^0.0.0"
+    "@zml/shared": "workspace:^0.0.0",
+    "electron": "39.2.7"
   }
 }

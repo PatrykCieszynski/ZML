@@ -1,7 +1,7 @@
 import { app, BrowserWindow } from "electron";
 import path from "path";
 
-const DEV_URL = process.env.ELECTRON_RENDERER_URL ?? "http://localhost:5173";
+const DEV_URL = process.env.VITE_DEV_SERVER_URL ?? "http://localhost:5173";
 
 export function createMainWindow(): BrowserWindow {
     const win = new BrowserWindow({
