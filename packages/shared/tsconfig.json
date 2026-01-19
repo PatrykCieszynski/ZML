@@ -3,6 +3,7 @@
     "target": "ES2022",
     "module": "ES2022",
     "declaration": true,
+    "declarationMap": true,
     "outDir": "dist",
     "strict": true,
     "skipLibCheck": true

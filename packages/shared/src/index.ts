@@ -1,9 +1,9 @@
-export * from "./ipc/windowType";
-export * from "./ipc/bootstrap";
-export * from "./ipc/push";
-export * from "./ipc/channels";
+export * from "./ipc/windowType.js";
+export * from "./ipc/bootstrap.js";
+export * from "./ipc/push.js";
+export * from "./ipc/channels.js";
 
-export * from "./dto/worldPos";
-export * from "./dto/ocrPosition";
+export * from "./dto/worldPos.js";
+export * from "./dto/ocrPosition.js";
 
-export * from "./events/envelope";
+export * from "./events/envelope.js";

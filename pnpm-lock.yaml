@@ -26,6 +26,9 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@zml/shared':
+        specifier: workspace:^0.0.0
+        version: link:../../packages/shared
       electron:
         specifier: 39.2.7
         version: 39.2.7
@@ -48,6 +51,9 @@ importers:
 
   apps/ui:
     dependencies:
+      '@zml/shared':
+        specifier: workspace:^0.0.0
+        version: link:../../packages/shared
       react:
         specifier: ^19.2.0
         version: 19.2.3
