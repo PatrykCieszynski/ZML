@@ -6,6 +6,13 @@
     "module": "ESNext",
     "skipLibCheck": true,
 
+
+    "baseUrl": ".",
+    "paths": {
+      "@zml/shared": ["shared/index.ts"],
+      "@zml/shared/*": ["shared/*"]
+    },
+
     /* Bundler mode */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
