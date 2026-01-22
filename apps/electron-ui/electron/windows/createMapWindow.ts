@@ -7,6 +7,10 @@ export function createMapWindow(preloadPath: string): BrowserWindow {
         width: 900,
         height: 560,
         title: "ZML — Map",
+        // frame: false,
+        autoHideMenuBar: true,
+        backgroundColor: "#000000",
+        alwaysOnTop: true,
         webPreferences: {
             preload: preloadPath,
             contextIsolation: true,

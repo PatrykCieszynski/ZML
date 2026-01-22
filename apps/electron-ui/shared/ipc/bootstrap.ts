@@ -4,11 +4,13 @@ import type { OcrPositionDTO } from "../dto/ocrPosition.ts";
 export const IPC_VERSION = 1 as const;
 export type IpcVersion = typeof IPC_VERSION;
 
-export type AgentStatus = "connecting" | "connected" | "disconnected";
+export type AgentStatus =  {
+    status: "connecting" | "connected" | "disconnected";
+    lastError?: string | null;
+};
 
 export type BootstrapAgentState = {
     status: AgentStatus;
-    lastError?: string;
 };
 
 export type BootstrapStreamsState = {

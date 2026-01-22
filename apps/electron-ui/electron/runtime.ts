@@ -2,8 +2,9 @@ import type { AgentStatus, OcrPositionDTO } from "@zml/shared";
 
 export type RuntimeState = {
     seq: number;
-    agent: { status: AgentStatus };
+    agent: AgentStatus;
     streams: { ws: boolean; sse: boolean };
+    lastError?: string | null;
     lastPosition?: OcrPositionDTO;
 };
 

@@ -1,6 +1,6 @@
 import { getWindowType } from "./getWindowType";
-import { MainWindow } from "./windows/MainWindow";
-import { MapWindow } from "./windows/MapWindow";
+import { MainWindow } from "./windows/mainWindow.tsx";
+import { MapWindow } from "./windows/mapWindow.tsx";
 
 export default function App() {
   const wt = getWindowType();

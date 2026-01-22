@@ -7,3 +7,6 @@ export * from "./dto/worldPos.ts";
 export * from "./dto/ocrPosition.ts";
 
 export * from "./events/envelope.ts";
+
+export * from "./maps/mapConfig.ts";
+export * from "./maps/worldToPixel.ts";
