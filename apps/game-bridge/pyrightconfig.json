@@ -3,6 +3,7 @@
   "venv": ".venv",
   "pythonVersion": "3.13",
   "typeCheckingMode": "strict",
+  "reportMissingModuleSource": "none",
   "reportMissingTypeStubs": "none",
   "reportUnknownMemberType": "warning",
   "reportUnknownVariableType": "warning",

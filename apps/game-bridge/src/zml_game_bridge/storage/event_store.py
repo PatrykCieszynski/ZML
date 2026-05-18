@@ -17,13 +17,13 @@ class EventStore:
     def __init__(self, conn: sqlite3.Connection) -> None:
         self._conn: sqlite3.Connection | None = conn
 
-
     def append(self, event: EventBase) -> EventEnvelope:
         """
         Persist event and return envelope.
 
         Assumption:
         - DB schema was already ensured elsewhere (runtime bootstrap).
+        - Transaction ownership belongs to the caller.
         """
         conn = self._conn
         if conn is None:
@@ -40,15 +40,13 @@ class EventStore:
         event_dt_obj = getattr(event, "event_dt", None)
         event_dt = event_dt_obj.isoformat() if isinstance(event_dt_obj, datetime) else None
 
-        # Transaction: commit/rollback handled automatically.
-        with conn:
-            cur = conn.execute(
-                """
-                INSERT INTO events (created_ts_ms, event_type, payload_json, event_dt, raw)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (created_ts_ms, event_type, payload_json, event_dt, raw),
-            )
+        cur = conn.execute(
+            """
+            INSERT INTO events (created_ts_ms, event_type, payload_json, event_dt, raw)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (created_ts_ms, event_type, payload_json, event_dt, raw),
+        )
 
         rowid = cur.lastrowid
         if rowid is None:

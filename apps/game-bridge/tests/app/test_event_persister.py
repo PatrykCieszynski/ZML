@@ -8,13 +8,17 @@ from typing import Any
 
 import zml_game_bridge.app.db_writer_worker as db_writer_worker_mod
 from zml_game_bridge.app.event_channel import EventChannel
+from zml_game_bridge.events.base import EventBase
 from zml_game_bridge.events.envelope import EventEnvelope
 from zml_game_bridge.events.in_memory_persisted_event_bus import InMemoryPersistedEventBus
+from zml_game_bridge.storage.db_schema import ensure_schema
+from zml_game_bridge.storage.event_store import EventStore
+from zml_game_bridge.storage.sqlite import open_sqlite
 
 
 # --- Dummy domain event (doesn't matter what fields) ---
 @dataclass(frozen=True, slots=True)
-class DummyEvent:
+class DummyEvent(EventBase):
     x: int = 1
 
 
@@ -48,8 +52,8 @@ def test_db_writer_persists_and_publishes(monkeypatch, tmp_path: Path) -> None:
     gw = EventChannel(maxsize=10)
     writer = db_writer_worker_mod.DbWriterWorker(
         db_path=tmp_path / "events.sqlite3",
-        gateway=gw,
-        bus=bus,
+        pending_events=gw,
+        persisted_events=bus,
     )
 
     out: list[EventEnvelope] = []
@@ -62,7 +66,7 @@ def test_db_writer_persists_and_publishes(monkeypatch, tmp_path: Path) -> None:
     t.start()
 
     # Emit one event
-    gw.emit(DummyEvent(42))  # type: ignore[arg-type]
+    gw.emit(DummyEvent(42))
 
     assert got.wait(timeout=1.0), "DbWriterWorker didn't publish anything"
     stop.set()
@@ -87,8 +91,8 @@ def test_db_writer_no_event_no_publish(monkeypatch, tmp_path: Path) -> None:
     gw = EventChannel(maxsize=10)
     writer = db_writer_worker_mod.DbWriterWorker(
         db_path=tmp_path / "events.sqlite3",
-        gateway=gw,
-        bus=bus,
+        pending_events=gw,
+        persisted_events=bus,
     )
 
     out: list[EventEnvelope] = []
@@ -110,3 +114,78 @@ def test_db_writer_no_event_no_publish(monkeypatch, tmp_path: Path) -> None:
     assert inst.append_calls == []
 
     sub.close()
+
+
+class FailingProjector:
+    def project(self, **_kwargs: object) -> None:
+        raise RuntimeError("projection failed")
+
+
+def test_db_writer_persist_event_commits_transaction(tmp_path: Path) -> None:
+    db_path = tmp_path / "events.sqlite3"
+    writer = db_writer_worker_mod.DbWriterWorker(
+        db_path=db_path,
+        pending_events=EventChannel(maxsize=10),
+        persisted_events=InMemoryPersistedEventBus(),
+    )
+
+    writer.open()
+    assert writer.conn is not None
+    ensure_schema(writer.conn)
+
+    try:
+        env = writer._persist_event(EventStore(writer.conn), DummyEvent(7))
+    finally:
+        writer.close()
+
+    conn = open_sqlite(db_path)
+    try:
+        row = conn.execute(
+            "SELECT event_type, payload_json FROM events WHERE event_id = ?",
+            (env.event_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    assert row is not None
+    assert row["event_type"] == "DummyEvent"
+    assert row["payload_json"] == '{"x":7}'
+
+
+def test_db_writer_rolls_back_event_when_projection_fails(tmp_path: Path) -> None:
+    db_path = tmp_path / "events.sqlite3"
+    bus = InMemoryPersistedEventBus()
+    gw = EventChannel(maxsize=10)
+    writer = db_writer_worker_mod.DbWriterWorker(
+        db_path=db_path,
+        pending_events=gw,
+        persisted_events=bus,
+        projector=FailingProjector(),
+    )
+
+    out: list[EventEnvelope] = []
+    sub = bus.subscribe(lambda env: out.append(env))
+
+    writer.open()
+    assert writer.conn is not None
+    ensure_schema(writer.conn)
+
+    try:
+        try:
+            writer._persist_event(EventStore(writer.conn), DummyEvent(7))
+        except RuntimeError as exc:
+            assert str(exc) == "projection failed"
+        else:
+            raise AssertionError("Expected projection failure")
+    finally:
+        writer.close()
+        sub.close()
+
+    conn = open_sqlite(db_path)
+    try:
+        count = int(conn.execute("SELECT COUNT(*) FROM events").fetchone()[0])
+    finally:
+        conn.close()
+
+    assert count == 0
+    assert out == []

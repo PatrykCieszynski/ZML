@@ -9,10 +9,12 @@ from zml_game_bridge.api.sse_hub import SseHub
 from zml_game_bridge.api.ws_hub import OcrPositionHub
 from zml_game_bridge.app.db_writer_worker import DbWriterWorker
 from zml_game_bridge.app.event_channel import EventChannel
+from zml_game_bridge.app.position_state import LatestPositionState
 from zml_game_bridge.events.in_memory_persisted_event_bus import (
     InMemoryPersistedEventBus,
 )
 from zml_game_bridge.inputs.chat.runner import start_chat_input
+from zml_game_bridge.inputs.ocr.pipelines.position.model import OcrPosition
 from zml_game_bridge.inputs.ocr.runner import start_ocr_input
 
 logger = logging.getLogger(__name__)
@@ -33,9 +35,14 @@ class AppRuntime:
         self._ocr_enabled = ocr_enabled
 
         self._stop_event = threading.Event()
-        self._bus = InMemoryPersistedEventBus()
-        self._gateway = EventChannel()
-        self._db_writer_worker = DbWriterWorker(db_path=self._db_path, gateway=self._gateway, bus=self._bus)
+        self._pending_events = EventChannel()
+        self._persisted_events = InMemoryPersistedEventBus()
+        self._latest_position = LatestPositionState()
+        self._db_writer_worker = DbWriterWorker(
+            db_path=self._db_path,
+            pending_events=self._pending_events,
+            persisted_events=self._persisted_events,
+        )
 
         self._t_db: Thread | None = None
         self._t_chat: Thread | None = None
@@ -62,6 +69,10 @@ class AppRuntime:
     def sse_hub(self) -> SseHub | None:
         return self._sse_hub
 
+    @property
+    def latest_position(self) -> LatestPositionState:
+        return self._latest_position
+
     def attach_sse_hub(self, hub: SseHub) -> None:
         self._sse_hub = hub
 
@@ -73,8 +84,6 @@ class AppRuntime:
         if self._started:
             return
         self._started = True
-
-        hub = self.position_hub
 
         self._t_db = Thread(
             target=self._db_writer_worker.run,
@@ -90,7 +99,7 @@ class AppRuntime:
             target=start_chat_input,
             kwargs={
                 "path": self._chat_log_path,
-                "event_sink": self._gateway.emit,
+                "event_sink": self._pending_events.emit,
                 "stop_event": self._stop_event,
                 "start_at_end": self._chat_start_at_end,
             },
@@ -102,18 +111,24 @@ class AppRuntime:
             self._t_ocr = Thread(
                 target=start_ocr_input,
                 kwargs={
-                    "position_sink": hub.publish_threadsafe,
+                    "position_sink": self._on_position,
                     "stop_event": self._stop_event,
                 },
                 daemon=True,
             )
             self._t_ocr.start()
 
-        self._sub_print = self._bus.subscribe(lambda env: logger.info("New event stored: %s", env))
+        self._sub_print = self._persisted_events.subscribe(
+            lambda env: logger.info("New event stored: %s", env)
+        )
 
         # SSE fan-out (if attached)
         if self._sse_hub is not None:
-            self._sub_sse = self._bus.subscribe(self._sse_hub.on_envelope)
+            self._sub_sse = self._persisted_events.subscribe(self._sse_hub.on_envelope)
+
+    def _on_position(self, position: OcrPosition) -> None:
+        self._latest_position.update(position)
+        self.position_hub.publish_threadsafe(position)
 
     def stop(self) -> None:
         self._stop_event.set()

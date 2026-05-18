@@ -6,6 +6,13 @@ from zml_game_bridge.events.base import EventBase
 
 
 class EventChannel:
+    """
+    Thread-safe queue for durable events waiting for the single DB writer.
+
+    Producers write here before persistence. Live subscribers should use the
+    persisted-event bus instead, after the DB transaction commits.
+    """
+
     _q: Queue[EventBase]
 
     def __init__(self, *, maxsize: int = 10_000) -> None:

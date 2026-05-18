@@ -5,7 +5,10 @@ import threading
 from pathlib import Path
 
 from zml_game_bridge.app.event_channel import EventChannel
+from zml_game_bridge.app.event_projector import EventProjector, NoOpEventProjector
+from zml_game_bridge.events.base import EventBase
 from zml_game_bridge.events.bus import PersistedEventBus
+from zml_game_bridge.events.envelope import EventEnvelope
 from zml_game_bridge.storage.db_schema import ensure_schema
 from zml_game_bridge.storage.event_store import EventStore
 from zml_game_bridge.storage.sqlite import open_sqlite
@@ -13,13 +16,21 @@ from zml_game_bridge.storage.sqlite import open_sqlite
 
 class DbWriterWorker:
     db_path: Path
-    gateway: EventChannel
-    bus: PersistedEventBus
+    pending_events: EventChannel
+    persisted_events: PersistedEventBus
 
-    def __init__(self, *, db_path: Path, gateway: EventChannel, bus: PersistedEventBus) -> None:
+    def __init__(
+        self,
+        *,
+        db_path: Path,
+        pending_events: EventChannel,
+        persisted_events: PersistedEventBus,
+        projector: EventProjector | None = None,
+    ) -> None:
         self.db_path = db_path
-        self.gateway = gateway
-        self.bus = bus
+        self.pending_events = pending_events
+        self.persisted_events = persisted_events
+        self.projector = projector or NoOpEventProjector()
         self.conn: sqlite3.Connection | None = None
 
     def open(self) -> None:
@@ -45,7 +56,7 @@ class DbWriterWorker:
 
         try:
             while not stop_event.is_set():
-                event = self.gateway.take(timeout_s=0.1)
+                event = self.pending_events.take(timeout_s=0.1)
                 if event is None:
                     continue
 
@@ -56,7 +67,17 @@ class DbWriterWorker:
                 # Also: log exceptions with enough context (event_type).
 
                 # TODO batching?
-                event_envelope = event_store.append(event)
-                self.bus.publish(event_envelope)
+                event_envelope = self._persist_event(event_store, event)
+                self.persisted_events.publish(event_envelope)
         finally:
             self.close()
+
+    def _persist_event(self, event_store: EventStore, event: EventBase) -> EventEnvelope:
+        conn = self.conn
+        if conn is None:
+            raise RuntimeError("DbWriterWorker not opened")
+
+        with conn:
+            event_envelope = event_store.append(event)
+            self.projector.project(conn=conn, event=event, envelope=event_envelope)
+        return event_envelope
