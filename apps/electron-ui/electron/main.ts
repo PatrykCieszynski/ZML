@@ -11,6 +11,7 @@ import { registerWindow } from "./windows/registry";
 import {runtime} from "./runtime.ts";
 import {startPositionWsClient} from "./agent/positionWsClient.ts";
 import { pushPosition } from "./ipc/pushPosition.ts";
+import { pushStatePatch } from "./ipc/pushStatePatch.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -49,6 +50,10 @@ async function createWindows() {
       runtime.agent.status = s === "connected" ? "connected" : s === "connecting" ? "connecting" : "disconnected";
       runtime.agent.lastError = err || undefined;
       runtime.streams.ws = s === "connected";
+      pushStatePatch({
+        agent: { ...runtime.agent },
+        streams: { ...runtime.streams },
+      });
     },
     onEvent: pushPosition,
   });

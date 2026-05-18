@@ -1,5 +1,13 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { BootstrapState, GetBootstrapStateReq, OcrPositionEvent, PushPosition, WindowType } from "@zml/shared";
+import type {
+  BootstrapState,
+  GetBootstrapStateReq,
+  OcrPositionEvent,
+  PushPosition,
+  PushStatePatch,
+  RuntimeStatePatch,
+  WindowType,
+} from "@zml/shared";
 import { IPC_CMD, IPC_PUSH } from "@zml/shared";
 
 type Unsubscribe = () => void;
@@ -7,6 +15,7 @@ type Unsubscribe = () => void;
 type ZmlApi = {
   getBootstrapState: (windowType: WindowType) => Promise<BootstrapState>;
   onPosition: (cb: (event: OcrPositionEvent) => void) => Unsubscribe;
+  onStatePatch: (cb: (patch: RuntimeStatePatch) => void) => Unsubscribe;
 };
 
 const api: ZmlApi = {
@@ -24,6 +33,18 @@ const api: ZmlApi = {
 
     return () => {
       ipcRenderer.removeListener(IPC_PUSH.POSITION, handler);
+    };
+  },
+
+  onStatePatch(cb) {
+    const handler = (_evt: Electron.IpcRendererEvent, payload: PushStatePatch) => {
+      cb(payload.patch);
+    };
+
+    ipcRenderer.on(IPC_PUSH.STATE_PATCH, handler);
+
+    return () => {
+      ipcRenderer.removeListener(IPC_PUSH.STATE_PATCH, handler);
     };
   },
 };

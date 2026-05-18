@@ -6,6 +6,7 @@ export const IPC_CMD = {
 
 export const IPC_PUSH = {
     POSITION: `${IPC_NAMESPACE}:push:position`,
+    STATE_PATCH: `${IPC_NAMESPACE}:push:state_patch`,
 } as const;
 
 export type IpcCmdChannel = (typeof IPC_CMD)[keyof typeof IPC_CMD];

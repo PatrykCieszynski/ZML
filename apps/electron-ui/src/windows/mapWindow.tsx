@@ -1,44 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
-import type { BootstrapState, OcrPositionEvent, WindowType } from "@zml/shared";
-import { getZml } from "../zml";
+import { useMemo } from "react";
+import type { WindowType } from "@zml/shared";
 import {MapViewport} from "../widgets/map/mapViewport.tsx";
+import { useZmlRendererStore } from "../state/zmlRendererStore";
 
 type MapPoint = { x: number; y: number };
 
 export function MapWindow() {
-  const [bootstrap, setBootstrap] = useState<BootstrapState | null>(null);
-  const [last, setLast] = useState<OcrPositionEvent | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const windowType: WindowType = "map";
-
-  useEffect(() => {
-    let api;
-    try {
-      api = getZml();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      return;
-    }
-
-    let alive = true;
-
-    api.getBootstrapState(windowType)
-        .then((s) => alive && setBootstrap(s))
-        .catch((e) => alive && setError(e instanceof Error ? e.message : String(e)));
-
-    const unsub = api.onPosition((ev) => setLast(ev));
-
-    return () => {
-      alive = false;
-      unsub();
-    };
-  }, []);
+  const state = useZmlRendererStore(windowType);
 
   const point: MapPoint | null = useMemo(() => {
-    const pos = last?.payload?.position ?? bootstrap?.position?.position;
+    const pos = state.position?.position;
     if (!pos) return null;
     return { x: pos.x, y: pos.y };
-  }, [last, bootstrap]);
+  }, [state.position]);
 
   // hardcoded planet for now
   const planetId = "calypso" as const;
@@ -48,7 +23,7 @@ export function MapWindow() {
         <MapViewport planetId={planetId} point={point} />
 
         {/* overlays */}
-        {error && (
+        {state.error && (
             <div
                 style={{
                   position: "absolute",
@@ -62,11 +37,11 @@ export function MapWindow() {
                 }}
             >
               <b>UI error</b>
-              <div style={{ marginTop: 6 }}>{error}</div>
+              <div style={{ marginTop: 6 }}>{state.error}</div>
             </div>
         )}
 
-        {!error && (
+        {!state.error && (
             <div
                 style={{
                   position: "absolute",
@@ -85,7 +60,7 @@ export function MapWindow() {
               <div>X: {point ? point.x : "—"}</div>
               <div>Y: {point ? point.y : "—"}</div>
               <div style={{ opacity: 0.7, marginTop: 6 }}>
-                {last ? `seq=${last.seq} ts=${last.tsMs}` : "waiting…"}
+                {state.positionEvent ? `seq=${state.positionEvent.seq} ts=${state.positionEvent.tsMs}` : "waiting…"}
               </div>
             </div>
         )}
