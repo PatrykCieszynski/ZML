@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type {
+  AgentHealthDto,
   BootstrapState,
   GetBootstrapStateReq,
   OcrPositionEvent,
@@ -14,6 +15,7 @@ type Unsubscribe = () => void;
 
 type ZmlApi = {
   getBootstrapState: (windowType: WindowType) => Promise<BootstrapState>;
+  getAgentHealth: () => Promise<AgentHealthDto>;
   onPosition: (cb: (event: OcrPositionEvent) => void) => Unsubscribe;
   onStatePatch: (cb: (patch: RuntimeStatePatch) => void) => Unsubscribe;
 };
@@ -22,6 +24,10 @@ const api: ZmlApi = {
   async getBootstrapState(windowType) {
     const req: GetBootstrapStateReq = { windowType };
     return ipcRenderer.invoke(IPC_CMD.GET_BOOTSTRAP_STATE, req) as Promise<BootstrapState>;
+  },
+
+  async getAgentHealth() {
+    return ipcRenderer.invoke(IPC_CMD.GET_AGENT_HEALTH) as Promise<AgentHealthDto>;
   },
 
   onPosition(cb) {

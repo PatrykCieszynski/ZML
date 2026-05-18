@@ -10,6 +10,7 @@ import { registerWindow } from "./windows/registry";
 
 import {runtime} from "./runtime.ts";
 import {startPositionWsClient} from "./agent/positionWsClient.ts";
+import { AgentRestClient } from "./agent/restClient.ts";
 import { pushPosition } from "./ipc/pushPosition.ts";
 import { pushStatePatch } from "./ipc/pushStatePatch.ts";
 
@@ -24,12 +25,13 @@ export const preloadPath = path.join(MAIN_DIST, 'preload.mjs')
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 'public') : RENDERER_DIST
 
 const BACKEND_URL = process.env.ZML_BACKEND_URL ?? "http://127.0.0.1:17171";
+const agentRestClient = new AgentRestClient({ baseUrl: BACKEND_URL });
 
 let mainWin: BrowserWindow | null
 let mapWin: BrowserWindow | null
 
 async function createWindows() {
-  registerIpc();
+  registerIpc({ agentRestClient });
 
   // Windows
   mainWin = createMainWindow(preloadPath);

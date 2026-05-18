@@ -8,5 +8,7 @@ export * from "./dto/ocrPosition.js";
 
 export * from "./events/envelope.js";
 
+export * from "./agent/health.js";
+
 export * from "./maps/mapConfig.js";
 export * from "./maps/worldToPixel.js";

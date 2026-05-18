@@ -2,6 +2,7 @@ export const IPC_NAMESPACE = "zml" as const;
 
 export const IPC_CMD = {
     GET_BOOTSTRAP_STATE: `${IPC_NAMESPACE}:cmd:get_bootstrap_state`,
+    GET_AGENT_HEALTH: `${IPC_NAMESPACE}:cmd:get_agent_health`,
 } as const;
 
 export const IPC_PUSH = {

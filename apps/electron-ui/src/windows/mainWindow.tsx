@@ -1,5 +1,5 @@
 import type { WindowType } from "@zml/shared";
-import { useZmlRendererStore } from "../state/zmlRendererStore";
+import { refreshAgentHealth, useZmlRendererStore } from "../state/zmlRendererStore";
 
 export function MainWindow() {
   const windowType: WindowType = "main";
@@ -26,7 +26,19 @@ export function MainWindow() {
             <div>Status: {state.agent.status}</div>
             <div>WS: {state.streams.ws ? "connected" : "offline"}</div>
             <div>SSE: {state.streams.sse ? "connected" : "offline"}</div>
+            <div>Health: {state.agentHealth?.status ?? "-"}</div>
             {state.agent.lastError && <div style={{ color: "#ffb4b4" }}>{state.agent.lastError}</div>}
+            {state.lastCommandError && <div style={{ color: "#ffb4b4" }}>{state.lastCommandError}</div>}
+            <button
+              type="button"
+              onClick={() => {
+                void refreshAgentHealth();
+              }}
+              disabled={state.agentHealthChecking}
+              style={{ marginTop: 10 }}
+            >
+              {state.agentHealthChecking ? "Checking..." : "Check health"}
+            </button>
           </section>
 
           <section style={{ background: "#111", color: "#ddd", padding: 12, borderRadius: 8 }}>

@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from "react";
 import type {
+  AgentHealthDto,
   BootstrapAgentState,
   BootstrapState,
   BootstrapStreamsState,
@@ -17,6 +18,9 @@ export type ZmlRendererState = {
   streams: BootstrapStreamsState;
   position?: OcrPositionDTO;
   positionEvent?: OcrPositionEvent;
+  agentHealth?: AgentHealthDto;
+  agentHealthChecking: boolean;
+  lastCommandError: string | null;
   error: string | null;
   lastBootstrapTsMs?: number;
 };
@@ -27,6 +31,8 @@ const initialState: ZmlRendererState = {
   bootstrapping: false,
   agent: { status: "connecting" },
   streams: { ws: false, sse: false },
+  agentHealthChecking: false,
+  lastCommandError: null,
   error: null,
 };
 
@@ -134,6 +140,38 @@ export function initZmlRendererStore(windowType: WindowType): void {
       error: null,
     });
   });
+}
+
+export async function refreshAgentHealth(): Promise<void> {
+  let api;
+  try {
+    api = getZml();
+  } catch (error) {
+    setState({
+      agentHealthChecking: false,
+      lastCommandError: errorToMessage(error),
+    });
+    return;
+  }
+
+  setState({
+    agentHealthChecking: true,
+    lastCommandError: null,
+  });
+
+  try {
+    const agentHealth = await api.getAgentHealth();
+    setState({
+      agentHealth,
+      agentHealthChecking: false,
+      lastCommandError: null,
+    });
+  } catch (error) {
+    setState({
+      agentHealthChecking: false,
+      lastCommandError: errorToMessage(error),
+    });
+  }
 }
 
 export function useZmlRendererStore(windowType: WindowType): ZmlRendererState {
