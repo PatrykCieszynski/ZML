@@ -8,6 +8,7 @@ const child = spawn(viteCommand, process.argv.slice(2), {
   env: {
     ...process.env,
     ZML_UI_MOCKS: "1",
+    VITE_ZML_UI_MOCKS: "1",
   },
 });
 

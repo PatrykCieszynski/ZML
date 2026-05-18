@@ -1,152 +1,133 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { MAP_CONFIG, worldToPixel, type PlanetId } from "@zml/shared";
-import { TileLayer } from "./tileLayer";
+import { useEffect, useMemo, useState } from "react";
+import DeckGL from "@deck.gl/react";
+import {
+  OrthographicView,
+  type OrthographicViewState,
+  type ViewStateChangeParameters,
+} from "@deck.gl/core";
+import type { PlanetId } from "@zml/shared";
+import { createClaimPointLayer, createClaimTimerLayer } from "./layers/claimLayers";
+import { createMapTileLayer } from "./layers/mapTileLayer";
+import { createPlayerMarkerLayer, createPlayerRangeLayer } from "./layers/playerLayers";
+import { compactLayers } from "./mapLayerUtils";
+import {
+  createInitialMapViewState,
+  entropiaToDeckPosition,
+  type EntropiaMapPoint,
+} from "./mapProjection";
+import { createDebugClaims } from "./mocks/debugClaims";
+import type { DeckPoint } from "./mapTypes";
 
-type MapPoint = { x: number; y: number };
-type Offset = { x: number; y: number };
+const MAP_VIEW = new OrthographicView({
+  id: "map",
+  flipY: true,
+  controller: {
+    dragRotate: false,
+    doubleClickZoom: false,
+    scrollZoom: { speed: 0.01, smooth: true },
+  },
+});
 
-function clamp(v: number, min: number, max: number): number {
-    return Math.max(min, Math.min(max, v));
+const DEBUG_CLAIMS_ENABLED = import.meta.env.VITE_ZML_UI_MOCKS === "1";
+
+function nowSec(): number {
+  return Math.floor(Date.now() / 1000);
 }
 
 export function MapViewport({
-                                planetId,
-                                point,
-                            }: {
-    planetId: PlanetId;
-    point: MapPoint | null;
+  planetId,
+  point,
+}: {
+  planetId: PlanetId;
+  point: EntropiaMapPoint | null;
 }) {
-    const planet = MAP_CONFIG.planets[planetId];
+  const [viewState, setViewState] = useState<OrthographicViewState>(() =>
+    createInitialMapViewState(planetId),
+  );
+  const [currentSec, setCurrentSec] = useState(nowSec);
+  const [debugClaimSeedSec] = useState(nowSec);
 
-    const viewportRef = useRef<HTMLDivElement | null>(null);
-    const [scale, setScale] = useState(1);
-    const [offset, setOffset] = useState<Offset>({ x: 0, y: 0 });
-    const [isDragging, setIsDragging] = useState(false);
+  const marker = useMemo<DeckPoint | null>(() => {
+    if (!point) return null;
+    return { position: entropiaToDeckPosition(planetId, point) };
+  }, [planetId, point]);
 
-    const dragRef = useRef<{
-        pointerId: number;
-        sx: number;
-        sy: number;
-        ox: number;
-        oy: number;
-    } | null>(null);
+  useEffect(() => {
+    setViewState(createInitialMapViewState(planetId));
+  }, [planetId]);
 
-    const marker = useMemo(() => {
-        if (!point) return null;
-        return worldToPixel(MAP_CONFIG, planetId, point.x, point.y);
-    }, [planetId, point]);
+  useEffect(() => {
+    if (!DEBUG_CLAIMS_ENABLED) return;
 
-    useEffect(() => {
-        const el = viewportRef.current;
-        if (!el) return;
+    const timer = window.setInterval(() => setCurrentSec(nowSec()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
-        const onWheel = (e: WheelEvent) => {
-            e.preventDefault();
+  const tileLayer = useMemo(() => createMapTileLayer(planetId), [planetId]);
+  const debugClaims = useMemo(
+    () =>
+      DEBUG_CLAIMS_ENABLED
+        ? createDebugClaims(planetId, debugClaimSeedSec)
+        : [],
+    [debugClaimSeedSec, planetId],
+  );
 
-            const rect = el.getBoundingClientRect();
-            const mx = e.clientX - rect.left;
-            const my = e.clientY - rect.top;
+  const debugClaimPointLayer = useMemo(() => createClaimPointLayer(debugClaims), [debugClaims]);
+  const debugClaimTimerLayer = useMemo(
+    () => createClaimTimerLayer(debugClaims, currentSec),
+    [currentSec, debugClaims],
+  );
+  const playerRangeLayer = useMemo(
+    () => createPlayerRangeLayer(planetId, marker),
+    [marker, planetId],
+  );
+  const playerMarkerLayer = useMemo(() => createPlayerMarkerLayer(marker), [marker]);
 
-            const factor = e.deltaY < 0 ? 1.08 : 1 / 1.08;
+  const layers = useMemo(
+    () =>
+      compactLayers([
+        tileLayer,
+        debugClaimPointLayer,
+        debugClaimTimerLayer,
+        playerRangeLayer,
+        playerMarkerLayer,
+      ]),
+    [
+      debugClaimPointLayer,
+      debugClaimTimerLayer,
+      playerMarkerLayer,
+      playerRangeLayer,
+      tileLayer,
+    ],
+  );
 
-            setScale((prevScale) => {
-                const nextScale = clamp(prevScale * factor, 0.2, 16);
+  const handleViewStateChange = ({
+    viewState: nextViewState,
+  }: ViewStateChangeParameters<OrthographicViewState>) => {
+    setViewState({
+      ...nextViewState,
+      minZoom: -2.5,
+      maxZoom: 6,
+    });
+  };
 
-                // Keep point under cursor stable:
-                // screen = offset + world * scale
-                // world = (screen - offset) / scale
-                const worldX = (mx - offset.x) / prevScale;
-                const worldY = (my - offset.y) / prevScale;
-
-                const nextOffsetX = mx - worldX * nextScale;
-                const nextOffsetY = my - worldY * nextScale;
-
-                setOffset({ x: nextOffsetX, y: nextOffsetY });
-                return nextScale;
-            });
-        };
-
-        el.addEventListener("wheel", onWheel, { passive: false });
-        return () => el.removeEventListener("wheel", onWheel);
-    }, [offset.x, offset.y]);
-
-    const onPointerDown = (e: React.PointerEvent) => {
-        if (e.button !== 0) return;
-        const el = viewportRef.current;
-        if (!el) return;
-
-        el.setPointerCapture(e.pointerId);
-        dragRef.current = { pointerId: e.pointerId, sx: e.clientX, sy: e.clientY, ox: offset.x, oy: offset.y };
-        setIsDragging(true);
-    };
-
-    const onPointerMove = (e: React.PointerEvent) => {
-        const d = dragRef.current;
-        if (!d || d.pointerId !== e.pointerId) return;
-
-        const dx = e.clientX - d.sx;
-        const dy = e.clientY - d.sy;
-        setOffset({ x: d.ox + dx, y: d.oy + dy });
-    };
-
-    const endDrag = (e: React.PointerEvent) => {
-        const d = dragRef.current;
-        if (!d || d.pointerId !== e.pointerId) return;
-
-        dragRef.current = null;
-        setIsDragging(false);
-    };
-
-    return (
-        <div
-            ref={viewportRef}
-            style={{
-                width: "100%",
-                height: "100%",
-                background: "#0b0b0b",
-                overflow: "hidden",
-                position: "relative",
-                cursor: isDragging ? "grabbing" : "grab",
-                userSelect: "none",
-            }}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={endDrag}
-            onPointerCancel={endDrag}
-            onPointerLeave={(e) => {
-                if (isDragging) endDrag(e);
-            }}
-        >
-            <div
-                style={{
-                    transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
-                    transformOrigin: "0 0",
-                    position: "absolute",
-                    left: 0,
-                    top: 0,
-                    willChange: "transform",
-                }}
-            >
-                <TileLayer planet={planet} />
-
-                {marker && (
-                    <div
-                        title={point ? `(${point.x}, ${point.y})` : ""}
-                        style={{
-                            position: "absolute",
-                            left: marker.px,
-                            top: marker.py,
-                            width: 1,
-                            height: 1,
-                            borderRadius: 999,
-                            background: "#44f",
-                            transform: "translate(-50%, -50%)",
-                            boxShadow: "0 0 0 2px rgba(0,0,0,0.7)",
-                            pointerEvents: "none",
-                        }}
-                    />
-                )}
-            </div>
-        </div>
-    );
+  return (
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        background: "#0b0b0b",
+        overflow: "hidden",
+        position: "relative",
+      }}
+    >
+      <DeckGL
+        views={MAP_VIEW}
+        viewState={viewState}
+        layers={layers}
+        onViewStateChange={handleViewStateChange}
+        style={{ position: "absolute", inset: "0" }}
+      />
+    </div>
+  );
 }
