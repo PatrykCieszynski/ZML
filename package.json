@@ -8,7 +8,8 @@
   ],
   "scripts": {
     "dev:ui": "pnpm --filter @zml/ui dev",
-    "dev:desktop": "pnpm --filter @zml/desktop dev",
+    "dev:desktop": "pnpm --filter @zml/electron-ui dev",
+    "dev:desktop:mocks": "pnpm --filter @zml/electron-ui dev:mocks",
     "dev:bridge": "cd apps/game-bridge && uv run python -m zml_game_bridge.main",
     "dev": "concurrently -k \"pnpm dev:ui\" \"pnpm dev:bridge\" \"wait-on http://localhost:5173 && wait-on http-get://127.0.0.1:17171/health && pnpm dev:desktop\"",
     "build": "pnpm -r build",

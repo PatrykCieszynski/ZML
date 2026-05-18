@@ -4,13 +4,10 @@ import {
     type OcrPositionEvent,
     type OcrPositionWire,
 } from "@zml/shared";
+import type { PositionSourceOptions, StopPositionSource } from "./positionSource.ts";
 
-type Status = "connecting" | "connected" | "disconnected";
-
-type Opts = {
+type PositionWsClientOptions = PositionSourceOptions & {
     baseUrl: string; // e.g. http://127.0.0.1:8000 (or 127.0.0.1:8000)
-    onStatus: (s: Status, err?: string) => void;
-    onEvent: (ev: OcrPositionEvent) => void;
 };
 
 export function isOcrPositionWire(x: unknown): x is OcrPositionWire {
@@ -60,7 +57,7 @@ function decodeWsData(data: WebSocket.RawData): string {
     return Buffer.from(data).toString("utf-8");
 }
 
-export function startPositionWsClient(opts: Opts): () => void {
+export function startPositionWsClient(opts: PositionWsClientOptions): StopPositionSource {
     let ws: WebSocket | null = null;
     let stopped = false;
 

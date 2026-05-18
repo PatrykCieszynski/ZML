@@ -17,7 +17,13 @@ type AgentRestClientOptions = {
   fetchImpl?: FetchLike;
 };
 
-export class AgentRestClient {
+export type AgentClient = {
+  getHealth: () => Promise<AgentHealthDto>;
+  startRun: (request: StartRunRequest) => Promise<RunDto>;
+  stopRun: (request: StopRunRequest) => Promise<RunDto>;
+};
+
+export class AgentRestClient implements AgentClient {
   private readonly baseUrl: URL;
   private readonly timeoutMs: number;
   private readonly fetchImpl: FetchLike;

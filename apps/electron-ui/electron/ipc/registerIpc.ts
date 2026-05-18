@@ -9,10 +9,10 @@ import {
     type GetBootstrapStateReq,
 } from "@zml/shared";
 import { runtime } from "../runtime";
-import type { AgentRestClient } from "../agent/restClient.ts";
+import type { AgentClient } from "../agent/restClient.ts";
 
 type RegisterIpcDeps = {
-    agentRestClient: AgentRestClient;
+    agentRestClient: AgentClient;
 };
 
 let registered = false;
