@@ -1,6 +1,11 @@
 import { IPC_PUSH, type OcrPositionEvent, type PushPosition } from "@zml/shared";
 import { runtime } from "../runtime";
 import { getWindow } from "../windows/registry";
+import type { BrowserWindow } from "electron";
+
+function isWindow(win: BrowserWindow | undefined): win is BrowserWindow {
+  return win !== undefined;
+}
 
 /**
  * Main -> Renderer push. Keep it as a single function to avoid
@@ -10,8 +15,8 @@ export function pushPosition(event: OcrPositionEvent): void {
   runtime.lastPosition = event.payload;
 
   // For now: map + hud are consumers.
-  const targets = [getWindow("map"), getWindow("hud"), getWindow("main")].filter(Boolean);
+  const targets = [getWindow("map"), getWindow("hud"), getWindow("main")].filter(isWindow);
   for (const w of targets) {
-    w!.webContents.send(IPC_PUSH.POSITION, { event } satisfies PushPosition);
+    w.webContents.send(IPC_PUSH.POSITION, { event } satisfies PushPosition);
   }
 }

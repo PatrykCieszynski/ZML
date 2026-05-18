@@ -1,9 +1,9 @@
-import type { AgentStatus, OcrPositionDTO } from "@zml/shared";
+import type { BootstrapAgentState, BootstrapStreamsState, OcrPositionDTO } from "@zml/shared";
 
 export type RuntimeState = {
     seq: number;
-    agent: AgentStatus;
-    streams: { ws: boolean; sse: boolean };
+    agent: BootstrapAgentState;
+    streams: BootstrapStreamsState;
     lastError?: string | null;
     lastPosition?: OcrPositionDTO;
 };

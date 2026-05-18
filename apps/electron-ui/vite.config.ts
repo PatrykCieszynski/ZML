@@ -5,7 +5,7 @@ import path from 'node:path'
 import electron from 'vite-plugin-electron/simple'
 import react from '@vitejs/plugin-react'
 
-const sharedIndex = path.resolve(__dirname, "shared/index.ts");
+const sharedIndex = path.resolve(__dirname, "../../packages/shared/src/index.ts");
 
 // https://vitejs.dev/config/
 export default defineConfig(() => {

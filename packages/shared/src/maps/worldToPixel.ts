@@ -1,4 +1,4 @@
-import type { MapConfig, PlanetId } from "./mapConfig";
+import type { MapConfig, PlanetId } from "./mapConfig.js";
 
 export type PixelPoint = { px: number; py: number };
 
@@ -20,7 +20,7 @@ export function worldToPixel(cfg: MapConfig, planetId: PlanetId, lon: number, la
 
     const x = ((lon - p.minLon) / lonRange) * width;
 
-    // IMPORTANT: Y inverted (top-left origin)
+    // Y is inverted because map pixels use a top-left origin.
     const y = height - ((lat - p.minLat) / latRange) * height;
 
     return { px: x, py: y };

@@ -15,7 +15,7 @@ type Opts = {
 
 export function isOcrPositionWire(x: unknown): x is OcrPositionWire {
     if (typeof x !== "object" || x === null) return false;
-    const r = x as any;
+    const r = x as Record<string, unknown>;
 
     return (
         typeof r.ts_ms === "number" &&
@@ -53,11 +53,11 @@ function computeBackoffMs(retry: number): number {
 function decodeWsData(data: WebSocket.RawData): string {
     // ws RawData can be Buffer | ArrayBuffer | Buffer[] | string
 
+    if (typeof data === "string") return data;
     if (Buffer.isBuffer(data)) return data.toString("utf-8");
     if (Array.isArray(data)) return Buffer.concat(data).toString("utf-8");
     if (data instanceof ArrayBuffer) return Buffer.from(data).toString("utf-8");
-    // Fallback
-    return Buffer.from(data as any).toString("utf-8");
+    return Buffer.from(data).toString("utf-8");
 }
 
 export function startPositionWsClient(opts: Opts): () => void {

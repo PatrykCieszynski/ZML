@@ -8,10 +8,9 @@ import { createMapWindow } from "./windows/createMapWindow";
 import { loadRenderer } from "./windows/loadRenderer";
 import { registerWindow } from "./windows/registry";
 
-import {IPC_PUSH, OcrPositionEvent, PushPosition} from "@zml/shared";
 import {runtime} from "./runtime.ts";
-import {broadcastTo} from "./windows/broadcast.ts";
 import {startPositionWsClient} from "./agent/positionWsClient.ts";
+import { pushPosition } from "./ipc/pushPosition.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -28,12 +27,6 @@ const BACKEND_URL = process.env.ZML_BACKEND_URL ?? "http://127.0.0.1:17171";
 let mainWin: BrowserWindow | null
 let mapWin: BrowserWindow | null
 
-function pushPosition(ev: OcrPositionEvent) {
-  console.debug(`[main] position event: seq=${ev.seq} tsMs=${ev.tsMs} x=${ev.payload.position.x} y=${ev.payload.position.y}`);
-  runtime.lastPosition = ev.payload;
-  broadcastTo("map", IPC_PUSH.POSITION, { event: ev } satisfies PushPosition);
-}
-
 async function createWindows() {
   registerIpc();
 
@@ -41,10 +34,12 @@ async function createWindows() {
   mainWin = createMainWindow(preloadPath);
   registerWindow("main", mainWin);
   await loadRenderer(mainWin, "main");
+  if (VITE_DEV_SERVER_URL) mainWin.webContents.openDevTools({ mode: "detach" });
 
   mapWin = createMapWindow(preloadPath);
   registerWindow("map", mapWin);
   await loadRenderer(mapWin, "map");
+  if (VITE_DEV_SERVER_URL) mapWin.webContents.openDevTools({ mode: "detach" });
 
 
   // backend connector (single source of truth)

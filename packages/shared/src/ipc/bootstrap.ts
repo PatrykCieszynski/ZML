@@ -8,7 +8,7 @@ export type AgentStatus = "connecting" | "connected" | "disconnected";
 
 export type BootstrapAgentState = {
     status: AgentStatus;
-    lastError?: string;
+    lastError?: string | null;
 };
 
 export type BootstrapStreamsState = {

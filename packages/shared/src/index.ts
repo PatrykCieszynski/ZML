@@ -7,3 +7,6 @@ export * from "./dto/worldPos.js";
 export * from "./dto/ocrPosition.js";
 
 export * from "./events/envelope.js";
+
+export * from "./maps/mapConfig.js";
+export * from "./maps/worldToPixel.js";

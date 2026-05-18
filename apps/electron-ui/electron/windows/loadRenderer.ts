@@ -1,7 +1,7 @@
 import type { BrowserWindow } from "electron";
 import type { WindowType } from "@zml/shared";
 import { getIndexHtml } from "./paths.ts";
-import {VITE_DEV_SERVER_URL} from "../main.ts";
+import { RENDERER_DIST, VITE_DEV_SERVER_URL } from "../main.ts";
 
 export async function loadRenderer(win: BrowserWindow, windowType: WindowType): Promise<void> {
     const params = new URLSearchParams({ windowType });
@@ -13,11 +13,10 @@ export async function loadRenderer(win: BrowserWindow, windowType: WindowType): 
         return;
     }
 
-    const distDir = VITE_DEV_SERVER_URL;
-    if (!distDir) {
-        throw new Error("process.env.DIST is not set (did you forget to set it in main.ts?)");
+    if (!RENDERER_DIST) {
+        throw new Error("RENDERER_DIST is not set (did you forget to set it in main.ts?)");
     }
 
-    const indexHtml = getIndexHtml(distDir);
+    const indexHtml = getIndexHtml(RENDERER_DIST);
     await win.loadFile(indexHtml, { search });
 }
