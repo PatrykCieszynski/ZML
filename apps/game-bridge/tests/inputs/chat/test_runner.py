@@ -3,9 +3,9 @@ from __future__ import annotations
 
 import threading
 
-from zml_game_bridge.inputs.chat.model import ChannelType, ChatLine
-from zml_game_bridge.inputs.chat.events import ResourceDepleted
 from zml_game_bridge.inputs.chat import runner as chat_runner
+from zml_game_bridge.inputs.chat.events import ResourceDepleted
+from zml_game_bridge.inputs.chat.model import ChannelType, ChatLine
 
 
 def _mk_line(message: str) -> ChatLine:

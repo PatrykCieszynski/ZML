@@ -9,6 +9,7 @@
   "exclude": [
     "**/.venv",
     "**/__pycache__",
+    "src/zml_game_bridge/testing",
     "tests"
   ]
 }

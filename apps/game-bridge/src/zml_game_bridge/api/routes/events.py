@@ -1,37 +1,36 @@
+from __future__ import annotations
+
 import asyncio
 import json
-import os
-from collections.abc import Iterator
-from pathlib import Path
-from typing import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
+from typing import Annotated, cast
 
 from fastapi import APIRouter, Depends, Query, Request
 from starlette.responses import StreamingResponse
 
 from zml_game_bridge.api.dto import EventEnvelopeDto
+from zml_game_bridge.app.runtime import AppRuntime
 from zml_game_bridge.events.envelope import EventEnvelope
 from zml_game_bridge.storage.event_reader import EventReader
 
 router = APIRouter(prefix="/events", tags=["events"])
 
-# TODO get path from config
-local_app_data = os.getenv("LOCALAPPDATA") or str(Path.home())
-db_path = Path(local_app_data) / "zabu-mining-log" / "db" / "zabu-mining-log.sqlite3"
 
-
-def get_event_reader() -> Iterator[EventReader]:
+def get_event_reader(request: Request) -> Iterator[EventReader]:
     """
     FastAPI dependency:
     - opens DB
     - yields EventReader
     - always closes
     """
-    event_reader = EventReader(db_path=db_path)
+    runtime = cast(AppRuntime, request.app.state.runtime)
+    event_reader = EventReader(db_path=runtime.db_path)
     event_reader.open()
     try:
         yield event_reader
     finally:
         event_reader.close()
+
 
 def _to_dto(envelope: EventEnvelope) -> EventEnvelopeDto:
     return EventEnvelopeDto(
@@ -43,10 +42,14 @@ def _to_dto(envelope: EventEnvelope) -> EventEnvelopeDto:
     )
 
 
+EventReaderDep = Annotated[EventReader, Depends(get_event_reader)]
+EventLimit = Annotated[int, Query(ge=1, le=2000)]
+
+
 @router.get("/latest", response_model=list[EventEnvelopeDto])
 def latest(
-    limit: int = Query(default=200, ge=1, le=2000),
-    db: EventReader = Depends(get_event_reader),
+    db: EventReaderDep,
+    limit: EventLimit = 200,
 ) -> list[EventEnvelopeDto]:
     rows = db.read_latest(limit=limit)
     return [_to_dto(r) for r in rows]
@@ -55,8 +58,8 @@ def latest(
 @router.get("/after/{after_event_id}", response_model=list[EventEnvelopeDto])
 def after(
     after_event_id: int,
-    limit: int = Query(default=200, ge=1, le=2000),
-    db: EventReader = Depends(get_event_reader),
+    db: EventReaderDep,
+    limit: EventLimit = 200,
 ) -> list[EventEnvelopeDto]:
     rows = db.read_after(after_event_id, limit=limit)
     return [_to_dto(r) for r in rows]
@@ -64,13 +67,14 @@ def after(
 
 @router.get("/stream")
 async def events_stream(request: Request) -> StreamingResponse:
-    runtime = request.app.state.runtime
-    #TODO property/getter
-    hub = runtime._sse_hub
+    runtime = cast(AppRuntime, request.app.state.runtime)
+    hub = runtime.sse_hub
 
     if hub is None:
+
         async def empty() -> AsyncIterator[str]:
             yield "event: error\ndata: {\"error\":\"sse hub not configured\"}\n\n"
+
         return StreamingResponse(empty(), media_type="text/event-stream")
 
     client = hub.register()
@@ -85,12 +89,12 @@ async def events_stream(request: Request) -> StreamingResponse:
 
                 try:
                     env: EventEnvelope = await asyncio.wait_for(client.queue.get(), timeout=15.0)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     yield ": keep-alive\n\n"
                     continue
 
                 dto = _to_dto(env)
-                data = dto.model_dump_json(exclude={"event_id", "event_type"})  # pydantic v2
+                data = dto.model_dump_json(exclude={"event_id", "event_type"})
 
                 # SSE format:
                 # id: <...>
@@ -105,6 +109,6 @@ async def events_stream(request: Request) -> StreamingResponse:
     headers = {
         "Cache-Control": "no-cache",
         "Connection": "keep-alive",
-        "X-Accel-Buffering": "no",  # nginx: disable buffering
+        "X-Accel-Buffering": "no",
     }
     return StreamingResponse(gen(), media_type="text/event-stream", headers=headers)

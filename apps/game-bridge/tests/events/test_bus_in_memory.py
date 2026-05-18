@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from zml_game_bridge.events.in_memory_persisted_event_bus import InMemoryPersistedEventBus
 from zml_game_bridge.events.envelope import EventEnvelope
+from zml_game_bridge.events.in_memory_persisted_event_bus import InMemoryPersistedEventBus
 
 
 def _env(i: int = 1) -> EventEnvelope:

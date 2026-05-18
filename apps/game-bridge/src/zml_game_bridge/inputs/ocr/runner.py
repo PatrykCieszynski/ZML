@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import time
 import threading
+import time
 from collections.abc import Callable
 from ctypes import windll
 
-from zml_game_bridge.inputs.ocr.capture.window_capturer import WindowCapturer
 from zml_game_bridge.inputs.ocr.capture.model import RoiRect
+from zml_game_bridge.inputs.ocr.capture.window_capturer import WindowCapturer
 from zml_game_bridge.inputs.ocr.pipelines.position.model import OcrPosition, PositionRois
 from zml_game_bridge.inputs.ocr.pipelines.position.pipeline import PositionPipeline
 

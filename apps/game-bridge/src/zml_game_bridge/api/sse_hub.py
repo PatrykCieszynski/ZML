@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import threading
+from contextlib import suppress
 from dataclasses import dataclass
-from typing import Dict
 
 from zml_game_bridge.events.envelope import EventEnvelope
 
@@ -29,7 +29,7 @@ class SseHub:
 
         self._lock = threading.Lock()
         self._next_id = 1
-        self._clients: Dict[int, asyncio.Queue[EventEnvelope]] = {}
+        self._clients: dict[int, asyncio.Queue[EventEnvelope]] = {}
 
     def register(self) -> SseClient:
         """
@@ -68,10 +68,8 @@ class SseHub:
             # Backpressure policy for slow clients:
             # keep the stream "near-real-time" by dropping oldest.
             if q.full():
-                try:
+                with suppress(asyncio.QueueEmpty):
                     _ = q.get_nowait()
-                except asyncio.QueueEmpty:
-                    pass
             try:
                 q.put_nowait(env)
             except asyncio.QueueFull:

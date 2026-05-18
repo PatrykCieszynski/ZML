@@ -1,5 +1,6 @@
 # python
 from pathlib import Path
+
 from PIL import Image
 
 INPUT_DIR: Path = Path("player_coords")

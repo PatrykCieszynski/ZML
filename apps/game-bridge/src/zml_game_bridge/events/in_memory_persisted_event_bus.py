@@ -1,6 +1,6 @@
 from threading import Lock
 
-from zml_game_bridge.events.bus import PersistedEventBus, EventHandler, Subscription
+from zml_game_bridge.events.bus import EventHandler, PersistedEventBus, Subscription
 from zml_game_bridge.events.envelope import EventEnvelope
 
 

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import uvicorn
+
 from zml_game_bridge.settings import Settings
+
 
 def main() -> None:
     s = Settings()

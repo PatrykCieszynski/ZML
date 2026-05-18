@@ -50,7 +50,7 @@ class TesserDigitsEngine:
 
         img = np.ascontiguousarray(img_u8)
         h, w = img.shape
-        self._api.SetImageBytes(img.tobytes(), w, h, 1, w)
+        self._api.SetImageBytes(img.tobytes(), w, h, 1, w)  # type: ignore[arg-type]
         return self._api.GetUTF8Text() or ""
 
     def close(self) -> None:

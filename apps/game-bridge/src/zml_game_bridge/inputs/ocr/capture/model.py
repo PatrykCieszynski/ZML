@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 import numpy as np
 
@@ -13,7 +12,7 @@ class RoiRect:
     y1: int
     y2: int
 
-    def crop(self, frame: np.ndarray) -> Optional[np.ndarray]:
+    def crop(self, frame: np.ndarray) -> np.ndarray | None:
         h: int = int(frame.shape[0])
         w: int = int(frame.shape[1])
 

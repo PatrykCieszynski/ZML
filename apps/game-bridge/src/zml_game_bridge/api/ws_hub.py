@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 
 from zml_game_bridge.inputs.ocr.pipelines.position.model import OcrPosition
 
@@ -24,11 +25,8 @@ class OcrPositionHub:
                     q.get_nowait()
                 except asyncio.QueueEmpty:
                     break
-            try:
+            with suppress(asyncio.QueueFull):
                 q.put_nowait(pos)
-            except asyncio.QueueFull:
-                # Shouldn't happen due to full() draining, but keep safe.
-                pass
 
     def subscribe(self) -> tuple[asyncio.Queue[OcrPosition], OcrPosition | None]:
         q: asyncio.Queue[OcrPosition] = asyncio.Queue(maxsize=1)

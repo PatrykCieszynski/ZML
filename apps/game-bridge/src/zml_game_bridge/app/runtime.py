@@ -1,24 +1,36 @@
 from __future__ import annotations
 
+import logging
 import threading
-from threading import Thread
 from pathlib import Path
+from threading import Thread
 
 from zml_game_bridge.api.sse_hub import SseHub
 from zml_game_bridge.api.ws_hub import OcrPositionHub
-from zml_game_bridge.app.event_channel import EventChannel
 from zml_game_bridge.app.db_writer_worker import DbWriterWorker
-from zml_game_bridge.inputs.ocr.runner import start_ocr_input
+from zml_game_bridge.app.event_channel import EventChannel
 from zml_game_bridge.events.in_memory_persisted_event_bus import (
     InMemoryPersistedEventBus,
 )
 from zml_game_bridge.inputs.chat.runner import start_chat_input
+from zml_game_bridge.inputs.ocr.runner import start_ocr_input
+
+logger = logging.getLogger(__name__)
 
 
 class AppRuntime:
-    def __init__(self, *, db_path: Path, chat_log_path: Path | None) -> None:
+    def __init__(
+        self,
+        *,
+        db_path: Path,
+        chat_log_path: Path | None,
+        chat_start_at_end: bool,
+        ocr_enabled: bool,
+    ) -> None:
         self._db_path = db_path
         self._chat_log_path = chat_log_path
+        self._chat_start_at_end = chat_start_at_end
+        self._ocr_enabled = ocr_enabled
 
         self._stop_event = threading.Event()
         self._bus = InMemoryPersistedEventBus()
@@ -34,12 +46,21 @@ class AppRuntime:
 
         self._sse_hub: SseHub | None = None
         self._position_hub: OcrPositionHub | None = None
+        self._started = False
+
+    @property
+    def db_path(self) -> Path:
+        return self._db_path
 
     @property
     def position_hub(self) -> OcrPositionHub:
         if self._position_hub is None:
             raise RuntimeError("Position hub not attached")
         return self._position_hub
+
+    @property
+    def sse_hub(self) -> SseHub | None:
+        return self._sse_hub
 
     def attach_sse_hub(self, hub: SseHub) -> None:
         self._sse_hub = hub
@@ -49,7 +70,9 @@ class AppRuntime:
 
 
     def start(self) -> None:
-        # TODO: idempotency guard (if already started -> return)
+        if self._started:
+            return
+        self._started = True
 
         hub = self.position_hub
 
@@ -69,24 +92,24 @@ class AppRuntime:
                 "path": self._chat_log_path,
                 "event_sink": self._gateway.emit,
                 "stop_event": self._stop_event,
-                "start_at_end": True,
+                "start_at_end": self._chat_start_at_end,
             },
             daemon=True,
         )
         self._t_chat.start()
 
+        if self._ocr_enabled:
+            self._t_ocr = Thread(
+                target=start_ocr_input,
+                kwargs={
+                    "position_sink": hub.publish_threadsafe,
+                    "stop_event": self._stop_event,
+                },
+                daemon=True,
+            )
+            self._t_ocr.start()
 
-        self._t_ocr = Thread(
-            target=start_ocr_input,
-            kwargs={
-                "position_sink": hub.publish_threadsafe,
-                "stop_event": self._stop_event,
-            },
-            daemon=True,
-        )
-        self._t_ocr.start()
-
-        self._sub_print = self._bus.subscribe(lambda env: print(f"New event stored: {env}"))
+        self._sub_print = self._bus.subscribe(lambda env: logger.info("New event stored: %s", env))
 
         # SSE fan-out (if attached)
         if self._sse_hub is not None:
@@ -109,3 +132,4 @@ class AppRuntime:
             self._t_db.join(timeout=2.0)
         if self._t_ocr is not None:
             self._t_ocr.join(timeout=2.0)
+        self._started = False

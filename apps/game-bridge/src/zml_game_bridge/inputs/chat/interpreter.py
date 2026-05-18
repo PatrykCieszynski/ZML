@@ -6,7 +6,7 @@ from decimal import Decimal, InvalidOperation
 
 from zml_game_bridge.common.types import Mpec
 
-from .model import ChatLine, ChannelType
+from ...common.models import WorldPos
 from .events import (
     ChatEventBase,
     EnhancerBroke,
@@ -16,7 +16,7 @@ from .events import (
     ResourceDepleted,
     SkillGained,
 )
-from ...common.models import WorldPos
+from .model import ChannelType, ChatLine
 
 RE_ENHANCER_BROKE = re.compile(
     r"^Your enhancer (?P<enhancer_name>.+?) on your (?P<item_name>.+?) broke\."

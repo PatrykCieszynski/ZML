@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from queue import Queue, Empty
+from queue import Empty, Queue
 
 from zml_game_bridge.events.base import EventBase
 

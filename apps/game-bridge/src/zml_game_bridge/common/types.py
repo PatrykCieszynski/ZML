@@ -1,4 +1,5 @@
 from typing import NewType
+
 # Monetary amounts are stored as integer mPEC to avoid float/Decimal drift.
 # 1 PED = 100 PEC = 100000 mPEC
 # 1mPEC = 0.001 PEC = 0.00001 PED

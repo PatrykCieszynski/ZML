@@ -100,8 +100,6 @@ def test_does_not_emit_partial_line_until_newline(chat_log: Path) -> None:
     """
     Chat logs can be written in chunks. Tailing must only emit complete lines.
     """
-    w = ChatLogWriter(chat_log)
-
     t, stop, out = _start_tailer_thread(path=chat_log, start_at_end=True)
     try:
         # write partial without newline (bypass ChatLogWriter.append)

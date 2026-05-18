@@ -3,12 +3,13 @@ from __future__ import annotations
 import threading
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import zml_game_bridge.app.db_writer_worker as db_writer_worker_mod
 from zml_game_bridge.app.event_channel import EventChannel
-from zml_game_bridge.events.in_memory_persisted_event_bus import InMemoryPersistedEventBus
 from zml_game_bridge.events.envelope import EventEnvelope
+from zml_game_bridge.events.in_memory_persisted_event_bus import InMemoryPersistedEventBus
 
 
 # --- Dummy domain event (doesn't matter what fields) ---
@@ -19,20 +20,12 @@ class DummyEvent:
 
 # --- Fake EventStore injected via monkeypatch ---
 class FakeEventStore:
-    last_instance: "FakeEventStore | None" = None
+    last_instance: FakeEventStore | None = None
 
-    def __init__(self, _db_path: Any) -> None:
-        self.open_calls = 0
-        self.close_calls = 0
+    def __init__(self, _conn: Any) -> None:
         self.append_calls: list[Any] = []
         self._next_id = 1
         FakeEventStore.last_instance = self
-
-    def open(self) -> None:
-        self.open_calls += 1
-
-    def close(self) -> None:
-        self.close_calls += 1
 
     def append(self, event: Any) -> EventEnvelope:
         self.append_calls.append(event)
@@ -47,13 +40,17 @@ class FakeEventStore:
         )
 
 
-def test_db_writer_persists_and_publishes(monkeypatch) -> None:
+def test_db_writer_persists_and_publishes(monkeypatch, tmp_path: Path) -> None:
     # Patch EventStore used by DbWriterWorker
     monkeypatch.setattr(db_writer_worker_mod, "EventStore", FakeEventStore)
 
     bus = InMemoryPersistedEventBus()
     gw = EventChannel(maxsize=10)
-    writer = db_writer_worker_mod.DbWriterWorker(db_path=":memory:", gateway=gw, bus=bus)  # db_path ignored by fake
+    writer = db_writer_worker_mod.DbWriterWorker(
+        db_path=tmp_path / "events.sqlite3",
+        gateway=gw,
+        bus=bus,
+    )
 
     out: list[EventEnvelope] = []
     got = threading.Event()
@@ -77,20 +74,22 @@ def test_db_writer_persists_and_publishes(monkeypatch) -> None:
 
     inst = FakeEventStore.last_instance
     assert inst is not None
-    assert inst.open_calls == 1
-    assert inst.close_calls == 1
     assert len(inst.append_calls) == 1
     assert isinstance(inst.append_calls[0], DummyEvent)
 
     sub.close()
 
 
-def test_db_writer_no_event_no_publish(monkeypatch) -> None:
+def test_db_writer_no_event_no_publish(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(db_writer_worker_mod, "EventStore", FakeEventStore)
 
     bus = InMemoryPersistedEventBus()
     gw = EventChannel(maxsize=10)
-    writer = db_writer_worker_mod.DbWriterWorker(db_path=":memory:", gateway=gw, bus=bus)
+    writer = db_writer_worker_mod.DbWriterWorker(
+        db_path=tmp_path / "events.sqlite3",
+        gateway=gw,
+        bus=bus,
+    )
 
     out: list[EventEnvelope] = []
     sub = bus.subscribe(lambda env: out.append(env))
@@ -108,8 +107,6 @@ def test_db_writer_no_event_no_publish(monkeypatch) -> None:
     assert out == []
     inst = FakeEventStore.last_instance
     assert inst is not None
-    assert inst.open_calls == 1
-    assert inst.close_calls == 1
     assert inst.append_calls == []
 
     sub.close()

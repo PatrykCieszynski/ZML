@@ -6,6 +6,7 @@ from zml_game_bridge.inputs.chat.interpreter import interpret_chat_line
 from zml_game_bridge.inputs.chat.parser import parse_chat_line
 from zml_game_bridge.inputs.chat.tailer import tail_lines
 
+
 def start_chat_input(
     path: Path,
     event_sink: EventSink,

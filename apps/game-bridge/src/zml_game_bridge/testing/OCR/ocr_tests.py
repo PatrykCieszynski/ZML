@@ -5,9 +5,9 @@ import argparse
 import csv
 import re
 import time
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -37,7 +37,7 @@ class LineResult:
     sample_id: str
     kind: str  # "lon" or "lat"
     expected: int
-    predicted: Optional[int]
+    predicted: int | None
     ok: bool
     ms_total: float
 
@@ -50,7 +50,7 @@ class PairResult:
     pair_ok: bool
 
 
-def _parse_name(stem: str) -> Tuple[str, int]:
+def _parse_name(stem: str) -> tuple[str, int]:
     """
     Parse "<sampleId>_<expected>" from the filename stem.
     """
@@ -60,20 +60,20 @@ def _parse_name(stem: str) -> Tuple[str, int]:
     return m.group("id"), int(m.group("expected"))
 
 
-def _collect_samples(root: Path) -> List[Sample]:
+def _collect_samples(root: Path) -> list[Sample]:
     lon_dir = root / "lon"
     lat_dir = root / "lat"
     if not lon_dir.is_dir() or not lat_dir.is_dir():
         raise FileNotFoundError(f"Expected 'lon/' and 'lat/' folders under: {root}")
 
-    lon_map: Dict[str, Tuple[Path, int]] = {}
+    lon_map: dict[str, tuple[Path, int]] = {}
     for p in sorted(lon_dir.glob("*.png")):
         sid, exp = _parse_name(p.stem)
         if sid in lon_map:
             raise ValueError(f"Duplicate lon sample_id={sid!r}: {lon_map[sid][0]} and {p}")
         lon_map[sid] = (p, exp)
 
-    lat_map: Dict[str, Tuple[Path, int]] = {}
+    lat_map: dict[str, tuple[Path, int]] = {}
     for p in sorted(lat_dir.glob("*.png")):
         sid, exp = _parse_name(p.stem)
         if sid in lat_map:
@@ -88,7 +88,7 @@ def _collect_samples(root: Path) -> List[Sample]:
             f"Missing pairs. Missing lon: {len(missing_lon)}; missing lat: {len(missing_lat)}"
         )
 
-    samples: List[Sample] = []
+    samples: list[Sample] = []
     for sid in sample_ids:
         lon_path, lon_exp = lon_map[sid]
         lat_path, lat_exp = lat_map[sid]
@@ -199,7 +199,7 @@ def _run_one_line(
     raw_text = backend.ocr_line(pre)
     digits = _digits_only(raw_text)
 
-    predicted: Optional[int]
+    predicted: int | None
     if digits == "":
         predicted = None
     else:
@@ -224,8 +224,8 @@ def _run_one_line(
     )
 
 
-def _summarize(lines: List[LineResult], pairs: List[PairResult]) -> str:
-    def _stats(kind: str) -> Tuple[int, int, int, float]:
+def _summarize(lines: list[LineResult], pairs: list[PairResult]) -> str:
+    def _stats(kind: str) -> tuple[int, int, int, float]:
         xs = [r for r in lines if r.kind == kind]
         total = len(xs)
         ok = sum(1 for r in xs if r.ok)
@@ -254,12 +254,12 @@ def _summarize(lines: List[LineResult], pairs: List[PairResult]) -> str:
     return "\n".join(out)
 
 
-def _build_pairs(line_results: List[LineResult]) -> List[PairResult]:
-    by_id: Dict[str, Dict[str, LineResult]] = {}
+def _build_pairs(line_results: list[LineResult]) -> list[PairResult]:
+    by_id: dict[str, dict[str, LineResult]] = {}
     for r in line_results:
         by_id.setdefault(r.sample_id, {})[r.kind] = r
 
-    pairs: List[PairResult] = []
+    pairs: list[PairResult] = []
     for sid, m in sorted(by_id.items(), key=lambda kv: kv[0]):
         lon = m.get("lon")
         lat = m.get("lat")
@@ -276,7 +276,7 @@ def _build_pairs(line_results: List[LineResult]) -> List[PairResult]:
     return pairs
 
 
-def _write_failures_csv(path: Path, results: List[LineResult]) -> None:
+def _write_failures_csv(path: Path, results: list[LineResult]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
@@ -312,11 +312,11 @@ def main() -> int:
 
     cfg = PreprocessConfig()
 
-    requested_variants: List[PreprocessVariant] = []
+    requested_variants: list[PreprocessVariant] = []
     for v in args.variants:
         requested_variants.append(v)  # type: ignore[arg-type]
 
-    backends: List[OcrBackend] = []
+    backends: list[OcrBackend] = []
     for b in args.backends:
         if b == "pytesseract":
             backends.append(PyTesseractBackend())
@@ -336,7 +336,7 @@ def main() -> int:
 
     for backend in backends:
         for variant in requested_variants:
-            line_results: List[LineResult] = []
+            line_results: list[LineResult] = []
 
             for s in samples:
                 line_results.append(
@@ -374,10 +374,8 @@ def main() -> int:
 
         # Close backend if needed
         if hasattr(backend, "close"):
-            try:
+            with suppress(Exception):
                 backend.close()  # type: ignore[attr-defined]
-            except Exception:
-                pass
 
     return 0
 

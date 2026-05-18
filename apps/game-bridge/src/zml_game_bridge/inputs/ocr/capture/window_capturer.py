@@ -1,13 +1,12 @@
 from __future__ import annotations
 
+from ctypes import windll
 from dataclasses import dataclass
-from typing import Any, Optional, Tuple, cast
+from typing import Any, cast
 
 import numpy as np
 import win32gui
 import win32ui
-from ctypes import windll
-
 
 PW_CLIENTONLY = 0x00000001
 PW_RENDERFULLCONTENT = 0x00000002
@@ -44,7 +43,7 @@ class WindowCapturer:
     def __init__(self, *, title_contains: str, flags: int = PW_CLIENTONLY | PW_RENDERFULLCONTENT) -> None:
         self._title_contains = title_contains
         self._flags = flags
-        self._state: Optional[_GdiState] = None
+        self._state: _GdiState | None = None
         self._ensure_open()
 
     def close(self) -> None:
@@ -79,7 +78,7 @@ class WindowCapturer:
             if ok2 != 1:
                 raise RuntimeError(f"PrintWindow failed: {ok} / fallback {ok2}")
 
-        bmpinfo = cast(dict, st.bitmap.GetInfo())
+        bmpinfo = cast(dict[str, int], st.bitmap.GetInfo())
         bmpstr = cast(bytes, st.bitmap.GetBitmapBits(True))
 
         height = int(bmpinfo.get("bmHeight", 0))
@@ -124,6 +123,6 @@ class WindowCapturer:
         )
 
     @staticmethod
-    def _get_client_size(hwnd: int) -> Tuple[int, int]:
+    def _get_client_size(hwnd: int) -> tuple[int, int]:
         left, top, right, bottom = win32gui.GetClientRect(hwnd)
         return right - left, bottom - top
