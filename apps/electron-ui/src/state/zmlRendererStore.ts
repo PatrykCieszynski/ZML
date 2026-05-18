@@ -6,6 +6,7 @@ import type {
   BootstrapStreamsState,
   OcrPositionDTO,
   OcrPositionEvent,
+  RunDto,
   WindowType,
 } from "@zml/shared";
 import { getZml } from "../zml";
@@ -18,8 +19,10 @@ export type ZmlRendererState = {
   streams: BootstrapStreamsState;
   position?: OcrPositionDTO;
   positionEvent?: OcrPositionEvent;
+  activeRun?: RunDto;
   agentHealth?: AgentHealthDto;
   agentHealthChecking: boolean;
+  runCommandPending: boolean;
   lastCommandError: string | null;
   error: string | null;
   lastBootstrapTsMs?: number;
@@ -32,6 +35,7 @@ const initialState: ZmlRendererState = {
   agent: { status: "connecting" },
   streams: { ws: false, sse: false },
   agentHealthChecking: false,
+  runCommandPending: false,
   lastCommandError: null,
   error: null,
 };
@@ -169,6 +173,76 @@ export async function refreshAgentHealth(): Promise<void> {
   } catch (error) {
     setState({
       agentHealthChecking: false,
+      lastCommandError: errorToMessage(error),
+    });
+  }
+}
+
+export async function startRun(name: string): Promise<void> {
+  let api;
+  try {
+    api = getZml();
+  } catch (error) {
+    setState({
+      runCommandPending: false,
+      lastCommandError: errorToMessage(error),
+    });
+    return;
+  }
+
+  const trimmedName = name.trim();
+  if (!trimmedName) {
+    setState({ lastCommandError: "Run name is required" });
+    return;
+  }
+
+  setState({
+    runCommandPending: true,
+    lastCommandError: null,
+  });
+
+  try {
+    const activeRun = await api.startRun({ name: trimmedName });
+    setState({
+      activeRun,
+      runCommandPending: false,
+      lastCommandError: null,
+    });
+  } catch (error) {
+    setState({
+      runCommandPending: false,
+      lastCommandError: errorToMessage(error),
+    });
+  }
+}
+
+export async function stopRun(): Promise<void> {
+  let api;
+  try {
+    api = getZml();
+  } catch (error) {
+    setState({
+      runCommandPending: false,
+      lastCommandError: errorToMessage(error),
+    });
+    return;
+  }
+
+  setState({
+    runCommandPending: true,
+    lastCommandError: null,
+  });
+
+  try {
+    const activeRun = await api.stopRun(state.activeRun ? { runId: state.activeRun.runId } : {});
+    setState({
+      activeRun,
+      runCommandPending: false,
+      lastCommandError: null,
+    });
+  } catch (error) {
+    setState({
+      runCommandPending: false,
       lastCommandError: errorToMessage(error),
     });
   }

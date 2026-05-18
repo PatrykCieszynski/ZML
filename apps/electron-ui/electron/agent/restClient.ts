@@ -1,4 +1,13 @@
-import type { AgentHealthDto } from "@zml/shared";
+import {
+  isRunWire,
+  startRunRequestToWire,
+  stopRunRequestToWire,
+  wireToRunDto,
+  type AgentHealthDto,
+  type RunDto,
+  type StartRunRequest,
+  type StopRunRequest,
+} from "@zml/shared";
 
 type FetchLike = typeof fetch;
 
@@ -27,15 +36,43 @@ export class AgentRestClient {
     return data;
   }
 
+  async startRun(request: StartRunRequest): Promise<RunDto> {
+    const data = await this.postJson("/api/v1/runs/start", startRunRequestToWire(request));
+    if (!isRunWire(data)) {
+      throw new Error("Agent start run returned an invalid payload");
+    }
+    return wireToRunDto(data);
+  }
+
+  async stopRun(request: StopRunRequest): Promise<RunDto> {
+    const data = await this.postJson("/api/v1/runs/stop", stopRunRequestToWire(request));
+    if (!isRunWire(data)) {
+      throw new Error("Agent stop run returned an invalid payload");
+    }
+    return wireToRunDto(data);
+  }
+
   private async getJson(pathname: string): Promise<unknown> {
+    return this.requestJson("GET", pathname);
+  }
+
+  private async postJson(pathname: string, body: unknown): Promise<unknown> {
+    return this.requestJson("POST", pathname, body);
+  }
+
+  private async requestJson(method: "GET" | "POST", pathname: string, body?: unknown): Promise<unknown> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
 
     try {
       const response = await this.fetchImpl(new URL(pathname, this.baseUrl), {
-        method: "GET",
-        headers: { accept: "application/json" },
+        method,
+        headers: {
+          accept: "application/json",
+          ...(body === undefined ? {} : { "content-type": "application/json" }),
+        },
         signal: controller.signal,
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
 
       if (!response.ok) {

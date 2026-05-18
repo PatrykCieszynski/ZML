@@ -1,10 +1,12 @@
+import { useState } from "react";
 import type { WindowType } from "@zml/shared";
-import { refreshAgentHealth, useZmlRendererStore } from "../state/zmlRendererStore";
+import { refreshAgentHealth, startRun, stopRun, useZmlRendererStore } from "../state/zmlRendererStore";
 
 export function MainWindow() {
   const windowType: WindowType = "main";
   const state = useZmlRendererStore(windowType);
   const position = state.position?.position;
+  const [runName, setRunName] = useState("Mining run");
 
   return (
     <div style={{ padding: 16, fontFamily: "system-ui, sans-serif" }}>
@@ -47,6 +49,37 @@ export function MainWindow() {
             <div>Y: {position ? position.y : "-"}</div>
             <div>Z: {position?.z ?? "-"}</div>
             <div>Seq: {state.positionEvent?.seq ?? "-"}</div>
+          </section>
+
+          <section style={{ background: "#111", color: "#ddd", padding: 12, borderRadius: 8 }}>
+            <h3 style={{ marginTop: 0 }}>Run Commands</h3>
+            <div>Active: {state.activeRun ? `${state.activeRun.name} (${state.activeRun.status})` : "-"}</div>
+            <input
+              value={runName}
+              onChange={(event) => setRunName(event.currentTarget.value)}
+              disabled={state.runCommandPending}
+              style={{ boxSizing: "border-box", marginTop: 10, width: "100%" }}
+            />
+            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  void startRun(runName);
+                }}
+                disabled={state.runCommandPending}
+              >
+                Start run
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void stopRun();
+                }}
+                disabled={state.runCommandPending}
+              >
+                Stop run
+              </button>
+            </div>
           </section>
         </div>
       )}

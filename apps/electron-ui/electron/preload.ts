@@ -7,6 +7,9 @@ import type {
   PushPosition,
   PushStatePatch,
   RuntimeStatePatch,
+  RunDto,
+  StartRunRequest,
+  StopRunRequest,
   WindowType,
 } from "@zml/shared";
 import { IPC_CMD, IPC_PUSH } from "@zml/shared";
@@ -16,6 +19,8 @@ type Unsubscribe = () => void;
 type ZmlApi = {
   getBootstrapState: (windowType: WindowType) => Promise<BootstrapState>;
   getAgentHealth: () => Promise<AgentHealthDto>;
+  startRun: (request: StartRunRequest) => Promise<RunDto>;
+  stopRun: (request?: StopRunRequest) => Promise<RunDto>;
   onPosition: (cb: (event: OcrPositionEvent) => void) => Unsubscribe;
   onStatePatch: (cb: (patch: RuntimeStatePatch) => void) => Unsubscribe;
 };
@@ -28,6 +33,14 @@ const api: ZmlApi = {
 
   async getAgentHealth() {
     return ipcRenderer.invoke(IPC_CMD.GET_AGENT_HEALTH) as Promise<AgentHealthDto>;
+  },
+
+  async startRun(request) {
+    return ipcRenderer.invoke(IPC_CMD.START_RUN, request) as Promise<RunDto>;
+  },
+
+  async stopRun(request = {}) {
+    return ipcRenderer.invoke(IPC_CMD.STOP_RUN, request) as Promise<RunDto>;
   },
 
   onPosition(cb) {
