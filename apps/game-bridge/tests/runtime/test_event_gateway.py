@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from zml_game_bridge.app.event_channel import EventChannel
+from zml_game_bridge.runtime.event_queue import EventChannel
 
 
 @dataclass(frozen=True, slots=True)

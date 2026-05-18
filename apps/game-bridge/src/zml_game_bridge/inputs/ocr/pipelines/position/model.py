@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from zml_game_bridge.common.models import WorldPos
+from zml_game_bridge.domain.position import WorldPos
 from zml_game_bridge.inputs.ocr.capture.model import RoiRect
 
 

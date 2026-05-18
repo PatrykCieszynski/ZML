@@ -5,17 +5,17 @@ import threading
 from pathlib import Path
 from threading import Thread
 
-from zml_game_bridge.api.sse_hub import SseHub
-from zml_game_bridge.api.ws_hub import OcrPositionHub
-from zml_game_bridge.app.db_writer_worker import DbWriterWorker
-from zml_game_bridge.app.event_channel import EventChannel
-from zml_game_bridge.app.position_state import LatestPositionState
+from zml_game_bridge.api.channels.position_hub import OcrPositionHub
+from zml_game_bridge.api.channels.sse_hub import SseHub
 from zml_game_bridge.events.in_memory_persisted_event_bus import (
     InMemoryPersistedEventBus,
 )
 from zml_game_bridge.inputs.chat.runner import start_chat_input
 from zml_game_bridge.inputs.ocr.pipelines.position.model import OcrPosition
 from zml_game_bridge.inputs.ocr.runner import start_ocr_input
+from zml_game_bridge.runtime.db_writer import DbWriterWorker
+from zml_game_bridge.runtime.event_queue import EventChannel
+from zml_game_bridge.runtime.position_state import LatestPositionState
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,6 @@ class AppRuntime:
 
     def attach_position_hub(self, hub: OcrPositionHub) -> None:
         self._position_hub = hub
-
 
     def start(self) -> None:
         if self._started:

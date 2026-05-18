@@ -4,9 +4,9 @@ import re
 from collections.abc import Callable
 from decimal import Decimal, InvalidOperation
 
-from zml_game_bridge.common.types import Mpec
+from zml_game_bridge.domain.money import Mpec
 
-from ...common.models import WorldPos
+from ...domain.position import WorldPos
 from .events import (
     ChatEventBase,
     EnhancerBroke,

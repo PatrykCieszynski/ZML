@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from zml_game_bridge.common.models import WorldPos
+from zml_game_bridge.domain.position import WorldPos
 from zml_game_bridge.inputs.ocr.pipelines.position.engine import TesserDigitsEngine
 from zml_game_bridge.inputs.ocr.pipelines.position.model import OcrPosition, PositionRois
 from zml_game_bridge.inputs.ocr.pipelines.position.preprocess import (

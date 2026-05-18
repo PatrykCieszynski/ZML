@@ -4,14 +4,12 @@ import sqlite3
 import threading
 from pathlib import Path
 
-from zml_game_bridge.app.event_channel import EventChannel
-from zml_game_bridge.app.event_projector import EventProjector, NoOpEventProjector
-from zml_game_bridge.events.base import EventBase
 from zml_game_bridge.events.bus import PersistedEventBus
-from zml_game_bridge.events.envelope import EventEnvelope
-from zml_game_bridge.storage.db_schema import ensure_schema
-from zml_game_bridge.storage.event_store import EventStore
-from zml_game_bridge.storage.sqlite import open_sqlite
+from zml_game_bridge.persistence.event_projector import EventProjector
+from zml_game_bridge.persistence.event_writer import EventWriter
+from zml_game_bridge.persistence.schema import ensure_schema
+from zml_game_bridge.persistence.sqlite import open_sqlite
+from zml_game_bridge.runtime.event_queue import EventChannel
 
 
 class DbWriterWorker:
@@ -30,7 +28,7 @@ class DbWriterWorker:
         self.db_path = db_path
         self.pending_events = pending_events
         self.persisted_events = persisted_events
-        self.projector = projector or NoOpEventProjector()
+        self.projector = projector
         self.conn: sqlite3.Connection | None = None
 
     def open(self) -> None:
@@ -52,7 +50,7 @@ class DbWriterWorker:
             self.close()
             raise
 
-        event_store = EventStore(self.conn)
+        event_writer = EventWriter(self.conn, projector=self.projector)
 
         try:
             while not stop_event.is_set():
@@ -67,17 +65,7 @@ class DbWriterWorker:
                 # Also: log exceptions with enough context (event_type).
 
                 # TODO batching?
-                event_envelope = self._persist_event(event_store, event)
+                event_envelope = event_writer.write(event)
                 self.persisted_events.publish(event_envelope)
         finally:
             self.close()
-
-    def _persist_event(self, event_store: EventStore, event: EventBase) -> EventEnvelope:
-        conn = self.conn
-        if conn is None:
-            raise RuntimeError("DbWriterWorker not opened")
-
-        with conn:
-            event_envelope = event_store.append(event)
-            self.projector.project(conn=conn, event=event, envelope=event_envelope)
-        return event_envelope

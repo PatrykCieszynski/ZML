@@ -8,10 +8,10 @@ from typing import Annotated, cast
 from fastapi import APIRouter, Depends, Query, Request
 from starlette.responses import StreamingResponse
 
-from zml_game_bridge.api.dto import EventEnvelopeDto
-from zml_game_bridge.app.runtime import AppRuntime
+from zml_game_bridge.api.schemas.events import EventEnvelopeDto
 from zml_game_bridge.events.envelope import EventEnvelope
-from zml_game_bridge.storage.event_reader import EventReader
+from zml_game_bridge.persistence.events import EventReader
+from zml_game_bridge.runtime.runtime import AppRuntime
 
 router = APIRouter(prefix="/events", tags=["events"])
 

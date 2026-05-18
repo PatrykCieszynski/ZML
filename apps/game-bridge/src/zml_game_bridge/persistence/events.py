@@ -7,10 +7,12 @@ from dataclasses import asdict, is_dataclass
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
+from pathlib import Path
 from typing import Any, cast
 
 from zml_game_bridge.events.base import EventBase
 from zml_game_bridge.events.envelope import EventEnvelope
+from zml_game_bridge.persistence.sqlite import open_sqlite
 
 
 class EventStore:
@@ -22,7 +24,7 @@ class EventStore:
         Persist event and return envelope.
 
         Assumption:
-        - DB schema was already ensured elsewhere (runtime bootstrap).
+        - DB schema was already ensured elsewhere.
         - Transaction ownership belongs to the caller.
         """
         conn = self._conn
@@ -59,6 +61,60 @@ class EventStore:
             event_type=event_type,
             payload_json=payload_json,
         )
+
+
+class EventReader:
+    def __init__(self, db_path: Path) -> None:
+        self._db_path = db_path
+        self._conn: sqlite3.Connection | None = None
+
+    def open(self) -> None:
+        self._conn = open_sqlite(self._db_path)
+
+    def close(self) -> None:
+        if self._conn is not None:
+            self._conn.close()
+            self._conn = None
+
+    def read_after(self, after_event_id: int, *, limit: int = 200) -> list[EventEnvelope]:
+        assert self._conn is not None, "EventReader not opened"
+        cur = self._conn.execute(
+            """
+            SELECT event_id, created_ts_ms, event_dt, event_type, payload_json
+            FROM events
+            WHERE event_id > ?
+            ORDER BY event_id ASC
+            LIMIT ?
+            """,
+            (after_event_id, limit),
+        )
+        return [_row_to_event_envelope(row) for row in cur.fetchall()]
+
+    def read_latest(self, *, limit: int = 200) -> list[EventEnvelope]:
+        assert self._conn is not None, "EventReader not opened"
+        cur = self._conn.execute(
+            """
+            SELECT * FROM (
+              SELECT event_id, created_ts_ms, event_dt, event_type, payload_json
+              FROM events
+              ORDER BY event_id DESC
+              LIMIT ?
+            )
+            ORDER BY event_id ASC
+            """,
+            (limit,),
+        )
+        return [_row_to_event_envelope(row) for row in cur.fetchall()]
+
+
+def _row_to_event_envelope(row: sqlite3.Row) -> EventEnvelope:
+    return EventEnvelope(
+        event_id=int(row["event_id"]),
+        created_ts_ms=int(row["created_ts_ms"]),
+        event_dt=row["event_dt"],
+        event_type=str(row["event_type"]),
+        payload_json=str(row["payload_json"]),
+    )
 
 
 def _serialize_payload(event: EventBase) -> dict[str, Any]:

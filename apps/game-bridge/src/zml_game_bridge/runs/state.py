@@ -1,4 +1,4 @@
-# zml_game_bridge/services/run_state.py
+# zml_game_bridge/runs/state.py
 from __future__ import annotations
 
 import sqlite3
@@ -6,7 +6,7 @@ import time
 from dataclasses import dataclass
 from typing import Final
 
-from zml_game_bridge.storage.run_store import RunStore
+from zml_game_bridge.persistence.runs import RunStore
 
 ACTIVE_RUN_ID_KEY: Final[str] = "active_run_id"
 

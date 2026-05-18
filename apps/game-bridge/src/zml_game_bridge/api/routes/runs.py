@@ -7,12 +7,12 @@ from typing import Annotated, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from zml_game_bridge.api.dto import RunDto, StartRunRequestDto, StopRunRequestDto
-from zml_game_bridge.app.runtime import AppRuntime
-from zml_game_bridge.services.run_state import RunState
-from zml_game_bridge.storage.db_schema import ensure_schema
-from zml_game_bridge.storage.run_store import RunStore
-from zml_game_bridge.storage.sqlite import open_sqlite
+from zml_game_bridge.api.schemas.runs import RunDto, StartRunRequestDto, StopRunRequestDto
+from zml_game_bridge.persistence.runs import RunStore
+from zml_game_bridge.persistence.schema import ensure_schema
+from zml_game_bridge.persistence.sqlite import open_sqlite
+from zml_game_bridge.runs.state import RunState
+from zml_game_bridge.runtime.runtime import AppRuntime
 
 router = APIRouter(prefix="/api/v1/runs", tags=["runs"])
 

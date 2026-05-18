@@ -6,8 +6,8 @@ from typing import cast
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from zml_game_bridge.api.dto import PositionDto
-from zml_game_bridge.app.runtime import AppRuntime
+from zml_game_bridge.api.schemas.position import PositionDto
+from zml_game_bridge.runtime.runtime import AppRuntime
 
 router = APIRouter(prefix="/ws", tags=["ws"])
 

@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 
-from zml_game_bridge.common.models import WorldPos
-from zml_game_bridge.common.types import Mpec
+from zml_game_bridge.domain.money import Mpec
+from zml_game_bridge.domain.position import WorldPos
 from zml_game_bridge.events.base import EventBase
 from zml_game_bridge.inputs.chat.model import ChannelType
 

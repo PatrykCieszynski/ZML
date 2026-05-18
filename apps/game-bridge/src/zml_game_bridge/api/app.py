@@ -6,10 +6,10 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from zml_game_bridge.api.channels.position_hub import OcrPositionHub
+from zml_game_bridge.api.channels.sse_hub import SseHub
 from zml_game_bridge.api.routes import register_routes
-from zml_game_bridge.api.sse_hub import SseHub
-from zml_game_bridge.api.ws_hub import OcrPositionHub
-from zml_game_bridge.app.runtime import AppRuntime
+from zml_game_bridge.runtime.runtime import AppRuntime
 from zml_game_bridge.settings import Settings
 
 logger = logging.getLogger(__name__)
