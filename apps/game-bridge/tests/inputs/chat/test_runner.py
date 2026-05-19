@@ -48,7 +48,7 @@ def test_chat_runner_emits_event(monkeypatch) -> None:
         out.append(ev)
 
     stop = threading.Event()
-    chat_runner.start_chat_input(path=None, event_sink=sink, stop_event=stop, start_at_end=True)  # type: ignore[arg-type]
+    chat_runner.start_chat_input(path=None, signal_sink=sink, stop_event=stop, start_at_end=True)  # type: ignore[arg-type]
 
     assert len(out) == 1
     assert isinstance(out[0], ResourceDepleted)

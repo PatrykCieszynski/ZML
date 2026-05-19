@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from uuid import uuid4
@@ -16,7 +17,7 @@ from zml_game_bridge.domain.mining_events import (
 )
 from zml_game_bridge.domain.money import Mpec
 from zml_game_bridge.events.base import EventBase
-from zml_game_bridge.inputs.ocr.signals import (
+from zml_game_bridge.inputs.ocr.pipelines.mining_finder.signals import (
     FinderHitHintSignal,
     FinderModeInvalidatedSignal,
     FinderModesChangedSignal,
@@ -26,10 +27,11 @@ from zml_game_bridge.inputs.ocr.signals import (
 )
 
 IdFactory = Callable[[], str]
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
-class MiningRuntimeCoordinatorConfig:
+class MiningCoordinatorConfig:
     result_link_window_ms: int = 60_000
 
 
@@ -43,44 +45,44 @@ def default_id_factory() -> str:
     return uuid4().hex
 
 
-class MiningRuntimeCoordinator:
+class MiningCoordinator:
     def __init__(
         self,
         *,
         profile: MiningEquipmentProfile | None = None,
-        config: MiningRuntimeCoordinatorConfig | None = None,
+        config: MiningCoordinatorConfig | None = None,
         id_factory: IdFactory = default_id_factory,
     ) -> None:
         self._profile = profile or default_mining_equipment_profile()
-        self._config = config or MiningRuntimeCoordinatorConfig()
+        self._config = config or MiningCoordinatorConfig()
         self._id_factory = id_factory
         self._modes_mask: int | None = None
         self._probes_per_drop: int | None = None
         self._ammo_per_drop: int | None = None
         self._pending_drop: MiningDropEvent | None = None
 
-    def process(self, message: EventBase) -> list[EventBase]:
-        if isinstance(message, FinderModesChangedSignal):
-            self._modes_mask = message.modes_mask
+    def process(self, signal: EventBase) -> list[EventBase]:
+        if isinstance(signal, FinderModesChangedSignal):
+            self._modes_mask = signal.modes_mask
             return []
 
-        if isinstance(message, FinderModeInvalidatedSignal):
+        if isinstance(signal, FinderModeInvalidatedSignal):
             self._modes_mask = None
             return []
 
-        if isinstance(message, FinderUnitsChangedSignal):
-            self._probes_per_drop = message.probes_per_drop
-            self._ammo_per_drop = message.ammo_per_drop
+        if isinstance(signal, FinderUnitsChangedSignal):
+            self._probes_per_drop = signal.probes_per_drop
+            self._ammo_per_drop = signal.ammo_per_drop
             return []
 
-        if isinstance(message, ProbeFiredSignal):
-            return [self._record_drop(message)]
+        if isinstance(signal, ProbeFiredSignal):
+            return [self._record_drop(signal)]
 
-        if isinstance(message, FinderHitHintSignal):
-            return [self._record_hit_hint(message)]
+        if isinstance(signal, FinderHitHintSignal):
+            return [self._record_hit_hint(signal)]
 
-        if isinstance(message, FinderNoResourcesSignal):
-            return [self._record_no_resources(message)]
+        if isinstance(signal, FinderNoResourcesSignal):
+            return [self._record_no_resources(signal)]
 
         return []
 
@@ -117,6 +119,16 @@ class MiningRuntimeCoordinator:
             roi_name=signal.roi_name,
         )
         self._pending_drop = event
+        logger.info(
+            "mining event derived type=%s drop_id=%s ts=%s position=%s modes=%s ammo=%s total_mpec=%s",
+            type(event).__name__,
+            event.drop_id,
+            event.observed_ts_ms,
+            event.position,
+            event.modes_mask,
+            event.ammo_per_drop,
+            event.cost.total_mpec,
+        )
         return event
 
     def _record_hit_hint(self, signal: FinderHitHintSignal) -> MiningHitHintEvent:
@@ -124,7 +136,7 @@ class MiningRuntimeCoordinator:
         if linked_drop is not None:
             self._pending_drop = None
 
-        return MiningHitHintEvent(
+        event = MiningHitHintEvent(
             hit_id=self._id_factory(),
             drop_id=linked_drop.drop_id if linked_drop is not None else None,
             observed_ts_ms=signal.ts_ms,
@@ -138,19 +150,38 @@ class MiningRuntimeCoordinator:
             raw_details_text=signal.raw_details_text,
             roi_name=signal.roi_name,
         )
+        logger.info(
+            "mining event derived type=%s hit_id=%s drop_id=%s ts=%s resource=%r size=%s(%s)",
+            type(event).__name__,
+            event.hit_id,
+            event.drop_id,
+            event.observed_ts_ms,
+            event.resource_name,
+            event.size_label,
+            event.size_index,
+        )
+        return event
 
     def _record_no_resources(self, signal: FinderNoResourcesSignal) -> MiningNoResourcesEvent:
         linked_drop = self._linked_pending_drop(signal.ts_ms)
         if linked_drop is not None:
             self._pending_drop = None
 
-        return MiningNoResourcesEvent(
+        event = MiningNoResourcesEvent(
             drop_id=linked_drop.drop_id if linked_drop is not None else None,
             observed_ts_ms=signal.ts_ms,
             position=linked_drop.position if linked_drop is not None else None,
             raw_status_text=signal.raw_status_text,
             roi_name=signal.roi_name,
         )
+        logger.info(
+            "mining event derived type=%s drop_id=%s ts=%s position=%s",
+            type(event).__name__,
+            event.drop_id,
+            event.observed_ts_ms,
+            event.position,
+        )
+        return event
 
     def _linked_pending_drop(self, observed_ts_ms: int) -> MiningDropEvent | None:
         drop = self._pending_drop

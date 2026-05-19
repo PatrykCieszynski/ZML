@@ -9,21 +9,21 @@ from zml_game_bridge.domain.mining_events import (
 )
 from zml_game_bridge.domain.money import Mpec, mpec_to_int
 from zml_game_bridge.domain.position import WorldPos
-from zml_game_bridge.inputs.ocr.signals import (
+from zml_game_bridge.inputs.ocr.pipelines.mining_finder.signals import (
     FinderHitHintSignal,
     FinderModesChangedSignal,
     FinderNoResourcesSignal,
     FinderUnitsChangedSignal,
     ProbeFiredSignal,
 )
-from zml_game_bridge.runtime.mining_runtime_coordinator import (
-    MiningRuntimeCoordinator,
-    MiningRuntimeCoordinatorConfig,
+from zml_game_bridge.runtime.mining_coordinator import (
+    MiningCoordinator,
+    MiningCoordinatorConfig,
 )
 
 
-def test_mining_runtime_coordinator_records_probe_drop_with_current_units() -> None:
-    coordinator = MiningRuntimeCoordinator(
+def test_mining_coordinator_records_probe_drop_with_current_units() -> None:
+    coordinator = MiningCoordinator(
         profile=MiningEquipmentProfile(
             finder=MiningToolProfile(name="Finder", decay_mpec=Mpec(100)),
         ),
@@ -57,8 +57,8 @@ def test_mining_runtime_coordinator_records_probe_drop_with_current_units() -> N
     assert mpec_to_int(drop.cost.total_mpec) == 10_100
 
 
-def test_mining_runtime_coordinator_uses_current_modes_when_probe_signal_lacks_modes() -> None:
-    coordinator = MiningRuntimeCoordinator(id_factory=_id_factory("drop-1"))
+def test_mining_coordinator_uses_current_modes_when_probe_signal_lacks_modes() -> None:
+    coordinator = MiningCoordinator(id_factory=_id_factory("drop-1"))
 
     coordinator.process(
         FinderModesChangedSignal(
@@ -76,8 +76,8 @@ def test_mining_runtime_coordinator_uses_current_modes_when_probe_signal_lacks_m
     assert drop.modes_mask == int(MiningMode.ORE | MiningMode.ENMATTER)
 
 
-def test_mining_runtime_coordinator_prefers_probe_signal_units_over_cached_units() -> None:
-    coordinator = MiningRuntimeCoordinator(id_factory=_id_factory("drop-1"))
+def test_mining_coordinator_prefers_probe_signal_units_over_cached_units() -> None:
+    coordinator = MiningCoordinator(id_factory=_id_factory("drop-1"))
 
     coordinator.process(
         FinderUnitsChangedSignal(ts_ms=900, probes_per_drop=None, ammo_per_drop=500)
@@ -92,9 +92,9 @@ def test_mining_runtime_coordinator_prefers_probe_signal_units_over_cached_units
     assert mpec_to_int(drop.cost.total_mpec) == 10_000
 
 
-def test_mining_runtime_coordinator_records_hit_hint_linked_to_recent_drop() -> None:
+def test_mining_coordinator_records_hit_hint_linked_to_recent_drop() -> None:
     position = WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None)
-    coordinator = MiningRuntimeCoordinator(id_factory=_id_factory("drop-1", "hit-1"))
+    coordinator = MiningCoordinator(id_factory=_id_factory("drop-1", "hit-1"))
 
     coordinator.process(
         ProbeFiredSignal(ts_ms=1_000, position=position, modes_mask=1, ammo_per_drop=1_000)
@@ -123,9 +123,9 @@ def test_mining_runtime_coordinator_records_hit_hint_linked_to_recent_drop() -> 
     assert hit.depth_m == 53.0
 
 
-def test_mining_runtime_coordinator_records_no_resources_linked_to_recent_drop() -> None:
+def test_mining_coordinator_records_no_resources_linked_to_recent_drop() -> None:
     position = WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None)
-    coordinator = MiningRuntimeCoordinator(id_factory=_id_factory("drop-1"))
+    coordinator = MiningCoordinator(id_factory=_id_factory("drop-1"))
 
     coordinator.process(
         ProbeFiredSignal(ts_ms=1_000, position=position, modes_mask=1, ammo_per_drop=1_000)
@@ -145,8 +145,8 @@ def test_mining_runtime_coordinator_records_no_resources_linked_to_recent_drop()
     assert no_resources.raw_status_text == "No resources found. Try again\nsomewhere else-"
 
 
-def test_mining_runtime_coordinator_no_resources_closes_pending_drop() -> None:
-    coordinator = MiningRuntimeCoordinator(id_factory=_id_factory("drop-1", "hit-1"))
+def test_mining_coordinator_no_resources_closes_pending_drop() -> None:
+    coordinator = MiningCoordinator(id_factory=_id_factory("drop-1", "hit-1"))
 
     coordinator.process(
         ProbeFiredSignal(ts_ms=1_000, position=None, modes_mask=1, ammo_per_drop=1_000)
@@ -166,9 +166,9 @@ def test_mining_runtime_coordinator_no_resources_closes_pending_drop() -> None:
     assert hit.drop_id is None
 
 
-def test_mining_runtime_coordinator_does_not_link_hit_to_stale_drop() -> None:
-    coordinator = MiningRuntimeCoordinator(
-        config=MiningRuntimeCoordinatorConfig(result_link_window_ms=1_000),
+def test_mining_coordinator_does_not_link_hit_to_stale_drop() -> None:
+    coordinator = MiningCoordinator(
+        config=MiningCoordinatorConfig(result_link_window_ms=1_000),
         id_factory=_id_factory("drop-1", "hit-1"),
     )
 
@@ -190,9 +190,9 @@ def test_mining_runtime_coordinator_does_not_link_hit_to_stale_drop() -> None:
     assert hit.position is None
 
 
-def test_mining_runtime_coordinator_does_not_link_no_resources_to_stale_drop() -> None:
-    coordinator = MiningRuntimeCoordinator(
-        config=MiningRuntimeCoordinatorConfig(result_link_window_ms=1_000),
+def test_mining_coordinator_does_not_link_no_resources_to_stale_drop() -> None:
+    coordinator = MiningCoordinator(
+        config=MiningCoordinatorConfig(result_link_window_ms=1_000),
         id_factory=_id_factory("drop-1"),
     )
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from zml_game_bridge.events.base import SignalBase, should_persist_event
-from zml_game_bridge.inputs.ocr.signals import (
+from zml_game_bridge.inputs.ocr.pipelines.mining_finder.signals import (
     FinderHitHintSignal,
     FinderModeInvalidatedSignal,
     FinderModesChangedSignal,

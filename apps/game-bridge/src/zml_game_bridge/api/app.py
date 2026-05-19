@@ -26,6 +26,8 @@ def create_app() -> FastAPI:
             chat_log_path=settings.chat_log_path,
             chat_start_at_end=settings.chat_start_at_end,
             ocr_enabled=settings.ocr_enabled,
+            mock_inputs_enabled=settings.mock_inputs_enabled,
+            mock_mining_interval_ms=settings.mock_mining_interval_ms,
         )
 
         loop = asyncio.get_running_loop()

@@ -17,9 +17,7 @@ from zml_game_bridge.inputs.ocr.pipelines.mining_finder.pipeline import (
     MiningFinderPipeline,
     MiningFinderPipelineConfig,
 )
-from zml_game_bridge.inputs.ocr.pipelines.position.model import OcrPosition, PositionRois
-from zml_game_bridge.inputs.ocr.pipelines.position.pipeline import PositionPipeline
-from zml_game_bridge.inputs.ocr.signals import (
+from zml_game_bridge.inputs.ocr.pipelines.mining_finder.signals import (
     FinderHitHintSignal,
     FinderModeInvalidatedSignal,
     FinderModesChangedSignal,
@@ -27,6 +25,8 @@ from zml_game_bridge.inputs.ocr.signals import (
     FinderUnitsChangedSignal,
     ProbeFiredSignal,
 )
+from zml_game_bridge.inputs.ocr.pipelines.position.model import OcrPosition, PositionRois
+from zml_game_bridge.inputs.ocr.pipelines.position.pipeline import PositionPipeline
 
 PositionSink = Callable[[OcrPosition], None]
 logger = logging.getLogger(__name__)

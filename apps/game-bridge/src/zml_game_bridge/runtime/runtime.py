@@ -12,12 +12,13 @@ from zml_game_bridge.events.in_memory_persisted_event_bus import (
     InMemoryPersistedEventBus,
 )
 from zml_game_bridge.inputs.chat.runner import start_chat_input
+from zml_game_bridge.inputs.mock.mining import start_mock_mining_input
 from zml_game_bridge.inputs.ocr.pipelines.position.model import OcrPosition
 from zml_game_bridge.inputs.ocr.runner import start_ocr_input
+from zml_game_bridge.runtime.channels import EventChannel, SignalChannel
 from zml_game_bridge.runtime.db_writer import DbWriterWorker
-from zml_game_bridge.runtime.event_queue import EventChannel
-from zml_game_bridge.runtime.message_worker import RuntimeMessageWorker
-from zml_game_bridge.runtime.mining_runtime_coordinator import MiningRuntimeCoordinator
+from zml_game_bridge.runtime.input_coordinator import InputCoordinator
+from zml_game_bridge.runtime.mining_coordinator import MiningCoordinator
 from zml_game_bridge.runtime.position_state import LatestPositionState
 
 logger = logging.getLogger(__name__)
@@ -31,23 +32,26 @@ class AppRuntime:
         chat_log_path: Path | None,
         chat_start_at_end: bool,
         ocr_enabled: bool,
+        mock_inputs_enabled: bool,
+        mock_mining_interval_ms: int,
     ) -> None:
         self._db_path = db_path
         self._chat_log_path = chat_log_path
         self._chat_start_at_end = chat_start_at_end
         self._ocr_enabled = ocr_enabled
+        self._mock_inputs_enabled = mock_inputs_enabled
+        self._mock_mining_interval_ms = mock_mining_interval_ms
 
         self._stop_event = threading.Event()
-        self._pending_messages = EventChannel()
+        self._pending_signals = SignalChannel()
         self._pending_events = EventChannel()
         self._persisted_events = InMemoryPersistedEventBus()
         self._latest_position = LatestPositionState()
-        self._mining_runtime_coordinator = MiningRuntimeCoordinator()
-        self._message_worker = RuntimeMessageWorker(
-            pending_messages=self._pending_messages,
+        self._mining_coordinator = MiningCoordinator()
+        self._input_coordinator = InputCoordinator(
+            pending_signals=self._pending_signals,
             pending_events=self._pending_events,
-            live_events=self._persisted_events,
-            message_processor=self._mining_runtime_coordinator,
+            signal_processor=self._mining_coordinator,
         )
         self._db_writer_worker = DbWriterWorker(
             db_path=self._db_path,
@@ -55,10 +59,11 @@ class AppRuntime:
             persisted_events=self._persisted_events,
         )
 
-        self._t_messages: Thread | None = None
+        self._t_input: Thread | None = None
         self._t_db: Thread | None = None
         self._t_chat: Thread | None = None
         self._t_ocr: Thread | None = None
+        self._t_mock: Thread | None = None
 
         self._sub_print = None
         self._sub_sse = None
@@ -96,12 +101,12 @@ class AppRuntime:
             return
         self._started = True
 
-        self._t_messages = Thread(
-            target=self._message_worker.run,
+        self._t_input = Thread(
+            target=self._input_coordinator.run,
             kwargs={"stop_event": self._stop_event},
             daemon=True,
         )
-        self._t_messages.start()
+        self._t_input.start()
 
         self._t_db = Thread(
             target=self._db_writer_worker.run,
@@ -117,7 +122,7 @@ class AppRuntime:
             target=start_chat_input,
             kwargs={
                 "path": self._chat_log_path,
-                "event_sink": self._pending_messages.emit,
+                "signal_sink": self._pending_signals.emit,
                 "stop_event": self._stop_event,
                 "start_at_end": self._chat_start_at_end,
             },
@@ -130,12 +135,24 @@ class AppRuntime:
                 target=start_ocr_input,
                 kwargs={
                     "position_sink": self._on_position,
-                    "signal_sink": self._pending_messages.emit,
+                    "signal_sink": self._pending_signals.emit,
                     "stop_event": self._stop_event,
                 },
                 daemon=True,
             )
             self._t_ocr.start()
+
+        if self._mock_inputs_enabled:
+            self._t_mock = Thread(
+                target=start_mock_mining_input,
+                kwargs={
+                    "signal_sink": self._pending_signals.emit,
+                    "stop_event": self._stop_event,
+                    "interval_ms": self._mock_mining_interval_ms,
+                },
+                daemon=True,
+            )
+            self._t_mock.start()
 
         self._sub_print = self._persisted_events.subscribe(self._log_event_envelope)
 
@@ -148,10 +165,7 @@ class AppRuntime:
         self.position_hub.publish_threadsafe(position)
 
     def _log_event_envelope(self, env: EventEnvelope) -> None:
-        if env.event_id <= 0:
-            logger.info("New transient event: %s", env)
-        else:
-            logger.info("New event stored: %s", env)
+        logger.info("New event stored: %s", env)
 
     def stop(self) -> None:
         self._stop_event.set()
@@ -168,8 +182,10 @@ class AppRuntime:
             self._t_chat.join(timeout=2.0)
         if self._t_ocr is not None:
             self._t_ocr.join(timeout=2.0)
-        if self._t_messages is not None:
-            self._t_messages.join(timeout=2.0)
+        if self._t_mock is not None:
+            self._t_mock.join(timeout=2.0)
+        if self._t_input is not None:
+            self._t_input.join(timeout=2.0)
         if self._t_db is not None:
             self._t_db.join(timeout=2.0)
         self._started = False

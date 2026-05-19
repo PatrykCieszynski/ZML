@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -119,6 +120,32 @@ def _default_ocr_enabled() -> bool:
     return _env_bool("ZML_OCR_ENABLED", default=False)
 
 
+def _default_mock_inputs_enabled() -> bool:
+    return _env_bool("ZML_MOCK_INPUTS", default=False)
+
+
+def _env_int(name: str, *, default: int) -> int:
+    value = os.getenv(name)
+    if value is None or value.strip() == "":
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        return default
+
+
+def _default_mock_mining_interval_ms() -> int:
+    return _env_int("ZML_MOCK_MINING_INTERVAL_MS", default=3_000)
+
+
+def configure_logging_from_env() -> None:
+    logging_level = os.getenv("ZML_LOG_LEVEL", "INFO").strip().upper()
+    logging.basicConfig(
+        level=getattr(logging, logging_level, logging.INFO),
+        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     host: str = "127.0.0.1"
@@ -131,3 +158,5 @@ class Settings:
 
     chat_start_at_end: bool = field(default_factory=_default_chat_start_at_end)
     ocr_enabled: bool = field(default_factory=_default_ocr_enabled)
+    mock_inputs_enabled: bool = field(default_factory=_default_mock_inputs_enabled)
+    mock_mining_interval_ms: int = field(default_factory=_default_mock_mining_interval_ms)

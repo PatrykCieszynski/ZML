@@ -9,7 +9,7 @@ from zml_game_bridge.persistence.event_projector import EventProjector
 from zml_game_bridge.persistence.event_writer import EventWriter
 from zml_game_bridge.persistence.schema import ensure_schema
 from zml_game_bridge.persistence.sqlite import open_sqlite
-from zml_game_bridge.runtime.event_queue import EventChannel
+from zml_game_bridge.runtime.channels import EventChannel
 
 
 class DbWriterWorker:

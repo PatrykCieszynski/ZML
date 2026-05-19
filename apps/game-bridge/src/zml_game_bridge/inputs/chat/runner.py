@@ -1,7 +1,7 @@
 import threading
 from pathlib import Path
 
-from zml_game_bridge.events.contracts import EventSink
+from zml_game_bridge.events.contracts import SignalSink
 from zml_game_bridge.inputs.chat.interpreter import interpret_chat_line
 from zml_game_bridge.inputs.chat.parser import parse_chat_line
 from zml_game_bridge.inputs.chat.tailer import tail_lines
@@ -9,7 +9,7 @@ from zml_game_bridge.inputs.chat.tailer import tail_lines
 
 def start_chat_input(
     path: Path,
-    event_sink: EventSink,
+    signal_sink: SignalSink,
     stop_event: threading.Event,
     start_at_end: bool = False,
     poll_interval_s: float = 0.05,
@@ -27,4 +27,4 @@ def start_chat_input(
         chat_event = interpret_chat_line(chat_line)
         if chat_event is None:
             continue
-        event_sink(chat_event)
+        signal_sink(chat_event)

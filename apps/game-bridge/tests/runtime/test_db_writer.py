@@ -10,7 +10,7 @@ import zml_game_bridge.runtime.db_writer as db_writer_worker_mod
 from zml_game_bridge.events.base import EventBase
 from zml_game_bridge.events.envelope import EventEnvelope
 from zml_game_bridge.events.in_memory_persisted_event_bus import InMemoryPersistedEventBus
-from zml_game_bridge.runtime.event_queue import EventChannel
+from zml_game_bridge.runtime.channels import EventChannel
 
 
 @dataclass(frozen=True, slots=True)
