@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA_DDL = """
 -- =========================
@@ -74,6 +74,44 @@ CREATE INDEX IF NOT EXISTS idx_events_created_ts_ms ON events(created_ts_ms);
 CREATE INDEX IF NOT EXISTS idx_events_event_type ON events(event_type);
 CREATE INDEX IF NOT EXISTS idx_events_run_id_event_id ON events(run_id, event_id);
 
+CREATE TABLE IF NOT EXISTS mining_drops (
+    drop_id                 TEXT PRIMARY KEY,
+    drop_event_id           INTEGER NOT NULL REFERENCES events(event_id) ON DELETE CASCADE,
+    observed_ts_ms          INTEGER NOT NULL,
+
+    planet_name             TEXT,
+    x                       INTEGER,
+    y                       INTEGER,
+    z                       INTEGER,
+
+    modes_mask              INTEGER,
+    probes_per_drop         INTEGER,
+    ammo_per_drop           INTEGER,
+
+    ammo_cost_mpec          INTEGER NOT NULL,
+    probes_cost_mpec        INTEGER NOT NULL,
+    finder_decay_mpec       INTEGER NOT NULL,
+    amp_decay_mpec          INTEGER NOT NULL,
+    total_cost_mpec         INTEGER NOT NULL,
+
+    result                  TEXT NOT NULL DEFAULT 'pending',
+    result_event_id         INTEGER REFERENCES events(event_id) ON DELETE SET NULL,
+    result_observed_ts_ms   INTEGER,
+
+    hit_id                  TEXT,
+    hit_event_id            INTEGER REFERENCES events(event_id) ON DELETE SET NULL,
+    resource_name           TEXT,
+    size_label              TEXT,
+    size_index              INTEGER,
+    range_m                 REAL,
+    depth_m                 REAL,
+
+    CHECK (result IN ('pending', 'hit', 'no_resources'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_mining_drops_observed_ts_ms ON mining_drops(observed_ts_ms);
+CREATE INDEX IF NOT EXISTS idx_mining_drops_result ON mining_drops(result);
+
 -- =========================
 -- App state:
 -- which run is currently "selected/active" after restart
@@ -92,6 +130,6 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA_DDL)
     cur = conn.execute("PRAGMA user_version")
     user_version = int(cur.fetchone()[0])
-    if user_version == 0:
+    if user_version < SCHEMA_VERSION:
         conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
     conn.commit()

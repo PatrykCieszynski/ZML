@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import sqlite3
-from typing import Protocol
+from abc import ABC, abstractmethod
 
 from zml_game_bridge.events.base import EventBase
 from zml_game_bridge.events.envelope import EventEnvelope
 
 
-class EventProjector(Protocol):
+class EventProjector(ABC):
     """
     Applies durable read-model updates derived from a persisted event.
 
@@ -16,6 +16,7 @@ class EventProjector(Protocol):
     live subscribers.
     """
 
+    @abstractmethod
     def project(
         self,
         *,
@@ -26,7 +27,7 @@ class EventProjector(Protocol):
         ...
 
 
-class NoOpEventProjector:
+class NoOpEventProjector(EventProjector):
     def project(
         self,
         *,

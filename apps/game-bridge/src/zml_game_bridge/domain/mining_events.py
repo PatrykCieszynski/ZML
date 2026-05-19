@@ -17,7 +17,6 @@ class MiningDropEvent(EventBase):
     ammo_per_drop: int | None
     cost: DropCostBreakdown
     raw_status_text: str | None = None
-    roi_name: str = "finder_mvp_bottom_left"
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,7 +32,6 @@ class MiningHitHintEvent(EventBase):
     depth_m: float | None = None
     raw_status_text: str | None = None
     raw_details_text: str | None = None
-    roi_name: str = "finder_mvp_bottom_left"
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,4 +40,3 @@ class MiningNoResourcesEvent(EventBase):
     observed_ts_ms: int
     position: WorldPos | None
     raw_status_text: str | None = None
-    roi_name: str = "finder_mvp_bottom_left"

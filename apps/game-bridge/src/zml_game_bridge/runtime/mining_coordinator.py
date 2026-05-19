@@ -116,7 +116,6 @@ class MiningCoordinator:
             ammo_per_drop=ammo_per_drop,
             cost=cost,
             raw_status_text=signal.raw_status_text,
-            roi_name=signal.roi_name,
         )
         self._pending_drop = event
         logger.info(
@@ -148,7 +147,6 @@ class MiningCoordinator:
             depth_m=signal.depth_m,
             raw_status_text=signal.raw_status_text,
             raw_details_text=signal.raw_details_text,
-            roi_name=signal.roi_name,
         )
         logger.info(
             "mining event derived type=%s hit_id=%s drop_id=%s ts=%s resource=%r size=%s(%s)",
@@ -172,7 +170,6 @@ class MiningCoordinator:
             observed_ts_ms=signal.ts_ms,
             position=linked_drop.position if linked_drop is not None else None,
             raw_status_text=signal.raw_status_text,
-            roi_name=signal.roi_name,
         )
         logger.info(
             "mining event derived type=%s drop_id=%s ts=%s position=%s",

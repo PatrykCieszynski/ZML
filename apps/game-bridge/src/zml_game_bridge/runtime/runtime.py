@@ -15,6 +15,7 @@ from zml_game_bridge.inputs.chat.runner import start_chat_input
 from zml_game_bridge.inputs.mock.mining import start_mock_mining_input
 from zml_game_bridge.inputs.ocr.pipelines.position.model import OcrPosition
 from zml_game_bridge.inputs.ocr.runner import start_ocr_input
+from zml_game_bridge.persistence.mining_drops import MiningDropProjector
 from zml_game_bridge.runtime.channels import EventChannel, SignalChannel
 from zml_game_bridge.runtime.db_writer import DbWriterWorker
 from zml_game_bridge.runtime.input_coordinator import InputCoordinator
@@ -57,6 +58,7 @@ class AppRuntime:
             db_path=self._db_path,
             pending_events=self._pending_events,
             persisted_events=self._persisted_events,
+            projector=MiningDropProjector(),
         )
 
         self._t_input: Thread | None = None
