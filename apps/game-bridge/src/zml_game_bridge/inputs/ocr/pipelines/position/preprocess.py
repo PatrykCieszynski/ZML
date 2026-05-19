@@ -6,6 +6,8 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 
+from zml_game_bridge.inputs.ocr.pipelines.image import to_gray_u8, upscale
+
 
 @dataclass(frozen=True, slots=True)
 class DigitsPreprocessConfig:
@@ -22,31 +24,6 @@ class DigitsPreprocessConfig:
     min_cc_area: int = 12
 
     force_white_bg: bool = True
-
-
-def _to_gray_u8(img: np.ndarray) -> np.ndarray:
-    """Convert input image to single-channel uint8 grayscale."""
-    if img.ndim == 2:
-        gray = img
-    elif img.ndim == 3 and img.shape[2] == 3:
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    elif img.ndim == 3 and img.shape[2] == 4:
-        gray = cv2.cvtColor(img, cv2.COLOR_BGRA2GRAY)
-    else:
-        raise ValueError(f"Unsupported image shape: {img.shape}")
-
-    if gray.dtype != np.uint8:
-        raise ValueError(f"Unsupported grayscale dtype: {gray.dtype}")
-
-    return gray
-
-
-def _upscale(img: np.ndarray, scale: int, interpolation: int) -> np.ndarray:
-    """Upscale image by an integer factor."""
-    if scale <= 1:
-        return img
-    h, w = img.shape[:2]
-    return cv2.resize(img, (w * scale, h * scale), interpolation=interpolation)
 
 
 def _normalize_binary_background(binary: np.ndarray) -> np.ndarray:
@@ -99,8 +76,8 @@ class DigitsPreprocessor:
         Preprocess a single-line ROI containing bright digits on varying background.
         Returns binary uint8 (0/255).
         """
-        gray = _to_gray_u8(img)
-        work = _upscale(gray, self.cfg.upscale, self.cfg.interpolation)
+        gray = to_gray_u8(img)
+        work = upscale(gray, self.cfg.upscale, self.cfg.interpolation)
 
         top = cv2.morphologyEx(work, cv2.MORPH_TOPHAT, self._tophat_kernel_mat)
 

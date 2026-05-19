@@ -7,6 +7,7 @@ from threading import Thread
 
 from zml_game_bridge.api.channels.position_hub import OcrPositionHub
 from zml_game_bridge.api.channels.sse_hub import SseHub
+from zml_game_bridge.events.envelope import EventEnvelope
 from zml_game_bridge.events.in_memory_persisted_event_bus import (
     InMemoryPersistedEventBus,
 )
@@ -15,6 +16,8 @@ from zml_game_bridge.inputs.ocr.pipelines.position.model import OcrPosition
 from zml_game_bridge.inputs.ocr.runner import start_ocr_input
 from zml_game_bridge.runtime.db_writer import DbWriterWorker
 from zml_game_bridge.runtime.event_queue import EventChannel
+from zml_game_bridge.runtime.message_worker import RuntimeMessageWorker
+from zml_game_bridge.runtime.mining_signal_processor import MiningSignalProcessor
 from zml_game_bridge.runtime.position_state import LatestPositionState
 
 logger = logging.getLogger(__name__)
@@ -35,15 +38,24 @@ class AppRuntime:
         self._ocr_enabled = ocr_enabled
 
         self._stop_event = threading.Event()
+        self._pending_messages = EventChannel()
         self._pending_events = EventChannel()
         self._persisted_events = InMemoryPersistedEventBus()
         self._latest_position = LatestPositionState()
+        self._mining_signal_processor = MiningSignalProcessor()
+        self._message_worker = RuntimeMessageWorker(
+            pending_messages=self._pending_messages,
+            pending_events=self._pending_events,
+            live_events=self._persisted_events,
+            message_processor=self._mining_signal_processor,
+        )
         self._db_writer_worker = DbWriterWorker(
             db_path=self._db_path,
             pending_events=self._pending_events,
             persisted_events=self._persisted_events,
         )
 
+        self._t_messages: Thread | None = None
         self._t_db: Thread | None = None
         self._t_chat: Thread | None = None
         self._t_ocr: Thread | None = None
@@ -84,6 +96,13 @@ class AppRuntime:
             return
         self._started = True
 
+        self._t_messages = Thread(
+            target=self._message_worker.run,
+            kwargs={"stop_event": self._stop_event},
+            daemon=True,
+        )
+        self._t_messages.start()
+
         self._t_db = Thread(
             target=self._db_writer_worker.run,
             kwargs={"stop_event": self._stop_event},
@@ -98,7 +117,7 @@ class AppRuntime:
             target=start_chat_input,
             kwargs={
                 "path": self._chat_log_path,
-                "event_sink": self._pending_events.emit,
+                "event_sink": self._pending_messages.emit,
                 "stop_event": self._stop_event,
                 "start_at_end": self._chat_start_at_end,
             },
@@ -111,15 +130,14 @@ class AppRuntime:
                 target=start_ocr_input,
                 kwargs={
                     "position_sink": self._on_position,
+                    "signal_sink": self._pending_messages.emit,
                     "stop_event": self._stop_event,
                 },
                 daemon=True,
             )
             self._t_ocr.start()
 
-        self._sub_print = self._persisted_events.subscribe(
-            lambda env: logger.info("New event stored: %s", env)
-        )
+        self._sub_print = self._persisted_events.subscribe(self._log_event_envelope)
 
         # SSE fan-out (if attached)
         if self._sse_hub is not None:
@@ -128,6 +146,12 @@ class AppRuntime:
     def _on_position(self, position: OcrPosition) -> None:
         self._latest_position.update(position)
         self.position_hub.publish_threadsafe(position)
+
+    def _log_event_envelope(self, env: EventEnvelope) -> None:
+        if env.event_id <= 0:
+            logger.info("New transient event: %s", env)
+        else:
+            logger.info("New event stored: %s", env)
 
     def stop(self) -> None:
         self._stop_event.set()
@@ -142,8 +166,10 @@ class AppRuntime:
 
         if self._t_chat is not None:
             self._t_chat.join(timeout=2.0)
-        if self._t_db is not None:
-            self._t_db.join(timeout=2.0)
         if self._t_ocr is not None:
             self._t_ocr.join(timeout=2.0)
+        if self._t_messages is not None:
+            self._t_messages.join(timeout=2.0)
+        if self._t_db is not None:
+            self._t_db.join(timeout=2.0)
         self._started = False

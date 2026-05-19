@@ -18,7 +18,7 @@ class Subscription:
 
 
 class PersistedEventBus(Protocol):
-    """Dispatches persisted EventEnvelope objects to subscribers."""
+    """Dispatches envelopes for persisted events and transient live signals."""
 
     def publish(self, envelope: EventEnvelope) -> None:
         ...

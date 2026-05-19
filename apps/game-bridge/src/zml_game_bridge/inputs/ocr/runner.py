@@ -1,28 +1,47 @@
 from __future__ import annotations
 
+import logging
+import os
 import threading
 import time
 from collections.abc import Callable
 from ctypes import windll
 
+import numpy as np
+
+from zml_game_bridge.events.contracts import SignalSink
 from zml_game_bridge.inputs.ocr.capture.model import RoiRect
 from zml_game_bridge.inputs.ocr.capture.window_capturer import WindowCapturer
+from zml_game_bridge.inputs.ocr.pipelines.mining_finder.model import MiningFinderSignal
+from zml_game_bridge.inputs.ocr.pipelines.mining_finder.pipeline import (
+    MiningFinderPipeline,
+    MiningFinderPipelineConfig,
+)
 from zml_game_bridge.inputs.ocr.pipelines.position.model import OcrPosition, PositionRois
 from zml_game_bridge.inputs.ocr.pipelines.position.pipeline import PositionPipeline
+from zml_game_bridge.inputs.ocr.signals import (
+    FinderHitHint,
+    FinderModeInvalidated,
+    FinderModesChanged,
+    FinderUnitsChanged,
+    ProbeFired,
+)
 
 PositionSink = Callable[[OcrPosition], None]
+logger = logging.getLogger(__name__)
 
 # MVP hardcode
 ROI_COMPASS = RoiRect(x1=2185, y1=965, x2=2551, y2=1411)
-ROI_FINDER  = RoiRect(x1=20,   y1=20,  x2=700,  y2=250)
-ROI_DEEDS   = RoiRect(x1=20,   y1=260, x2=700,  y2=520)
+ROI_DEEDS = RoiRect(x1=20, y1=260, x2=700, y2=520)
 
 
 def start_ocr_input(
     *,
     position_sink: PositionSink,
+    signal_sink: SignalSink | None = None,
     stop_event: threading.Event,
     target_hz: float = 10.0,
+    finder_debug_logging: bool | None = None,
 ) -> None:
     windll.user32.SetProcessDPIAware()  # do once per process
     cap = WindowCapturer(title_contains="Entropia Universe Client")
@@ -37,13 +56,22 @@ def start_ocr_input(
 
     # pipelines (MVP stubs)
     position_pipeline = PositionPipeline(lat_lon_rois)
-    # finder_pipeline = ...    # step(finder_roi, ts_ms) -> ...
+    if finder_debug_logging is None:
+        finder_debug_logging = _env_bool("ZML_FINDER_DEBUG", default=False)
+    if finder_debug_logging:
+        _configure_finder_debug_logging()
+        logger.info("Finder OCR debug logging enabled")
+
+    finder_pipeline = MiningFinderPipeline(
+        cfg=MiningFinderPipelineConfig(debug_logging=finder_debug_logging)
+    )
     # deeds_pipeline = ...     # step(deeds_roi, ts_ms) -> ...
 
     # optional: run slower pipelines less often
     finder_every_n = 5   # 10Hz/5 = 2Hz
     deeds_every_n = 10   # 1Hz
     tick = 0
+    latest_position: OcrPosition | None = None
 
     try:
         while not stop_event.is_set():
@@ -66,13 +94,16 @@ def start_ocr_input(
             if compass is not None:
                 pos = position_pipeline.step(compass, ts_ms)
                 if pos is not None:
+                    latest_position = pos
                     position_sink(pos)
 
             if tick % finder_every_n == 0:
-                pass
-                # finder = ROI_FINDER.crop(frame)
-                # if finder is not None:
-                #     finder_pipeline.step(finder, ts_ms)
+                finder = _finder_mvp_roi(frame).crop(frame)
+                if finder is not None:
+                    signals = finder_pipeline.step(finder, ts_ms)
+                    if signal_sink is not None:
+                        for signal in signals:
+                            signal_sink(_to_finder_signal(signal, latest_position))
 
             if tick % deeds_every_n == 0:
                 pass
@@ -82,3 +113,89 @@ def start_ocr_input(
     finally:
         cap.close()
         position_pipeline.close()
+        finder_pipeline.close()
+
+
+def _finder_mvp_roi(frame: np.ndarray) -> RoiRect:
+    height = int(frame.shape[0])
+    width = int(frame.shape[1])
+    margin = 3
+    roi_width = 347
+    roi_height = 239
+    return RoiRect(
+        x1=margin,
+        x2=min(width, margin + roi_width),
+        y1=max(0, height - margin - roi_height),
+        y2=max(0, height - margin),
+    )
+
+
+def _env_bool(name: str, *, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _configure_finder_debug_logging() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    )
+    logger.setLevel(logging.INFO)
+    logging.getLogger("zml_game_bridge.inputs.ocr.pipelines.mining_finder").setLevel(
+        logging.INFO
+    )
+
+
+def _to_finder_signal(signal: MiningFinderSignal, latest_position: OcrPosition | None):
+    match signal.kind:
+        case "probe_fired":
+            return ProbeFired(
+                ts_ms=signal.ts_ms,
+                position=latest_position.position if latest_position is not None else None,
+                modes_mask=signal.modes_mask,
+                probes_per_drop=signal.probes_per_drop,
+                ammo_per_drop=signal.ammo_per_drop,
+                raw_status_text=signal.raw_text,
+                debug=signal.debug,
+            )
+        case "finder_modes_changed":
+            if signal.modes_mask is None:
+                raise RuntimeError("finder_modes_changed requires modes_mask")
+            return FinderModesChanged(
+                ts_ms=signal.ts_ms,
+                modes_mask=signal.modes_mask,
+                previous_modes_mask=signal.previous_modes_mask,
+                debug=signal.debug,
+            )
+        case "finder_mode_invalidated":
+            return FinderModeInvalidated(
+                ts_ms=signal.ts_ms,
+                previous_modes_mask=signal.previous_modes_mask,
+                debug=signal.debug,
+            )
+        case "finder_units_changed":
+            return FinderUnitsChanged(
+                ts_ms=signal.ts_ms,
+                probes_per_drop=signal.probes_per_drop,
+                ammo_per_drop=signal.ammo_per_drop,
+                raw_text=signal.raw_text,
+            )
+        case "finder_hit_hint":
+            if (
+                signal.hit_size_label is None
+                or signal.hit_size_index is None
+                or signal.resource_name is None
+            ):
+                raise RuntimeError("finder_hit_hint requires size label, index, and resource")
+            return FinderHitHint(
+                ts_ms=signal.ts_ms,
+                size_label=signal.hit_size_label,
+                size_index=signal.hit_size_index,
+                resource_name=signal.resource_name,
+                range_m=signal.range_m,
+                depth_m=signal.depth_m,
+                raw_status_text=signal.raw_text,
+                raw_details_text=signal.raw_details_text,
+            )

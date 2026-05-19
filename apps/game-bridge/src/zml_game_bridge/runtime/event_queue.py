@@ -7,10 +7,10 @@ from zml_game_bridge.events.base import EventBase
 
 class EventChannel:
     """
-    Thread-safe queue for durable events waiting for the single DB writer.
+    Thread-safe queue for runtime messages crossing worker boundaries.
 
-    Producers write here before persistence. Live subscribers should use the
-    persisted-event bus instead, after the DB transaction commits.
+    Runtime uses one instance for raw input messages and another for durable
+    events waiting for the DB writer.
     """
 
     _q: Queue[EventBase]

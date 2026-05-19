@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from zml_game_bridge.events.base import EventBase
+from zml_game_bridge.events.base import EventBase, should_persist_event
 from zml_game_bridge.events.envelope import EventEnvelope
 from zml_game_bridge.persistence.event_projector import EventProjector, NoOpEventProjector
 from zml_game_bridge.persistence.events import EventStore
@@ -27,6 +27,8 @@ class EventWriter:
         self._projector = projector or NoOpEventProjector()
 
     def write(self, event: EventBase) -> EventEnvelope:
+        if not should_persist_event(event):
+            raise ValueError(f"Refusing to persist transient event: {type(event).__name__}")
         with self._conn:
             event_envelope = self._event_store.append(event)
             self._projector.project(

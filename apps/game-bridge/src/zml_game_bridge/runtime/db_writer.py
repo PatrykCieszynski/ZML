@@ -53,7 +53,7 @@ class DbWriterWorker:
         event_writer = EventWriter(self.conn, projector=self.projector)
 
         try:
-            while not stop_event.is_set():
+            while not stop_event.is_set() or self.pending_events.size() > 0:
                 event = self.pending_events.take(timeout_s=0.1)
                 if event is None:
                     continue

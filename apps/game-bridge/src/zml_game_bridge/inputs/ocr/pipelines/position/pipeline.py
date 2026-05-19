@@ -11,6 +11,7 @@ from zml_game_bridge.inputs.ocr.pipelines.position.preprocess import (
     DigitsPreprocessConfig,
     DigitsPreprocessor,
 )
+from zml_game_bridge.inputs.ocr.pipelines.text import digits_only
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,7 +71,7 @@ class PositionPipeline:
         pre = self._pre.process(img)
         raw = self._engine.recognize_digits(pre)
 
-        digits = self._digits_only(raw)
+        digits = digits_only(raw)
         if not digits:
             return None
 
@@ -84,7 +85,3 @@ class PositionPipeline:
 
         return val
 
-    @staticmethod
-    def _digits_only(text: str) -> str:
-        # Keep only [0-9] to avoid false positives from OCR artifacts.
-        return "".join(ch for ch in text if "0" <= ch <= "9")

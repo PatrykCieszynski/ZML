@@ -100,7 +100,8 @@ async def events_stream(request: Request) -> StreamingResponse:
                 # id: <...>
                 # event: <...>
                 # data: <json>
-                yield f"id: {dto.event_id}\n"
+                if dto.event_id > 0:
+                    yield f"id: {dto.event_id}\n"
                 yield f"event: {dto.event_type}\n"
                 yield f"data: {data}\n\n"
         finally:

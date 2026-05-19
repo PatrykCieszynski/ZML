@@ -1,17 +1,13 @@
 from __future__ import annotations
 
-import json
 import sqlite3
 import time
-from dataclasses import asdict, is_dataclass
 from datetime import datetime
-from decimal import Decimal
-from enum import Enum
 from pathlib import Path
-from typing import Any, cast
 
 from zml_game_bridge.events.base import EventBase
 from zml_game_bridge.events.envelope import EventEnvelope
+from zml_game_bridge.events.serialization import event_payload_json
 from zml_game_bridge.persistence.sqlite import open_sqlite
 
 
@@ -32,10 +28,8 @@ class EventStore:
             raise RuntimeError("EventStore not opened")
 
         event_type = type(event).__name__
-        payload = _serialize_payload(event)
-
         created_ts_ms = time.time_ns() // 1_000_000
-        payload_json = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
+        payload_json = event_payload_json(event)
 
         raw = getattr(event, "raw", None)
 
@@ -116,42 +110,3 @@ def _row_to_event_envelope(row: sqlite3.Row) -> EventEnvelope:
         payload_json=str(row["payload_json"]),
     )
 
-
-def _serialize_payload(event: EventBase) -> dict[str, Any]:
-    if is_dataclass(event):
-        payload = asdict(event)
-        payload.pop("event_dt", None)
-        payload.pop("channel_type", None)
-        payload.pop("channel_token", None)
-        payload.pop("raw", None)
-    else:
-        payload = dict(getattr(event, "__dict__", {}))
-    return _to_jsonable(payload)
-
-
-def _to_jsonable(obj: Any) -> Any:
-    if obj is None:
-        return None
-
-    if isinstance(obj, (str, int, float, bool)):
-        return obj
-
-    if isinstance(obj, datetime):
-        return obj.isoformat()
-
-    if isinstance(obj, Decimal):
-        return str(obj)
-
-    if isinstance(obj, Enum):
-        return obj.value
-
-    if isinstance(obj, dict):
-        result: dict[str, Any] = {}
-        for key, value in cast(dict[object, object], obj).items():
-            result[str(key)] = _to_jsonable(value)
-        return result
-
-    if isinstance(obj, (list, tuple)):
-        return [_to_jsonable(value) for value in cast(list[object] | tuple[object, ...], obj)]
-
-    return str(obj)
