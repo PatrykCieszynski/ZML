@@ -6,12 +6,12 @@ from decimal import Decimal
 
 from zml_game_bridge.domain.money import Mpec
 from zml_game_bridge.domain.position import WorldPos
-from zml_game_bridge.events.base import EventBase
+from zml_game_bridge.events.base import SignalBase
 from zml_game_bridge.inputs.chat.model import ChannelType
 
 
 @dataclass(frozen=True, slots=True)
-class ChatEventBase(EventBase):
+class ChatSignalBase(SignalBase):
     event_dt: datetime
     channel_type: ChannelType
     channel_token: str
@@ -19,35 +19,35 @@ class ChatEventBase(EventBase):
 
 
 @dataclass(frozen=True, slots=True)
-class ResourceClaimed(ChatEventBase):
+class ResourceClaimedSignal(ChatSignalBase):
     resource_name: str
 
 
 @dataclass(frozen=True, slots=True)
-class ItemReceived(ChatEventBase):
+class ItemReceivedSignal(ChatSignalBase):
     item_name: str
     qty: int
     value_mpec: Mpec
 
 
 @dataclass(frozen=True, slots=True)
-class ResourceDepleted(ChatEventBase):
+class ResourceDepletedSignal(ChatSignalBase):
     pass
 
 
 @dataclass(frozen=True, slots=True)
-class EnhancerBroke(ChatEventBase):
+class EnhancerBrokeSignal(ChatSignalBase):
     enhancer_name: str
     item_name: str
     remaining: int
 
 
 @dataclass(frozen=True, slots=True)
-class PlayerPosWaypoint(ChatEventBase):
+class PlayerPosWaypointSignal(ChatSignalBase):
     position: WorldPos
 
 
 @dataclass(frozen=True, slots=True)
-class SkillGained(ChatEventBase):
+class SkillGainedSignal(ChatSignalBase):
     skill: str
     amount: Decimal

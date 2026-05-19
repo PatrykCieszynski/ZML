@@ -7,16 +7,16 @@ from decimal import Decimal, InvalidOperation
 from zml_game_bridge.domain.money import Mpec
 
 from ...domain.position import WorldPos
-from .events import (
-    ChatEventBase,
-    EnhancerBroke,
-    ItemReceived,
-    PlayerPosWaypoint,
-    ResourceClaimed,
-    ResourceDepleted,
-    SkillGained,
-)
 from .model import ChannelType, ChatLine
+from .signals import (
+    ChatSignalBase,
+    EnhancerBrokeSignal,
+    ItemReceivedSignal,
+    PlayerPosWaypointSignal,
+    ResourceClaimedSignal,
+    ResourceDepletedSignal,
+    SkillGainedSignal,
+)
 
 RE_ENHANCER_BROKE = re.compile(
     r"^Your enhancer (?P<enhancer_name>.+?) on your (?P<item_name>.+?) broke\."
@@ -45,7 +45,7 @@ RE_SKILL_GAINED = re.compile(
 )
 
 
-def interpret_chat_line(line: ChatLine) -> ChatEventBase | None:
+def interpret_chat_line(line: ChatLine) -> ChatSignalBase | None:
     match line.channel_type:
         case ChannelType.SYSTEM:
             return _interpret_system(line)
@@ -55,22 +55,22 @@ def interpret_chat_line(line: ChatLine) -> ChatEventBase | None:
             return None
 
 
-def _interpret_system(line: ChatLine) -> ChatEventBase | None:
+def _interpret_system(line: ChatLine) -> ChatSignalBase | None:
     for matcher in _SYSTEM_MATCHERS:
         try:
-            event_output = matcher(line)
+            signal_output = matcher(line)
         except Exception:
             continue
-        if event_output is not None:
-            return event_output
+        if signal_output is not None:
+            return signal_output
     return None
 
 
-def _interpret_globals(_line: ChatLine) -> ChatEventBase | None:
+def _interpret_globals(_line: ChatLine) -> ChatSignalBase | None:
     return None
 
 
-def _try_match_enhancer_broke(line: ChatLine) -> EnhancerBroke | None:
+def _try_match_enhancer_broke(line: ChatLine) -> EnhancerBrokeSignal | None:
     matches = RE_ENHANCER_BROKE.match(line.message)
     if matches is None:
         return None
@@ -84,7 +84,7 @@ def _try_match_enhancer_broke(line: ChatLine) -> EnhancerBroke | None:
     if remaining is None:
         return None
 
-    return EnhancerBroke(
+    return EnhancerBrokeSignal(
         event_dt=line.event_dt,
         channel_type=line.channel_type,
         channel_token=line.channel_token,
@@ -95,7 +95,7 @@ def _try_match_enhancer_broke(line: ChatLine) -> EnhancerBroke | None:
     )
 
 
-def _try_match_item_received(line: ChatLine) -> ItemReceived | None:
+def _try_match_item_received(line: ChatLine) -> ItemReceivedSignal | None:
     matches = RE_ITEM_RECEIVED.match(line.message)
     if matches is None:
         return None
@@ -110,7 +110,7 @@ def _try_match_item_received(line: ChatLine) -> ItemReceived | None:
     if qty is None or value_mpec is None:
         return None
 
-    return ItemReceived(
+    return ItemReceivedSignal(
         event_dt=line.event_dt,
         channel_type=line.channel_type,
         channel_token=line.channel_token,
@@ -120,14 +120,14 @@ def _try_match_item_received(line: ChatLine) -> ItemReceived | None:
         value_mpec=value_mpec
     )
 
-def _try_match_resource_claimed(line: ChatLine) -> ResourceClaimed | None:
+def _try_match_resource_claimed(line: ChatLine) -> ResourceClaimedSignal | None:
     matches = RE_RESOURCE_CLAIMED.match(line.message)
     if matches is None:
         return None
 
     resource_name = matches.group("resource_name")
 
-    return ResourceClaimed(
+    return ResourceClaimedSignal(
         event_dt=line.event_dt,
         channel_type=line.channel_type,
         channel_token=line.channel_token,
@@ -135,19 +135,19 @@ def _try_match_resource_claimed(line: ChatLine) -> ResourceClaimed | None:
         resource_name=resource_name
     )
 
-def _try_match_resource_depleted(line: ChatLine) -> ResourceDepleted | None:
+def _try_match_resource_depleted(line: ChatLine) -> ResourceDepletedSignal | None:
     matches = RE_RESOURCE_DEPLETED.match(line.message)
     if matches is None:
         return None
 
-    return ResourceDepleted(
+    return ResourceDepletedSignal(
         event_dt=line.event_dt,
         channel_type=line.channel_type,
         channel_token=line.channel_token,
         raw=line.raw,
     )
 
-def _try_match_position_ping(line: ChatLine) -> PlayerPosWaypoint | None:
+def _try_match_position_ping(line: ChatLine) -> PlayerPosWaypointSignal | None:
     matches = RE_POSITION_PING.match(line.message)
     if matches is None:
         return None
@@ -164,7 +164,7 @@ def _try_match_position_ping(line: ChatLine) -> PlayerPosWaypoint | None:
     if x is None or y is None or z is None:
         return None
 
-    return PlayerPosWaypoint(
+    return PlayerPosWaypointSignal(
         event_dt=line.event_dt,
         channel_type=line.channel_type,
         channel_token=line.channel_token,
@@ -177,7 +177,7 @@ def _try_match_position_ping(line: ChatLine) -> PlayerPosWaypoint | None:
         )
     )
 
-def _try_match_skill_gained(line: ChatLine) -> SkillGained | None:
+def _try_match_skill_gained(line: ChatLine) -> SkillGainedSignal | None:
     matches = RE_SKILL_GAINED.match(line.message)
     if matches is None:
         return None
@@ -189,7 +189,7 @@ def _try_match_skill_gained(line: ChatLine) -> SkillGained | None:
     if amount is None:
         return None
 
-    return SkillGained(
+    return SkillGainedSignal(
         event_dt=line.event_dt,
         channel_type=line.channel_type,
         channel_token=line.channel_token,
@@ -224,7 +224,7 @@ def _parse_ped_to_mpec(s: str) -> Mpec | None:
     return Mpec(int(mpec))
 
 
-_SYSTEM_MATCHERS: tuple[Callable[[ChatLine], ChatEventBase | None], ...] = (
+_SYSTEM_MATCHERS: tuple[Callable[[ChatLine], ChatSignalBase | None], ...] = (
     _try_match_enhancer_broke,
     _try_match_item_received,
     _try_match_resource_claimed,

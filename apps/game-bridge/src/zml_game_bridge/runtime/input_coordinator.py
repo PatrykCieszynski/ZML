@@ -35,17 +35,8 @@ class InputCoordinator:
 
             derived_events = list(self.signal_processor.process(signal))
 
-            if not derived_events:
-                self._route_legacy_durable_input(signal)
             for event in derived_events:
                 self._route_durable_event(event)
-
-    def _route_legacy_durable_input(self, signal: EventBase) -> None:
-        # Transitional path for existing chat input events. New input sources
-        # should emit SignalBase and let a coordinator derive durable events.
-        # Once a processor derives events from a legacy input, the raw input is
-        # no longer persisted, which avoids duplicate facts.
-        self._route_durable_event(signal)
 
     def _route_durable_event(self, event: EventBase) -> None:
         if should_persist_event(event):

@@ -33,13 +33,7 @@ class RuntimeChannel[T]:
 
 
 class SignalChannel(RuntimeChannel[EventBase]):
-    """
-    Queue for input observations waiting for runtime coordination.
-
-    Most values here should be SignalBase instances. Current chat input still
-    emits legacy EventBase classes and should be migrated to signals when the
-    mining chat flow is implemented.
-    """
+    """Queue for input observations waiting for runtime coordination."""
 
 
 class EventChannel(RuntimeChannel[EventBase]):

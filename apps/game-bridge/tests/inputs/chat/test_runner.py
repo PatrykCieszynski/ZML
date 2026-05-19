@@ -4,8 +4,8 @@ from __future__ import annotations
 import threading
 
 from zml_game_bridge.inputs.chat import runner as chat_runner
-from zml_game_bridge.inputs.chat.events import ResourceDepleted
 from zml_game_bridge.inputs.chat.model import ChannelType, ChatLine
+from zml_game_bridge.inputs.chat.signals import ResourceDepletedSignal
 
 
 def _mk_line(message: str) -> ChatLine:
@@ -23,7 +23,7 @@ def _mk_line(message: str) -> ChatLine:
     )
 
 
-def test_chat_runner_emits_event(monkeypatch) -> None:
+def test_chat_runner_emits_signal(monkeypatch) -> None:
     # Tailer yields exactly one line
     monkeypatch.setattr(chat_runner, "tail_lines", lambda *a, **k: iter(["RAW"]))
 
@@ -34,7 +34,7 @@ def test_chat_runner_emits_event(monkeypatch) -> None:
     monkeypatch.setattr(
         chat_runner,
         "interpret_chat_line",
-        lambda line: ResourceDepleted(
+        lambda line: ResourceDepletedSignal(
             event_dt=line.event_dt,
             channel_type=line.channel_type,
             channel_token=line.channel_token,
@@ -51,4 +51,4 @@ def test_chat_runner_emits_event(monkeypatch) -> None:
     chat_runner.start_chat_input(path=None, signal_sink=sink, stop_event=stop, start_at_end=True)  # type: ignore[arg-type]
 
     assert len(out) == 1
-    assert isinstance(out[0], ResourceDepleted)
+    assert isinstance(out[0], ResourceDepletedSignal)
