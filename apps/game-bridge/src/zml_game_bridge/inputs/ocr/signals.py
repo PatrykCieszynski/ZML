@@ -12,7 +12,7 @@ def _empty_debug() -> dict[str, float]:
 
 
 @dataclass(frozen=True, slots=True)
-class ProbeFired(SignalBase):
+class ProbeFiredSignal(SignalBase):
     ts_ms: int
     position: WorldPos | None
     modes_mask: int | None
@@ -24,7 +24,7 @@ class ProbeFired(SignalBase):
 
 
 @dataclass(frozen=True, slots=True)
-class FinderModesChanged(SignalBase):
+class FinderModesChangedSignal(SignalBase):
     ts_ms: int
     modes_mask: int
     previous_modes_mask: int | None
@@ -33,7 +33,7 @@ class FinderModesChanged(SignalBase):
 
 
 @dataclass(frozen=True, slots=True)
-class FinderModeInvalidated(SignalBase):
+class FinderModeInvalidatedSignal(SignalBase):
     ts_ms: int
     previous_modes_mask: int | None
     roi_name: str = "finder_mvp_bottom_left"
@@ -41,7 +41,7 @@ class FinderModeInvalidated(SignalBase):
 
 
 @dataclass(frozen=True, slots=True)
-class FinderUnitsChanged(SignalBase):
+class FinderUnitsChangedSignal(SignalBase):
     ts_ms: int
     probes_per_drop: int | None
     ammo_per_drop: int | None
@@ -50,7 +50,7 @@ class FinderUnitsChanged(SignalBase):
 
 
 @dataclass(frozen=True, slots=True)
-class FinderHitHint(SignalBase):
+class FinderHitHintSignal(SignalBase):
     ts_ms: int
     size_label: str
     size_index: int
@@ -59,4 +59,11 @@ class FinderHitHint(SignalBase):
     depth_m: float | None = None
     raw_status_text: str | None = None
     raw_details_text: str | None = None
+    roi_name: str = "finder_mvp_bottom_left"
+
+
+@dataclass(frozen=True, slots=True)
+class FinderNoResourcesSignal(SignalBase):
+    ts_ms: int
+    raw_status_text: str | None = None
     roi_name: str = "finder_mvp_bottom_left"

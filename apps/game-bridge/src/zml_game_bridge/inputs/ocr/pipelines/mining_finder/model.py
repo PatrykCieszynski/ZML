@@ -12,6 +12,7 @@ FinderSignalKind = Literal[
     "finder_mode_invalidated",
     "finder_units_changed",
     "finder_hit_hint",
+    "finder_no_resources",
 ]
 
 

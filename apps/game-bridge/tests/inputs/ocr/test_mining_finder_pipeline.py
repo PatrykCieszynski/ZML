@@ -143,6 +143,35 @@ def test_classify_status_distinguishes_no_resources_from_preclaim_found() -> Non
     )
 
 
+def test_mining_finder_pipeline_emits_no_resources_for_no_resources_status() -> None:
+    pipeline = MiningFinderPipeline(
+        detector=FakeFeatureDetector(
+            FinderFeatures(
+                status_kind="no_resources",
+                raw_status_text="No resources found. Try again\nsomewhere else-",
+            ),
+            FinderFeatures(
+                status_kind="no_resources",
+                raw_status_text="No resources found. Try again\nsomewhere else-",
+            ),
+            FinderFeatures(status_kind="idle"),
+            FinderFeatures(
+                status_kind="no_resources",
+                raw_status_text="No resources found. Try again\nsomewhere else-",
+            ),
+        )
+    )
+
+    signals = pipeline.step(_roi(), 1_000)
+    assert [signal.kind for signal in signals] == ["finder_no_resources"]
+    assert signals[0].raw_text == "No resources found. Try again\nsomewhere else-"
+    assert pipeline.step(_roi(), 1_100) == []
+    assert pipeline.step(_roi(), 1_200) == []
+    assert [signal.kind for signal in pipeline.step(_roi(), 1_300)] == [
+        "finder_no_resources"
+    ]
+
+
 def test_mining_finder_pipeline_emits_hit_hint_for_found_status() -> None:
     pipeline = MiningFinderPipeline(
         detector=FakeFeatureDetector(

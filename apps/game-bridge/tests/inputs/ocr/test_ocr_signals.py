@@ -2,26 +2,28 @@ from __future__ import annotations
 
 from zml_game_bridge.events.base import SignalBase, should_persist_event
 from zml_game_bridge.inputs.ocr.signals import (
-    FinderHitHint,
-    FinderModeInvalidated,
-    FinderModesChanged,
-    FinderUnitsChanged,
-    ProbeFired,
+    FinderHitHintSignal,
+    FinderModeInvalidatedSignal,
+    FinderModesChangedSignal,
+    FinderNoResourcesSignal,
+    FinderUnitsChangedSignal,
+    ProbeFiredSignal,
 )
 
 
 def test_finder_ocr_signals_are_transient() -> None:
     signals = [
-        ProbeFired(ts_ms=1, position=None, modes_mask=1, ammo_per_drop=1_000),
-        FinderModesChanged(ts_ms=1, modes_mask=1, previous_modes_mask=None),
-        FinderModeInvalidated(ts_ms=1, previous_modes_mask=1),
-        FinderUnitsChanged(ts_ms=1, probes_per_drop=None, ammo_per_drop=1_000),
-        FinderHitHint(
+        ProbeFiredSignal(ts_ms=1, position=None, modes_mask=1, ammo_per_drop=1_000),
+        FinderModesChangedSignal(ts_ms=1, modes_mask=1, previous_modes_mask=None),
+        FinderModeInvalidatedSignal(ts_ms=1, previous_modes_mask=1),
+        FinderUnitsChangedSignal(ts_ms=1, probes_per_drop=None, ammo_per_drop=1_000),
+        FinderHitHintSignal(
             ts_ms=1,
             size_label="Minimal",
             size_index=1,
             resource_name="Lysterium Stone",
         ),
+        FinderNoResourcesSignal(ts_ms=1),
     ]
 
     assert all(isinstance(signal, SignalBase) for signal in signals)

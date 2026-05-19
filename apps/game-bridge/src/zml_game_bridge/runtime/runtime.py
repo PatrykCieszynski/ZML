@@ -17,7 +17,7 @@ from zml_game_bridge.inputs.ocr.runner import start_ocr_input
 from zml_game_bridge.runtime.db_writer import DbWriterWorker
 from zml_game_bridge.runtime.event_queue import EventChannel
 from zml_game_bridge.runtime.message_worker import RuntimeMessageWorker
-from zml_game_bridge.runtime.mining_signal_processor import MiningSignalProcessor
+from zml_game_bridge.runtime.mining_runtime_coordinator import MiningRuntimeCoordinator
 from zml_game_bridge.runtime.position_state import LatestPositionState
 
 logger = logging.getLogger(__name__)
@@ -42,12 +42,12 @@ class AppRuntime:
         self._pending_events = EventChannel()
         self._persisted_events = InMemoryPersistedEventBus()
         self._latest_position = LatestPositionState()
-        self._mining_signal_processor = MiningSignalProcessor()
+        self._mining_runtime_coordinator = MiningRuntimeCoordinator()
         self._message_worker = RuntimeMessageWorker(
             pending_messages=self._pending_messages,
             pending_events=self._pending_events,
             live_events=self._persisted_events,
-            message_processor=self._mining_signal_processor,
+            message_processor=self._mining_runtime_coordinator,
         )
         self._db_writer_worker = DbWriterWorker(
             db_path=self._db_path,

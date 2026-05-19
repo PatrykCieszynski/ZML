@@ -20,11 +20,12 @@ from zml_game_bridge.inputs.ocr.pipelines.mining_finder.pipeline import (
 from zml_game_bridge.inputs.ocr.pipelines.position.model import OcrPosition, PositionRois
 from zml_game_bridge.inputs.ocr.pipelines.position.pipeline import PositionPipeline
 from zml_game_bridge.inputs.ocr.signals import (
-    FinderHitHint,
-    FinderModeInvalidated,
-    FinderModesChanged,
-    FinderUnitsChanged,
-    ProbeFired,
+    FinderHitHintSignal,
+    FinderModeInvalidatedSignal,
+    FinderModesChangedSignal,
+    FinderNoResourcesSignal,
+    FinderUnitsChangedSignal,
+    ProbeFiredSignal,
 )
 
 PositionSink = Callable[[OcrPosition], None]
@@ -151,7 +152,7 @@ def _configure_finder_debug_logging() -> None:
 def _to_finder_signal(signal: MiningFinderSignal, latest_position: OcrPosition | None):
     match signal.kind:
         case "probe_fired":
-            return ProbeFired(
+            return ProbeFiredSignal(
                 ts_ms=signal.ts_ms,
                 position=latest_position.position if latest_position is not None else None,
                 modes_mask=signal.modes_mask,
@@ -163,20 +164,20 @@ def _to_finder_signal(signal: MiningFinderSignal, latest_position: OcrPosition |
         case "finder_modes_changed":
             if signal.modes_mask is None:
                 raise RuntimeError("finder_modes_changed requires modes_mask")
-            return FinderModesChanged(
+            return FinderModesChangedSignal(
                 ts_ms=signal.ts_ms,
                 modes_mask=signal.modes_mask,
                 previous_modes_mask=signal.previous_modes_mask,
                 debug=signal.debug,
             )
         case "finder_mode_invalidated":
-            return FinderModeInvalidated(
+            return FinderModeInvalidatedSignal(
                 ts_ms=signal.ts_ms,
                 previous_modes_mask=signal.previous_modes_mask,
                 debug=signal.debug,
             )
         case "finder_units_changed":
-            return FinderUnitsChanged(
+            return FinderUnitsChangedSignal(
                 ts_ms=signal.ts_ms,
                 probes_per_drop=signal.probes_per_drop,
                 ammo_per_drop=signal.ammo_per_drop,
@@ -189,7 +190,7 @@ def _to_finder_signal(signal: MiningFinderSignal, latest_position: OcrPosition |
                 or signal.resource_name is None
             ):
                 raise RuntimeError("finder_hit_hint requires size label, index, and resource")
-            return FinderHitHint(
+            return FinderHitHintSignal(
                 ts_ms=signal.ts_ms,
                 size_label=signal.hit_size_label,
                 size_index=signal.hit_size_index,
@@ -198,4 +199,9 @@ def _to_finder_signal(signal: MiningFinderSignal, latest_position: OcrPosition |
                 depth_m=signal.depth_m,
                 raw_status_text=signal.raw_text,
                 raw_details_text=signal.raw_details_text,
+            )
+        case "finder_no_resources":
+            return FinderNoResourcesSignal(
+                ts_ms=signal.ts_ms,
+                raw_status_text=signal.raw_text,
             )

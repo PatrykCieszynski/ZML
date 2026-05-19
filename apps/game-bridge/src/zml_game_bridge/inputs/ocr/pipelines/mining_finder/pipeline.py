@@ -52,6 +52,7 @@ class MiningFinderPipeline:
         self._pending_units: tuple[int | None, int | None] | None = None
         self._pending_units_frames = 0
         self._found_hint_emitted = False
+        self._no_resources_emitted = False
 
     def close(self) -> None:
         self._detector.close()
@@ -88,6 +89,10 @@ class MiningFinderPipeline:
         hit_signal = self._handle_hit_hint(features, ts_ms)
         if hit_signal is not None:
             signals.append(hit_signal)
+
+        no_resources_signal = self._handle_no_resources(features, ts_ms)
+        if no_resources_signal is not None:
+            signals.append(no_resources_signal)
 
         self._log_debug_changes(features, signals, ts_ms)
         self._last_status_kind = features.status_kind
@@ -208,6 +213,25 @@ class MiningFinderPipeline:
             depth_m=features.depth_m,
             raw_text=features.raw_status_text,
             raw_details_text=features.raw_details_text,
+        )
+
+    def _handle_no_resources(
+        self,
+        features: FinderFeatures,
+        ts_ms: int,
+    ) -> MiningFinderSignal | None:
+        if features.status_kind != "no_resources":
+            if features.status_kind is not None:
+                self._no_resources_emitted = False
+            return None
+        if self._no_resources_emitted:
+            return None
+
+        self._no_resources_emitted = True
+        return MiningFinderSignal(
+            ts_ms=ts_ms,
+            kind="finder_no_resources",
+            raw_text=features.raw_status_text,
         )
 
     def _log_debug_changes(
