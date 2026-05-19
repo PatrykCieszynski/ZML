@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import time
 from collections.abc import Iterator
 from typing import Annotated, cast
 
@@ -31,7 +32,12 @@ MiningConn = Annotated[sqlite3.Connection, Depends(get_mining_conn)]
 @router.get("/drops", response_model=list[MiningDropDto])
 def list_mining_drops(
     conn: MiningConn,
-    limit: Annotated[int, Query(ge=1, le=1_000)] = 200,
+    window_minutes: Annotated[int, Query(ge=1, le=24 * 60)] = 30,
 ) -> list[MiningDropDto]:
-    rows = MiningDropReader(conn).list_latest(limit=limit)
+    since_ts_ms = _now_ms() - window_minutes * 60_000
+    rows = MiningDropReader(conn).list_since(since_ts_ms=since_ts_ms)
     return [MiningDropDto.from_row(row) for row in rows]
+
+
+def _now_ms() -> int:
+    return time.time_ns() // 1_000_000

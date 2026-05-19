@@ -48,15 +48,15 @@ class MiningDropReader:
     def __init__(self, conn: sqlite3.Connection) -> None:
         self._conn = conn
 
-    def list_latest(self, *, limit: int = 200) -> list[MiningDropRow]:
+    def list_since(self, *, since_ts_ms: int) -> list[MiningDropRow]:
         cur = self._conn.execute(
             """
             SELECT *
             FROM mining_drops
+            WHERE observed_ts_ms >= ?
             ORDER BY observed_ts_ms DESC, drop_event_id DESC
-            LIMIT ?
             """,
-            (limit,),
+            (since_ts_ms,),
         )
         return [_row_to_mining_drop(row) for row in cur.fetchall()]
 

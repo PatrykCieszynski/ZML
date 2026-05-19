@@ -117,7 +117,7 @@ def test_mining_drop_projector_ignores_unlinked_result(tmp_path: Path) -> None:
             )
         )
 
-        assert MiningDropReader(conn).list_latest() == []
+        assert MiningDropReader(conn).list_since(since_ts_ms=0) == []
     finally:
         conn.close()
 
