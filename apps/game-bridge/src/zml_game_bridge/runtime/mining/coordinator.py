@@ -1,8 +1,15 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from zml_game_bridge.domain.mining_cost import MiningEquipmentProfile
 from zml_game_bridge.events.base import EventBase
 from zml_game_bridge.runtime.mining.chat_correlator import MiningChatCorrelator
+from zml_game_bridge.runtime.mining.claim_lifecycle import (
+    ActiveClaim,
+    ClaimLifecycleCorrelator,
+    PositionProvider,
+)
 from zml_game_bridge.runtime.mining.finder_correlator import FinderDropCorrelator
 from zml_game_bridge.runtime.mining.settings import (
     IdFactory,
@@ -19,6 +26,7 @@ class MiningCoordinator:
         profile: MiningEquipmentProfile | None = None,
         config: MiningCoordinatorConfig | None = None,
         id_factory: IdFactory = default_id_factory,
+        position_provider: PositionProvider | None = None,
     ) -> None:
         resolved_profile = profile or default_mining_equipment_profile()
         resolved_config = config or MiningCoordinatorConfig()
@@ -28,9 +36,24 @@ class MiningCoordinator:
             id_factory=id_factory,
         )
         self._chat = MiningChatCorrelator()
+        self._claim_lifecycle = ClaimLifecycleCorrelator(
+            config=resolved_config,
+            id_factory=id_factory,
+            position_provider=position_provider,
+        )
+
+    def restore_active_claims(self, claims: Iterable[ActiveClaim]) -> None:
+        self._claim_lifecycle.restore_active_claims(claims)
 
     def process(self, signal: EventBase) -> list[EventBase]:
         derived_events: list[EventBase] = []
-        derived_events.extend(self._finder.process(signal))
-        derived_events.extend(self._chat.process(signal))
+        correlated_events: list[EventBase] = []
+        correlated_events.extend(self._finder.process(signal))
+        correlated_events.extend(self._chat.process(signal))
+
+        for event in correlated_events:
+            derived_events.append(event)
+            derived_events.extend(self._claim_lifecycle.process_event(event))
+
+        derived_events.extend(self._claim_lifecycle.process_signal(signal))
         return derived_events

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 
 from zml_game_bridge.events.base import EventBase
 from zml_game_bridge.events.envelope import EventEnvelope
@@ -23,8 +24,7 @@ class EventProjector(ABC):
         conn: sqlite3.Connection,
         event: EventBase,
         envelope: EventEnvelope,
-    ) -> None:
-        ...
+    ) -> None: ...
 
 
 class NoOpEventProjector(EventProjector):
@@ -36,3 +36,18 @@ class NoOpEventProjector(EventProjector):
         envelope: EventEnvelope,
     ) -> None:
         _ = (conn, event, envelope)
+
+
+class CompositeEventProjector(EventProjector):
+    def __init__(self, projectors: Sequence[EventProjector]) -> None:
+        self._projectors = tuple(projectors)
+
+    def project(
+        self,
+        *,
+        conn: sqlite3.Connection,
+        event: EventBase,
+        envelope: EventEnvelope,
+    ) -> None:
+        for projector in self._projectors:
+            projector.project(conn=conn, event=event, envelope=envelope)

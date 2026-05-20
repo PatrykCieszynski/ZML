@@ -50,6 +50,22 @@ class MiningNoResourcesEvent(EventBase):
 
 
 @dataclass(frozen=True, slots=True)
+class MiningClaimCreatedEvent(EventBase):
+    claim_id: str
+    hit_id: str | None
+    drop_id: str | None
+    observed_ts_ms: int
+    position: WorldPos | None
+    search_radius_m: float | None
+    resource_name: str | None
+    size_label: str | None
+    size_index: int | None
+    expected_expires_ts_ms: int | None
+    range_m: float | None = None
+    depth_m: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class MiningItemReceivedEvent(EventBase):
     event_dt: datetime
     item_name: str
@@ -69,6 +85,17 @@ class MiningClaimDeedReceivedEvent(EventBase):
     raw: str
     received_raw: str | None = None
     claimed_raw: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class MiningClaimDepletedEvent(EventBase):
+    claim_id: str
+    drop_id: str | None
+    hit_id: str | None
+    event_dt: datetime
+    position: WorldPos
+    distance_m: float
+    raw: str
 
 
 @dataclass(frozen=True, slots=True)

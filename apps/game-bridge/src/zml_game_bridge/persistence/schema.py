@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 SCHEMA_DDL = """
 -- =========================
@@ -114,6 +114,43 @@ CREATE TABLE IF NOT EXISTS mining_drops (
 CREATE INDEX IF NOT EXISTS idx_mining_drops_observed_ts_ms ON mining_drops(observed_ts_ms);
 CREATE INDEX IF NOT EXISTS idx_mining_drops_result ON mining_drops(result);
 
+CREATE TABLE IF NOT EXISTS mining_claims (
+    claim_id                TEXT PRIMARY KEY,
+    created_event_id        INTEGER NOT NULL REFERENCES events(event_id) ON DELETE CASCADE,
+
+    hit_id                  TEXT,
+    drop_id                 TEXT,
+    observed_ts_ms          INTEGER NOT NULL,
+
+    planet_name             TEXT,
+    x                       INTEGER,
+    y                       INTEGER,
+    z                       INTEGER,
+    search_radius_m         REAL,
+
+    resource_name           TEXT,
+    size_label              TEXT,
+    size_index              INTEGER,
+    expected_expires_ts_ms  INTEGER,
+    range_m                 REAL,
+    depth_m                 REAL,
+
+    status                  TEXT NOT NULL DEFAULT 'active',
+    depleted_event_id       INTEGER REFERENCES events(event_id) ON DELETE SET NULL,
+    depleted_event_dt       TEXT,
+    depleted_planet_name    TEXT,
+    depleted_x              INTEGER,
+    depleted_y              INTEGER,
+    depleted_z              INTEGER,
+    depleted_distance_m     REAL,
+
+    CHECK (status IN ('active', 'depleted'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_mining_claims_status ON mining_claims(status);
+CREATE INDEX IF NOT EXISTS idx_mining_claims_observed_ts_ms ON mining_claims(observed_ts_ms);
+CREATE INDEX IF NOT EXISTS idx_mining_claims_expires ON mining_claims(expected_expires_ts_ms);
+
 -- =========================
 -- App state:
 -- which run is currently "selected/active" after restart
@@ -133,9 +170,7 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
     cur = conn.execute("PRAGMA user_version")
     user_version = int(cur.fetchone()[0])
     if user_version < 3 and not _column_exists(conn, "mining_drops", "drop_radius_m"):
-        conn.execute(
-            "ALTER TABLE mining_drops ADD COLUMN drop_radius_m REAL NOT NULL DEFAULT 55.0"
-        )
+        conn.execute("ALTER TABLE mining_drops ADD COLUMN drop_radius_m REAL NOT NULL DEFAULT 55.0")
     if user_version < 4 and not _column_exists(conn, "mining_drops", "expected_expires_ts_ms"):
         conn.execute("ALTER TABLE mining_drops ADD COLUMN expected_expires_ts_ms INTEGER")
     if user_version < SCHEMA_VERSION:

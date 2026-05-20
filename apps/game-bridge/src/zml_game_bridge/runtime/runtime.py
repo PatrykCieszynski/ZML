@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from pathlib import Path
 from threading import Thread
 
 from zml_game_bridge.api.channels.position_hub import OcrPositionHub
 from zml_game_bridge.api.channels.sse_hub import SseHub
+from zml_game_bridge.domain.position import WorldPos
 from zml_game_bridge.events.envelope import EventEnvelope
 from zml_game_bridge.events.in_memory_persisted_event_bus import (
     InMemoryPersistedEventBus,
@@ -15,11 +17,16 @@ from zml_game_bridge.inputs.chat.runner import start_chat_input
 from zml_game_bridge.inputs.mock.mining import start_mock_mining_input
 from zml_game_bridge.inputs.ocr.pipelines.position.model import OcrPosition
 from zml_game_bridge.inputs.ocr.runner import start_ocr_input
+from zml_game_bridge.persistence.event_projector import CompositeEventProjector
+from zml_game_bridge.persistence.mining_claims import MiningClaimProjector, MiningClaimReader
 from zml_game_bridge.persistence.mining_drops import MiningDropProjector
+from zml_game_bridge.persistence.schema import ensure_schema
+from zml_game_bridge.persistence.sqlite import open_sqlite
 from zml_game_bridge.runtime.channels import EventChannel, SignalChannel
 from zml_game_bridge.runtime.db_writer import DbWriterWorker
 from zml_game_bridge.runtime.input_coordinator import InputCoordinator
 from zml_game_bridge.runtime.mining import MiningCoordinator
+from zml_game_bridge.runtime.mining.claim_lifecycle import ActiveClaim
 from zml_game_bridge.runtime.position_state import LatestPositionState
 
 logger = logging.getLogger(__name__)
@@ -48,7 +55,7 @@ class AppRuntime:
         self._pending_events = EventChannel()
         self._persisted_events = InMemoryPersistedEventBus()
         self._latest_position = LatestPositionState()
-        self._mining_coordinator = MiningCoordinator()
+        self._mining_coordinator = MiningCoordinator(position_provider=self._current_position)
         self._input_coordinator = InputCoordinator(
             pending_signals=self._pending_signals,
             pending_events=self._pending_events,
@@ -58,7 +65,12 @@ class AppRuntime:
             db_path=self._db_path,
             pending_events=self._pending_events,
             persisted_events=self._persisted_events,
-            projector=MiningDropProjector(),
+            projector=CompositeEventProjector(
+                [
+                    MiningDropProjector(),
+                    MiningClaimProjector(),
+                ]
+            ),
         )
 
         self._t_input: Thread | None = None
@@ -101,6 +113,7 @@ class AppRuntime:
     def start(self) -> None:
         if self._started:
             return
+        self._restore_mining_lifecycle()
         self._started = True
 
         self._t_input = Thread(
@@ -166,6 +179,29 @@ class AppRuntime:
         self._latest_position.update(position)
         self.position_hub.publish_threadsafe(position)
 
+    def _current_position(self) -> WorldPos | None:
+        position = self._latest_position.get()
+        return position.position if position is not None else None
+
+    def _restore_mining_lifecycle(self) -> None:
+        conn = open_sqlite(self._db_path)
+        try:
+            ensure_schema(conn)
+            rows = MiningClaimReader(conn).list_active(now_ts_ms=_now_ms())
+        finally:
+            conn.close()
+
+        self._mining_coordinator.restore_active_claims(
+            ActiveClaim(
+                claim_id=row.claim_id,
+                drop_id=row.drop_id,
+                hit_id=row.hit_id,
+                position=row.position,
+                search_radius_m=row.search_radius_m,
+            )
+            for row in rows
+        )
+
     def _log_event_envelope(self, env: EventEnvelope) -> None:
         logger.info("New event stored: %s", env)
 
@@ -191,3 +227,7 @@ class AppRuntime:
         if self._t_db is not None:
             self._t_db.join(timeout=2.0)
         self._started = False
+
+
+def _now_ms() -> int:
+    return time.time_ns() // 1_000_000

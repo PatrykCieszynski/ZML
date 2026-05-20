@@ -5,7 +5,9 @@ from datetime import datetime
 from zml_game_bridge.domain.mining import MiningMode
 from zml_game_bridge.domain.mining_cost import MiningEquipmentProfile, MiningToolProfile
 from zml_game_bridge.domain.mining_events import (
+    MiningClaimCreatedEvent,
     MiningClaimDeedReceivedEvent,
+    MiningClaimDepletedEvent,
     MiningDropEvent,
     MiningEnhancerBrokeEvent,
     MiningHitHintEvent,
@@ -32,6 +34,7 @@ from zml_game_bridge.runtime.mining import (
     MiningCoordinator,
     MiningCoordinatorConfig,
 )
+from zml_game_bridge.runtime.mining.claim_lifecycle import ActiveClaim
 
 
 def test_mining_coordinator_records_probe_drop_with_current_units() -> None:
@@ -107,7 +110,7 @@ def test_mining_coordinator_prefers_probe_signal_units_over_cached_units() -> No
 
 def test_mining_coordinator_records_hit_hint_linked_to_recent_drop() -> None:
     position = WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None)
-    coordinator = MiningCoordinator(id_factory=_id_factory("drop-1", "hit-1"))
+    coordinator = MiningCoordinator(id_factory=_id_factory("drop-1", "hit-1", "claim-1"))
 
     coordinator.process(
         ProbeFiredSignal(ts_ms=1_000, position=position, modes_mask=1, ammo_per_drop=1_000)
@@ -123,7 +126,7 @@ def test_mining_coordinator_records_hit_hint_linked_to_recent_drop() -> None:
         )
     )
 
-    assert len(events) == 1
+    assert len(events) == 2
     hit = events[0]
     assert isinstance(hit, MiningHitHintEvent)
     assert hit.hit_id == "hit-1"
@@ -135,10 +138,19 @@ def test_mining_coordinator_records_hit_hint_linked_to_recent_drop() -> None:
     assert hit.expected_expires_ts_ms == 3_605_000
     assert hit.range_m == 51.14
     assert hit.depth_m == 53.0
+    claim = events[1]
+    assert isinstance(claim, MiningClaimCreatedEvent)
+    assert claim.claim_id == "claim-1"
+    assert claim.hit_id == "hit-1"
+    assert claim.drop_id == "drop-1"
+    assert claim.position == position
+    assert claim.search_radius_m == 55.0
+    assert claim.resource_name == "Lysterium Stone"
+    assert claim.expected_expires_ts_ms == 3_605_000
 
 
 def test_mining_coordinator_records_non_expiring_hit_hint() -> None:
-    coordinator = MiningCoordinator(id_factory=_id_factory("drop-1", "hit-1"))
+    coordinator = MiningCoordinator(id_factory=_id_factory("drop-1", "hit-1", "claim-1"))
 
     coordinator.process(
         ProbeFiredSignal(ts_ms=1_000, position=None, modes_mask=1, ammo_per_drop=1_000)
@@ -155,6 +167,9 @@ def test_mining_coordinator_records_non_expiring_hit_hint() -> None:
     hit = events[0]
     assert isinstance(hit, MiningHitHintEvent)
     assert hit.expected_expires_ts_ms is None
+    claim = events[1]
+    assert isinstance(claim, MiningClaimCreatedEvent)
+    assert claim.expected_expires_ts_ms is None
 
 
 def test_mining_coordinator_records_no_resources_linked_to_recent_drop() -> None:
@@ -180,7 +195,7 @@ def test_mining_coordinator_records_no_resources_linked_to_recent_drop() -> None
 
 
 def test_mining_coordinator_no_resources_closes_pending_drop() -> None:
-    coordinator = MiningCoordinator(id_factory=_id_factory("drop-1", "hit-1"))
+    coordinator = MiningCoordinator(id_factory=_id_factory("drop-1", "hit-1", "claim-1"))
 
     coordinator.process(
         ProbeFiredSignal(ts_ms=1_000, position=None, modes_mask=1, ammo_per_drop=1_000)
@@ -203,7 +218,7 @@ def test_mining_coordinator_no_resources_closes_pending_drop() -> None:
 def test_mining_coordinator_does_not_link_hit_to_stale_drop() -> None:
     coordinator = MiningCoordinator(
         config=MiningCoordinatorConfig(result_link_window_ms=1_000),
-        id_factory=_id_factory("drop-1", "hit-1"),
+        id_factory=_id_factory("drop-1", "hit-1", "claim-1"),
     )
 
     coordinator.process(
@@ -222,6 +237,10 @@ def test_mining_coordinator_does_not_link_hit_to_stale_drop() -> None:
     assert isinstance(hit, MiningHitHintEvent)
     assert hit.drop_id is None
     assert hit.position is None
+    claim = events[1]
+    assert isinstance(claim, MiningClaimCreatedEvent)
+    assert claim.drop_id is None
+    assert claim.position is None
 
 
 def test_mining_coordinator_does_not_link_no_resources_to_stale_drop() -> None:
@@ -374,6 +393,118 @@ def test_mining_coordinator_defers_resource_depleted_until_claim_lifecycle_can_l
     )
 
     assert events == []
+
+
+def test_mining_coordinator_depletes_nearest_active_claim() -> None:
+    current_position = WorldPos(planet_name="Calypso", x=58_894, y=84_642, z=None)
+    coordinator = MiningCoordinator(
+        id_factory=_id_factory("drop-1", "hit-1", "claim-1"),
+        position_provider=lambda: current_position,
+    )
+    event_dt = datetime(2026, 1, 10, 12, 37, 50)
+
+    coordinator.process(
+        ProbeFiredSignal(
+            ts_ms=1_000,
+            position=WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None),
+            modes_mask=1,
+            ammo_per_drop=1_000,
+        )
+    )
+    coordinator.process(
+        FinderHitHintSignal(
+            ts_ms=5_000,
+            size_label="Minimal",
+            size_index=1,
+            resource_name="Lysterium Stone",
+        )
+    )
+    events = coordinator.process(
+        ResourceDepletedSignal(
+            event_dt=event_dt,
+            channel_type=ChannelType.SYSTEM,
+            channel_token="System",
+            raw="2026-01-10 12:37:50 [System] [] This resource is depleted",
+        )
+    )
+
+    assert len(events) == 1
+    event = events[0]
+    assert isinstance(event, MiningClaimDepletedEvent)
+    assert event.claim_id == "claim-1"
+    assert event.drop_id == "drop-1"
+    assert event.hit_id == "hit-1"
+    assert event.event_dt == event_dt
+    assert event.position == current_position
+    assert round(event.distance_m, 2) == 5.0
+
+
+def test_mining_coordinator_does_not_deplete_far_claim() -> None:
+    coordinator = MiningCoordinator(
+        config=MiningCoordinatorConfig(claim_depletion_link_max_distance_m=20.0),
+        id_factory=_id_factory("drop-1", "hit-1", "claim-1"),
+        position_provider=lambda: WorldPos(planet_name="Calypso", x=59_500, y=85_500, z=None),
+    )
+
+    coordinator.process(
+        ProbeFiredSignal(
+            ts_ms=1_000,
+            position=WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None),
+            modes_mask=1,
+            ammo_per_drop=1_000,
+        )
+    )
+    coordinator.process(
+        FinderHitHintSignal(
+            ts_ms=5_000,
+            size_label="Minimal",
+            size_index=1,
+            resource_name="Lysterium Stone",
+        )
+    )
+    events = coordinator.process(
+        ResourceDepletedSignal(
+            event_dt=datetime(2026, 1, 10, 12, 37, 50),
+            channel_type=ChannelType.SYSTEM,
+            channel_token="System",
+            raw="2026-01-10 12:37:50 [System] [] This resource is depleted",
+        )
+    )
+
+    assert events == []
+
+
+def test_mining_coordinator_depletes_restored_active_claim() -> None:
+    current_position = WorldPos(planet_name="Calypso", x=58_894, y=84_642, z=None)
+    coordinator = MiningCoordinator(position_provider=lambda: current_position)
+    coordinator.restore_active_claims(
+        [
+            ActiveClaim(
+                claim_id="claim-1",
+                drop_id="drop-1",
+                hit_id="hit-1",
+                position=WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None),
+                search_radius_m=55.0,
+            )
+        ]
+    )
+    event_dt = datetime(2026, 1, 10, 12, 37, 50)
+
+    events = coordinator.process(
+        ResourceDepletedSignal(
+            event_dt=event_dt,
+            channel_type=ChannelType.SYSTEM,
+            channel_token="System",
+            raw="2026-01-10 12:37:50 [System] [] This resource is depleted",
+        )
+    )
+
+    assert len(events) == 1
+    event = events[0]
+    assert isinstance(event, MiningClaimDepletedEvent)
+    assert event.claim_id == "claim-1"
+    assert event.drop_id == "drop-1"
+    assert event.hit_id == "hit-1"
 
 
 def test_mining_coordinator_records_item_received_chat_event() -> None:
