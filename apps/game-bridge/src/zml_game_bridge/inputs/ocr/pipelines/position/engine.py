@@ -9,6 +9,8 @@ import zml_game_bridge
 
 class TesserDigitsEngine:
     def __init__(self, *, tessdata_dir: str | None = None) -> None:
+        # TODO: Add tesserocr to the documented/runtime dependencies and packaging flow.
+        # This engine relies on bundled tessdata plus a locally available tesserocr binary.
         try:
             import tesserocr  # type: ignore
         except Exception as e:

@@ -15,6 +15,8 @@ class FinderTextEngine(Protocol):
 
 class PytesseractFinderTextEngine:
     def __init__(self) -> None:
+        # TODO: Benchmark a tesserocr-based finder text engine on real finder crops.
+        # Position OCR shows tesserocr is much faster, but finder OCR has different text/layout needs.
         try:
             import pytesseract
         except Exception as exc:

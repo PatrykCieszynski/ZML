@@ -1,22 +1,14 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
-from dataclasses import dataclass
-from uuid import uuid4
 
 from zml_game_bridge.domain.claim_size import expected_claim_expires_ts_ms
-from zml_game_bridge.domain.mining_cost import (
-    MiningEquipmentProfile,
-    MiningToolProfile,
-    calculate_drop_cost,
-)
+from zml_game_bridge.domain.mining_cost import MiningEquipmentProfile, calculate_drop_cost
 from zml_game_bridge.domain.mining_events import (
     MiningDropEvent,
     MiningHitHintEvent,
     MiningNoResourcesEvent,
 )
-from zml_game_bridge.domain.money import Mpec
 from zml_game_bridge.events.base import EventBase
 from zml_game_bridge.inputs.ocr.pipelines.mining_finder.signals import (
     FinderHitHintSignal,
@@ -26,41 +18,25 @@ from zml_game_bridge.inputs.ocr.pipelines.mining_finder.signals import (
     FinderUnitsChangedSignal,
     ProbeFiredSignal,
 )
+from zml_game_bridge.runtime.mining.settings import (
+    DEFAULT_DROP_RADIUS_M,
+    IdFactory,
+    MiningCoordinatorConfig,
+)
 
-IdFactory = Callable[[], str]
 logger = logging.getLogger(__name__)
-DEFAULT_DROP_RADIUS_M = 55.0
 
 
-@dataclass(frozen=True, slots=True)
-class MiningCoordinatorConfig:
-    result_link_window_ms: int = 60_000
-
-
-def default_mining_equipment_profile() -> MiningEquipmentProfile:
-    return MiningEquipmentProfile(
-        finder=MiningToolProfile(
-            name="unknown-finder",
-            decay_mpec=Mpec(0),
-            radius_m=DEFAULT_DROP_RADIUS_M,
-        ),
-    )
-
-
-def default_id_factory() -> str:
-    return uuid4().hex
-
-
-class MiningCoordinator:
+class FinderDropCorrelator:
     def __init__(
         self,
         *,
-        profile: MiningEquipmentProfile | None = None,
-        config: MiningCoordinatorConfig | None = None,
-        id_factory: IdFactory = default_id_factory,
+        profile: MiningEquipmentProfile,
+        config: MiningCoordinatorConfig,
+        id_factory: IdFactory,
     ) -> None:
-        self._profile = profile or default_mining_equipment_profile()
-        self._config = config or MiningCoordinatorConfig()
+        self._profile = profile
+        self._config = config
         self._id_factory = id_factory
         self._modes_mask: int | None = None
         self._probes_per_drop: int | None = None
@@ -95,9 +71,7 @@ class MiningCoordinator:
     def _record_drop(self, signal: ProbeFiredSignal) -> MiningDropEvent:
         modes_mask = signal.modes_mask if signal.modes_mask is not None else self._modes_mask
         probes_per_drop = (
-            signal.probes_per_drop
-            if signal.probes_per_drop is not None
-            else self._probes_per_drop
+            signal.probes_per_drop if signal.probes_per_drop is not None else self._probes_per_drop
         )
         ammo_per_drop = (
             signal.ammo_per_drop if signal.ammo_per_drop is not None else self._ammo_per_drop
