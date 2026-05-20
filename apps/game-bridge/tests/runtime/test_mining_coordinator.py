@@ -16,7 +16,7 @@ from zml_game_bridge.inputs.ocr.pipelines.mining_finder.signals import (
     FinderUnitsChangedSignal,
     ProbeFiredSignal,
 )
-from zml_game_bridge.runtime.mining_coordinator import (
+from zml_game_bridge.runtime.mining import (
     MiningCoordinator,
     MiningCoordinatorConfig,
 )

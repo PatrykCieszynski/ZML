@@ -9,8 +9,8 @@ from zml_game_bridge.inputs.chat.model import ChannelType, ChatLine
 # 2026-01-10 12:37:50 [System] [] You have claimed a resource! (Yellow Crystal)
 _HEADER_RE = re.compile(
     r"^(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) "
-    r"\[(?P<channel>[^\]]*)\] "
-    r"\[(?P<speaker>[^\]]*)\] "
+    r"\[(?P<channel>[^]]*)] "
+    r"\[(?P<speaker>[^]]*)] "
     r"(?P<msg>.*)$"
 )
 

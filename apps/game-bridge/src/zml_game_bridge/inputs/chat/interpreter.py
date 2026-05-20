@@ -5,10 +5,9 @@ from collections.abc import Callable
 from decimal import Decimal, InvalidOperation
 
 from zml_game_bridge.domain.money import Mpec
-
-from ...domain.position import WorldPos
-from .model import ChannelType, ChatLine
-from .signals import (
+from zml_game_bridge.domain.position import WorldPos
+from zml_game_bridge.inputs.chat.model import ChannelType, ChatLine
+from zml_game_bridge.inputs.chat.signals import (
     ChatSignalBase,
     EnhancerBrokeSignal,
     ItemReceivedSignal,
@@ -65,7 +64,7 @@ def _interpret_system(line: ChatLine) -> ChatSignalBase | None:
             return signal_output
     return None
 
-
+#TODO track user globals and hofs
 def _interpret_globals(_line: ChatLine) -> ChatSignalBase | None:
     return None
 

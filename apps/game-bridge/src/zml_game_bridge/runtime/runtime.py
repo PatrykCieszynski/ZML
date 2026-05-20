@@ -19,7 +19,7 @@ from zml_game_bridge.persistence.mining_drops import MiningDropProjector
 from zml_game_bridge.runtime.channels import EventChannel, SignalChannel
 from zml_game_bridge.runtime.db_writer import DbWriterWorker
 from zml_game_bridge.runtime.input_coordinator import InputCoordinator
-from zml_game_bridge.runtime.mining_coordinator import MiningCoordinator
+from zml_game_bridge.runtime.mining import MiningCoordinator
 from zml_game_bridge.runtime.position_state import LatestPositionState
 
 logger = logging.getLogger(__name__)
