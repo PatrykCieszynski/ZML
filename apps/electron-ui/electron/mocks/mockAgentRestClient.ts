@@ -98,6 +98,7 @@ function createMockMiningDrop(
         resourceName: isHit ? "Lysterium Stone" : null,
         sizeLabel: isHit ? "Minimal" : null,
         sizeIndex: isHit ? 1 : null,
+        expectedExpiresTsMs: isHit ? observedTsMs + 60 * 60_000 : null,
         rangeM: isHit ? 51.14 : null,
         depthM: isHit ? 53 : null,
     };

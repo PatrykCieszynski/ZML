@@ -22,4 +22,5 @@ export type MapMiningDrop = EntropiaMapPoint & {
   position: DeckPosition;
   result: "pending" | "hit" | "no_resources";
   radiusM: number;
+  hitExpiresAtSec: number | null;
 };

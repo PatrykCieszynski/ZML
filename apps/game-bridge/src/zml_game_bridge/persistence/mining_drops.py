@@ -41,6 +41,7 @@ class MiningDropRow:
     resource_name: str | None
     size_label: str | None
     size_index: int | None
+    expected_expires_ts_ms: int | None
     range_m: float | None
     depth_m: float | None
 
@@ -162,6 +163,7 @@ class _MiningDropProjectionWriter:
                 resource_name = ?,
                 size_label = ?,
                 size_index = ?,
+                expected_expires_ts_ms = ?,
                 range_m = ?,
                 depth_m = ?
             WHERE drop_id = ?
@@ -174,6 +176,7 @@ class _MiningDropProjectionWriter:
                 event.resource_name,
                 event.size_label,
                 event.size_index,
+                event.expected_expires_ts_ms,
                 event.range_m,
                 event.depth_m,
                 event.drop_id,
@@ -230,6 +233,7 @@ def _row_to_mining_drop(row: sqlite3.Row) -> MiningDropRow:
         resource_name=row["resource_name"],
         size_label=row["size_label"],
         size_index=_optional_int(row["size_index"]),
+        expected_expires_ts_ms=_optional_int(row["expected_expires_ts_ms"]),
         range_m=_optional_float(row["range_m"]),
         depth_m=_optional_float(row["depth_m"]),
     )

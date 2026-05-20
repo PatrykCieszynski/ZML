@@ -30,6 +30,7 @@ export type MiningDropDto = {
     resourceName: string | null;
     sizeLabel: string | null;
     sizeIndex: number | null;
+    expectedExpiresTsMs: number | null;
     rangeM: number | null;
     depthM: number | null;
 };
@@ -67,6 +68,7 @@ export type MiningDropWire = {
     resource_name: string | null;
     size_label: string | null;
     size_index: number | null;
+    expected_expires_ts_ms: number | null;
     range_m: number | null;
     depth_m: number | null;
 };
@@ -105,6 +107,7 @@ export type MiningHitHintEventWire = {
     size_label: string | null;
     size_index: number | null;
     resource_name: string | null;
+    expected_expires_ts_ms?: number | null;
     range_m: number | null;
     depth_m: number | null;
 };
@@ -143,6 +146,7 @@ export function isMiningDropWire(value: unknown): value is MiningDropWire {
         isNullableString(value.resource_name) &&
         isNullableString(value.size_label) &&
         isNullableNumber(value.size_index) &&
+        isNullableNumber(value.expected_expires_ts_ms) &&
         isNullableNumber(value.range_m) &&
         isNullableNumber(value.depth_m)
     );
@@ -172,6 +176,8 @@ export function isMiningHitHintEventWire(value: unknown): value is MiningHitHint
         isNullableString(value.size_label) &&
         isNullableNumber(value.size_index) &&
         isNullableString(value.resource_name) &&
+        (value.expected_expires_ts_ms === undefined ||
+            isNullableNumber(value.expected_expires_ts_ms)) &&
         isNullableNumber(value.range_m) &&
         isNullableNumber(value.depth_m)
     );
@@ -211,6 +217,7 @@ export function wireToMiningDropDto(wire: MiningDropWire): MiningDropDto {
         resourceName: wire.resource_name,
         sizeLabel: wire.size_label,
         sizeIndex: wire.size_index,
+        expectedExpiresTsMs: wire.expected_expires_ts_ms,
         rangeM: wire.range_m,
         depthM: wire.depth_m,
     };
@@ -244,6 +251,7 @@ export function miningDropDtoFromMiningDropEventWire(
         resourceName: null,
         sizeLabel: null,
         sizeIndex: null,
+        expectedExpiresTsMs: null,
         rangeM: null,
         depthM: null,
     };
@@ -264,6 +272,7 @@ export function miningDropDtoWithHitHint(
         resourceName: wire.resource_name,
         sizeLabel: wire.size_label,
         sizeIndex: wire.size_index,
+        expectedExpiresTsMs: wire.expected_expires_ts_ms ?? null,
         rangeM: wire.range_m,
         depthM: wire.depth_m,
     };

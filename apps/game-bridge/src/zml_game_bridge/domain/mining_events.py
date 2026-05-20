@@ -32,6 +32,7 @@ class MiningHitHintEvent(EventBase):
     size_label: str
     size_index: int
     resource_name: str
+    expected_expires_ts_ms: int | None = None
     range_m: float | None = None
     depth_m: float | None = None
     raw_status_text: str | None = None

@@ -5,6 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from uuid import uuid4
 
+from zml_game_bridge.domain.claim_size import expected_claim_expires_ts_ms
 from zml_game_bridge.domain.mining_cost import (
     MiningEquipmentProfile,
     MiningToolProfile,
@@ -152,6 +153,11 @@ class MiningCoordinator:
             size_label=signal.size_label,
             size_index=signal.size_index,
             resource_name=signal.resource_name,
+            expected_expires_ts_ms=expected_claim_expires_ts_ms(
+                observed_ts_ms=signal.ts_ms,
+                size_index=signal.size_index,
+                size_label=signal.size_label,
+            ),
             range_m=signal.range_m,
             depth_m=signal.depth_m,
             raw_status_text=signal.raw_status_text,

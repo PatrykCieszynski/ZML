@@ -8,7 +8,7 @@ import {
 import type { MiningDropDto, PlanetId } from "@zml/shared";
 import { createClaimPointLayer, createClaimTimerLayer } from "./layers/claimLayers";
 import { createMapTileLayer } from "./layers/mapTileLayer";
-import { createMiningDropRadiusLayer } from "./layers/miningDropLayers";
+import { createMiningDropRadiusLayer, createMiningHitTimerLayer } from "./layers/miningDropLayers";
 import { createPlayerMarkerLayer, createPlayerRangeLayer } from "./layers/playerLayers";
 import { compactLayers } from "./mapLayerUtils";
 import {
@@ -69,6 +69,10 @@ export function MapViewport({
             position: entropiaToDeckPosition(planetId, drop.position),
             result: drop.result,
             radiusM: drop.dropRadiusM,
+            hitExpiresAtSec:
+              drop.result === "hit" && drop.expectedExpiresTsMs !== null
+                ? Math.floor(drop.expectedExpiresTsMs / 1000)
+                : null,
           },
         ];
       }),
@@ -80,17 +84,21 @@ export function MapViewport({
       DEFAULT_PLAYER_RADIUS_M,
     [miningDrops, planetId],
   );
+  const hasMiningHitTimers = useMemo(
+    () => mapMiningDrops.some((drop) => drop.result === "hit" && drop.hitExpiresAtSec !== null),
+    [mapMiningDrops],
+  );
 
   useEffect(() => {
     setViewState(createInitialMapViewState(planetId));
   }, [planetId]);
 
   useEffect(() => {
-    if (!DEBUG_CLAIMS_ENABLED) return;
+    if (!DEBUG_CLAIMS_ENABLED && !hasMiningHitTimers) return;
 
     const timer = window.setInterval(() => setCurrentSec(nowSec()), 1000);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [hasMiningHitTimers]);
 
   const tileLayer = useMemo(() => createMapTileLayer(planetId), [planetId]);
   const debugClaims = useMemo(
@@ -115,12 +123,17 @@ export function MapViewport({
     () => createMiningDropRadiusLayer(planetId, mapMiningDrops),
     [mapMiningDrops, planetId],
   );
+  const miningHitTimerLayer = useMemo(
+    () => createMiningHitTimerLayer(mapMiningDrops, currentSec),
+    [currentSec, mapMiningDrops],
+  );
 
   const layers = useMemo(
     () =>
       compactLayers([
         tileLayer,
         miningDropRadiusLayer,
+        miningHitTimerLayer,
         debugClaimPointLayer,
         debugClaimTimerLayer,
         playerRangeLayer,
@@ -129,6 +142,7 @@ export function MapViewport({
     [
       debugClaimPointLayer,
       debugClaimTimerLayer,
+      miningHitTimerLayer,
       miningDropRadiusLayer,
       playerMarkerLayer,
       playerRangeLayer,

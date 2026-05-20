@@ -60,6 +60,7 @@ def test_mining_drop_projector_marks_hit_result(tmp_path: Path) -> None:
                 size_label="Minimal",
                 size_index=1,
                 resource_name="Lysterium Stone",
+                expected_expires_ts_ms=3_602_000,
                 range_m=51.14,
                 depth_m=53.0,
             )
@@ -74,6 +75,7 @@ def test_mining_drop_projector_marks_hit_result(tmp_path: Path) -> None:
         assert row.resource_name == "Lysterium Stone"
         assert row.size_label == "Minimal"
         assert row.size_index == 1
+        assert row.expected_expires_ts_ms == 3_602_000
         assert row.range_m == 51.14
         assert row.depth_m == 53.0
     finally:

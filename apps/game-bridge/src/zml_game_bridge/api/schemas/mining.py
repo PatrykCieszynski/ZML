@@ -45,6 +45,7 @@ class MiningDropDto(BaseModel):
     resource_name: str | None
     size_label: str | None
     size_index: int | None
+    expected_expires_ts_ms: int | None
     range_m: float | None
     depth_m: float | None
 
@@ -84,6 +85,7 @@ class MiningDropDto(BaseModel):
             resource_name=row.resource_name,
             size_label=row.size_label,
             size_index=row.size_index,
+            expected_expires_ts_ms=row.expected_expires_ts_ms,
             range_m=row.range_m,
             depth_m=row.depth_m,
         )

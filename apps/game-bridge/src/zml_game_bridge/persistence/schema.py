@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SCHEMA_DDL = """
 -- =========================
@@ -104,6 +104,7 @@ CREATE TABLE IF NOT EXISTS mining_drops (
     resource_name           TEXT,
     size_label              TEXT,
     size_index              INTEGER,
+    expected_expires_ts_ms  INTEGER,
     range_m                 REAL,
     depth_m                 REAL,
 
@@ -135,6 +136,8 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         conn.execute(
             "ALTER TABLE mining_drops ADD COLUMN drop_radius_m REAL NOT NULL DEFAULT 55.0"
         )
+    if user_version < 4 and not _column_exists(conn, "mining_drops", "expected_expires_ts_ms"):
+        conn.execute("ALTER TABLE mining_drops ADD COLUMN expected_expires_ts_ms INTEGER")
     if user_version < SCHEMA_VERSION:
         conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
     conn.commit()

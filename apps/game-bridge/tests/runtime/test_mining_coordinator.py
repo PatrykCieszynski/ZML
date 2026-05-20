@@ -120,8 +120,29 @@ def test_mining_coordinator_records_hit_hint_linked_to_recent_drop() -> None:
     assert hit.resource_name == "Lysterium Stone"
     assert hit.size_label == "Minimal"
     assert hit.size_index == 1
+    assert hit.expected_expires_ts_ms == 3_605_000
     assert hit.range_m == 51.14
     assert hit.depth_m == 53.0
+
+
+def test_mining_coordinator_records_non_expiring_hit_hint() -> None:
+    coordinator = MiningCoordinator(id_factory=_id_factory("drop-1", "hit-1"))
+
+    coordinator.process(
+        ProbeFiredSignal(ts_ms=1_000, position=None, modes_mask=1, ammo_per_drop=1_000)
+    )
+    events = coordinator.process(
+        FinderHitHintSignal(
+            ts_ms=5_000,
+            size_label="Rich",
+            size_index=23,
+            resource_name="Lysterium Stone",
+        )
+    )
+
+    hit = events[0]
+    assert isinstance(hit, MiningHitHintEvent)
+    assert hit.expected_expires_ts_ms is None
 
 
 def test_mining_coordinator_records_no_resources_linked_to_recent_drop() -> None:

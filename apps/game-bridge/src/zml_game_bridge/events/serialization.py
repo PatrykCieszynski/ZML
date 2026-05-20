@@ -5,7 +5,7 @@ from dataclasses import asdict, is_dataclass
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Any
+from typing import Any, cast
 
 from zml_game_bridge.events.base import EventBase
 
@@ -45,11 +45,11 @@ def _to_jsonable(obj: Any) -> Any:
 
     if isinstance(obj, dict):
         result: dict[str, Any] = {}
-        for key, value in obj.items():
+        for key, value in cast(dict[Any, Any], obj).items():
             result[str(key)] = _to_jsonable(value)
         return result
 
     if isinstance(obj, (list, tuple)):
-        return [_to_jsonable(value) for value in obj]
+        return [_to_jsonable(value) for value in cast(list[Any] | tuple[Any, ...], obj)]
 
     return str(obj)
