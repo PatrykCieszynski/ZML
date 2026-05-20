@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import ClassVar
 
+from zml_game_bridge.domain.mining_events import MiningItemReceivedEvent
+from zml_game_bridge.domain.money import Mpec
 from zml_game_bridge.events.base import EventBase
 from zml_game_bridge.events.envelope import EventEnvelope
 from zml_game_bridge.persistence.event_projector import EventProjector
@@ -59,6 +62,42 @@ def test_event_writer_commits_transaction(tmp_path: Path) -> None:
     assert row is not None
     assert row["event_type"] == "DummyEvent"
     assert row["payload_json"] == '{"x":7}'
+
+
+def test_event_writer_stores_event_dt_and_raw_outside_payload(tmp_path: Path) -> None:
+    db_path = tmp_path / "events.sqlite3"
+    conn = open_sqlite(db_path)
+    ensure_schema(conn)
+    event_dt = datetime(2026, 1, 10, 12, 37, 50)
+    raw = "2026-01-10 12:37:50 [System] [] You received Blue Crystal x (8) Value: 0.1600 PED"
+
+    try:
+        env = EventWriter(conn).write(
+            MiningItemReceivedEvent(
+                event_dt=event_dt,
+                item_name="Blue Crystal",
+                qty=8,
+                value_mpec=Mpec(16_000),
+                raw=raw,
+            )
+        )
+    finally:
+        conn.close()
+
+    conn = open_sqlite(db_path)
+    try:
+        row = conn.execute(
+            "SELECT event_type, payload_json, event_dt, raw FROM events WHERE event_id = ?",
+            (env.event_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    assert row is not None
+    assert row["event_type"] == "MiningItemReceivedEvent"
+    assert row["payload_json"] == '{"item_name":"Blue Crystal","qty":8,"value_mpec":16000}'
+    assert row["event_dt"] == "2026-01-10T12:37:50"
+    assert row["raw"] == raw
 
 
 def test_event_writer_rolls_back_event_when_projection_fails(tmp_path: Path) -> None:

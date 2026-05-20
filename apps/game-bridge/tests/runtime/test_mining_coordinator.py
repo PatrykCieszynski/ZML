@@ -1,14 +1,26 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from zml_game_bridge.domain.mining import MiningMode
 from zml_game_bridge.domain.mining_cost import MiningEquipmentProfile, MiningToolProfile
 from zml_game_bridge.domain.mining_events import (
+    MiningClaimDeedReceivedEvent,
     MiningDropEvent,
+    MiningEnhancerBrokeEvent,
     MiningHitHintEvent,
+    MiningItemReceivedEvent,
     MiningNoResourcesEvent,
 )
 from zml_game_bridge.domain.money import Mpec, mpec_to_int
 from zml_game_bridge.domain.position import WorldPos
+from zml_game_bridge.inputs.chat.model import ChannelType
+from zml_game_bridge.inputs.chat.signals import (
+    EnhancerBrokeSignal,
+    ItemReceivedSignal,
+    ResourceClaimedSignal,
+    ResourceDepletedSignal,
+)
 from zml_game_bridge.inputs.ocr.pipelines.mining_finder.signals import (
     FinderHitHintSignal,
     FinderModesChangedSignal,
@@ -227,6 +239,195 @@ def test_mining_coordinator_does_not_link_no_resources_to_stale_drop() -> None:
     assert isinstance(no_resources, MiningNoResourcesEvent)
     assert no_resources.drop_id is None
     assert no_resources.position is None
+
+
+def test_mining_coordinator_records_claim_deed_received_chat_event() -> None:
+    coordinator = MiningCoordinator()
+    event_dt = datetime(2026, 1, 10, 12, 37, 50)
+    received_raw = (
+        "2026-01-10 12:37:50 [System] [] You received Mineral Resource Deed x (1) Value: 0.0000 PED"
+    )
+    claimed_raw = "2026-01-10 12:37:50 [System] [] You have claimed a resource! (Lysterium Stone)"
+
+    assert (
+        coordinator.process(
+            ItemReceivedSignal(
+                event_dt=event_dt,
+                channel_type=ChannelType.SYSTEM,
+                channel_token="System",
+                raw=received_raw,
+                item_name="Mineral Resource Deed",
+                qty=1,
+                value_mpec=Mpec(0),
+            )
+        )
+        == []
+    )
+    events = coordinator.process(
+        ResourceClaimedSignal(
+            event_dt=event_dt,
+            channel_type=ChannelType.SYSTEM,
+            channel_token="System",
+            raw=claimed_raw,
+            resource_name="Lysterium Stone",
+        )
+    )
+
+    assert len(events) == 1
+    event = events[0]
+    assert isinstance(event, MiningClaimDeedReceivedEvent)
+    assert event.event_dt == event_dt
+    assert event.resource_name == "Lysterium Stone"
+    assert event.mining_type == "ore"
+    assert event.deed_item_name == "Mineral Resource Deed"
+    assert event.qty == 1
+    assert event.value_mpec == Mpec(0)
+    assert event.raw == f"{received_raw}\n{claimed_raw}"
+    assert event.received_raw == received_raw
+    assert event.claimed_raw == claimed_raw
+
+
+def test_mining_coordinator_orders_multiple_pending_claim_deeds() -> None:
+    coordinator = MiningCoordinator()
+    event_dt = datetime(2026, 1, 10, 12, 37, 50)
+
+    coordinator.process(
+        ItemReceivedSignal(
+            event_dt=event_dt,
+            channel_type=ChannelType.SYSTEM,
+            channel_token="System",
+            raw="ore deed raw",
+            item_name="Mineral Resource Deed",
+            qty=1,
+            value_mpec=Mpec(0),
+        )
+    )
+    coordinator.process(
+        ItemReceivedSignal(
+            event_dt=event_dt,
+            channel_type=ChannelType.SYSTEM,
+            channel_token="System",
+            raw="enmatter deed raw",
+            item_name="Energy Matter Resource Deed",
+            qty=1,
+            value_mpec=Mpec(0),
+        )
+    )
+
+    ore_events = coordinator.process(
+        ResourceClaimedSignal(
+            event_dt=event_dt,
+            channel_type=ChannelType.SYSTEM,
+            channel_token="System",
+            raw="ore claimed raw",
+            resource_name="Gazzurdite Stone",
+        )
+    )
+    enmatter_events = coordinator.process(
+        ResourceClaimedSignal(
+            event_dt=event_dt,
+            channel_type=ChannelType.SYSTEM,
+            channel_token="System",
+            raw="enmatter claimed raw",
+            resource_name="Angelic Grit",
+        )
+    )
+
+    ore = ore_events[0]
+    enmatter = enmatter_events[0]
+    assert isinstance(ore, MiningClaimDeedReceivedEvent)
+    assert isinstance(enmatter, MiningClaimDeedReceivedEvent)
+    assert ore.mining_type == "ore"
+    assert ore.resource_name == "Gazzurdite Stone"
+    assert enmatter.mining_type == "enmatter"
+    assert enmatter.resource_name == "Angelic Grit"
+
+
+def test_mining_coordinator_ignores_unpaired_resource_claimed_chat_signal() -> None:
+    coordinator = MiningCoordinator()
+    event_dt = datetime(2026, 1, 10, 12, 37, 50)
+
+    events = coordinator.process(
+        ResourceClaimedSignal(
+            event_dt=event_dt,
+            channel_type=ChannelType.SYSTEM,
+            channel_token="System",
+            raw="2026-01-10 12:37:50 [System] [] You have claimed a resource! (Lysterium Stone)",
+            resource_name="Lysterium Stone",
+        )
+    )
+
+    assert events == []
+
+
+def test_mining_coordinator_defers_resource_depleted_until_claim_lifecycle_can_link_claim() -> None:
+    coordinator = MiningCoordinator()
+    event_dt = datetime(2026, 1, 10, 12, 37, 50)
+
+    events = coordinator.process(
+        ResourceDepletedSignal(
+            event_dt=event_dt,
+            channel_type=ChannelType.SYSTEM,
+            channel_token="System",
+            raw="2026-01-10 12:37:50 [System] [] This resource is depleted",
+        )
+    )
+
+    assert events == []
+
+
+def test_mining_coordinator_records_item_received_chat_event() -> None:
+    coordinator = MiningCoordinator()
+    event_dt = datetime(2026, 1, 10, 12, 37, 50)
+
+    events = coordinator.process(
+        ItemReceivedSignal(
+            event_dt=event_dt,
+            channel_type=ChannelType.SYSTEM,
+            channel_token="System",
+            raw="2026-01-10 12:37:50 [System] [] You received Blue Crystal x (8) Value: 0.1600 PED",
+            item_name="Blue Crystal",
+            qty=8,
+            value_mpec=Mpec(16_000),
+        )
+    )
+
+    assert len(events) == 1
+    event = events[0]
+    assert isinstance(event, MiningItemReceivedEvent)
+    assert event.event_dt == event_dt
+    assert event.item_name == "Blue Crystal"
+    assert event.qty == 8
+    assert event.value_mpec == Mpec(16_000)
+
+
+def test_mining_coordinator_records_enhancer_broke_chat_event() -> None:
+    coordinator = MiningCoordinator()
+    event_dt = datetime(2026, 1, 10, 12, 37, 50)
+
+    events = coordinator.process(
+        EnhancerBrokeSignal(
+            event_dt=event_dt,
+            channel_type=ChannelType.SYSTEM,
+            channel_token="System",
+            raw=(
+                "2026-01-10 12:37:50 [System] [] Your enhancer T2 Mining Excavator Speed"
+                " Enhancer on your Genesis Star Excavator broke. You have 413 enhancers"
+                " remaining on the item."
+            ),
+            enhancer_name="T2 Mining Excavator Speed Enhancer",
+            item_name="Genesis Star Excavator",
+            remaining=413,
+        )
+    )
+
+    assert len(events) == 1
+    event = events[0]
+    assert isinstance(event, MiningEnhancerBrokeEvent)
+    assert event.event_dt == event_dt
+    assert event.enhancer_name == "T2 Mining Excavator Speed Enhancer"
+    assert event.item_name == "Genesis Star Excavator"
+    assert event.remaining == 413
 
 
 def _id_factory(*ids: str):

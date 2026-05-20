@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from zml_game_bridge.domain.mining_cost import DropCostBreakdown
+from zml_game_bridge.domain.money import Mpec
 from zml_game_bridge.domain.position import WorldPos
 from zml_game_bridge.events.base import EventBase
 
@@ -45,3 +47,34 @@ class MiningNoResourcesEvent(EventBase):
     observed_ts_ms: int
     position: WorldPos | None
     raw_status_text: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class MiningItemReceivedEvent(EventBase):
+    event_dt: datetime
+    item_name: str
+    qty: int
+    value_mpec: Mpec
+    raw: str
+
+
+@dataclass(frozen=True, slots=True)
+class MiningClaimDeedReceivedEvent(EventBase):
+    event_dt: datetime
+    resource_name: str
+    mining_type: str | None
+    deed_item_name: str | None
+    qty: int | None
+    value_mpec: Mpec | None
+    raw: str
+    received_raw: str | None = None
+    claimed_raw: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class MiningEnhancerBrokeEvent(EventBase):
+    event_dt: datetime
+    enhancer_name: str
+    item_name: str
+    remaining: int
+    raw: str
