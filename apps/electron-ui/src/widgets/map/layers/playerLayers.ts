@@ -4,7 +4,11 @@ import type { PlanetId } from "@zml/shared";
 import { coordRadiusToDeckRadius } from "../mapProjection";
 import type { DeckPoint } from "../mapTypes";
 
-export function createPlayerRangeLayer(planetId: PlanetId, marker: DeckPoint | null): ScatterplotLayer<DeckPoint> | null {
+export function createPlayerRangeLayer(
+  planetId: PlanetId,
+  marker: DeckPoint | null,
+  radiusM: number,
+): ScatterplotLayer<DeckPoint> | null {
   if (!marker) return null;
 
   return new ScatterplotLayer<DeckPoint>({
@@ -16,7 +20,7 @@ export function createPlayerRangeLayer(planetId: PlanetId, marker: DeckPoint | n
     stroked: true,
     filled: true,
     getPosition: (item) => item.position,
-    getRadius: () => coordRadiusToDeckRadius(planetId, 110),
+    getRadius: () => coordRadiusToDeckRadius(planetId, radiusM),
     getFillColor: () => [80, 190, 110, 28],
     getLineColor: () => [145, 255, 170, 170],
     getLineWidth: () => 2,

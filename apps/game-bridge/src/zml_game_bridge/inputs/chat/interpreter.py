@@ -37,7 +37,7 @@ RE_RESOURCE_DEPLETED = re.compile(
 )
 
 RE_POSITION_PING = re.compile(
-    r"^\[(?P<planet_name>[^,\]]+),\s*(?P<x>-?\d+),\s*(?P<y>-?\d+),\s*(?P<z>-?\d+),\s*Waypoint\]$"
+    r"^\[(?P<planet_name>[^,\]]+),\s*(?P<x>-?\d+),\s*(?P<y>-?\d+),\s*(?P<z>-?\d+),\s*Waypoint]$"
 )
 
 RE_SKILL_GAINED = re.compile(

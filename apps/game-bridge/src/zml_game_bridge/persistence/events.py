@@ -77,7 +77,7 @@ class EventReader:
             SELECT event_id, created_ts_ms, event_dt, event_type, payload_json
             FROM events
             WHERE event_id > ?
-            ORDER BY event_id ASC
+            ORDER BY event_id
             LIMIT ?
             """,
             (after_event_id, limit),
@@ -88,13 +88,12 @@ class EventReader:
         assert self._conn is not None, "EventReader not opened"
         cur = self._conn.execute(
             """
-            SELECT * FROM (
-              SELECT event_id, created_ts_ms, event_dt, event_type, payload_json
-              FROM events
-              ORDER BY event_id DESC
-              LIMIT ?
-            )
-            ORDER BY event_id ASC
+            SELECT *
+            FROM (SELECT event_id, created_ts_ms, event_dt, event_type, payload_json
+                  FROM events
+                  ORDER BY event_id DESC
+                  LIMIT ?)
+            ORDER BY event_id
             """,
             (limit,),
         )

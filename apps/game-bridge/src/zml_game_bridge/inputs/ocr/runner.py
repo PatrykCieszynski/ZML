@@ -5,6 +5,7 @@ import os
 import threading
 import time
 from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
 from ctypes import windll
 
 import numpy as np
@@ -73,6 +74,9 @@ def start_ocr_input(
     deeds_every_n = 10   # 1Hz
     tick = 0
     latest_position: OcrPosition | None = None
+    finder_future: Future[list[MiningFinderSignal]] | None = None
+    finder_position: OcrPosition | None = None
+    finder_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="zml-finder-ocr")
 
     try:
         while not stop_event.is_set():
@@ -98,13 +102,24 @@ def start_ocr_input(
                     latest_position = pos
                     position_sink(pos)
 
-            if tick % finder_every_n == 0:
-                finder = _finder_mvp_roi(frame).crop(frame)
-                if finder is not None:
-                    signals = finder_pipeline.step(finder, ts_ms)
+            if finder_future is not None and finder_future.done():
+                try:
+                    signals = finder_future.result()
+                except Exception:
+                    logger.exception("Finder OCR worker failed")
+                else:
                     if signal_sink is not None:
                         for signal in signals:
-                            signal_sink(_to_finder_signal(signal, latest_position))
+                            signal_sink(_to_finder_signal(signal, finder_position))
+                finally:
+                    finder_future = None
+                    finder_position = None
+
+            if tick % finder_every_n == 0 and finder_future is None:
+                finder = _finder_mvp_roi(frame).crop(frame)
+                if finder is not None:
+                    finder_position = latest_position
+                    finder_future = finder_executor.submit(finder_pipeline.step, finder, ts_ms)
 
             if tick % deeds_every_n == 0:
                 pass
@@ -112,6 +127,9 @@ def start_ocr_input(
                 # if deeds is not None:
                 #     deeds_pipeline.step(deeds, ts_ms)
     finally:
+        if finder_future is not None:
+            finder_future.cancel()
+        finder_executor.shutdown(wait=True, cancel_futures=True)
         cap.close()
         position_pipeline.close()
         finder_pipeline.close()

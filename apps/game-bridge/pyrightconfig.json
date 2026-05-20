@@ -9,6 +9,7 @@
   "reportUnknownVariableType": "warning",
   "exclude": [
     "**/.venv",
+    "**/.uv-cache",
     "**/__pycache__",
     "src/zml_game_bridge/testing",
     "tests"

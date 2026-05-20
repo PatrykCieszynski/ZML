@@ -117,7 +117,7 @@ def _default_chat_start_at_end() -> bool:
 
 
 def _default_ocr_enabled() -> bool:
-    return _env_bool("ZML_OCR_ENABLED", default=False)
+    return _env_bool("ZML_OCR_ENABLED", default=True)
 
 
 def _default_mock_inputs_enabled() -> bool:

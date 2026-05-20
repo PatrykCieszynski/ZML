@@ -30,6 +30,7 @@ const MAP_VIEW = new OrthographicView({
 });
 
 const DEBUG_CLAIMS_ENABLED = import.meta.env.VITE_ZML_UI_MOCKS === "1";
+const DEFAULT_PLAYER_RADIUS_M = 55;
 
 function nowSec(): number {
   return Math.floor(Date.now() / 1000);
@@ -73,6 +74,12 @@ export function MapViewport({
       }),
     [miningDrops, planetId],
   );
+  const playerRangeRadiusM = useMemo(
+    () =>
+      miningDrops.find((drop) => isDropOnPlanet(planetId, drop))?.dropRadiusM ??
+      DEFAULT_PLAYER_RADIUS_M,
+    [miningDrops, planetId],
+  );
 
   useEffect(() => {
     setViewState(createInitialMapViewState(planetId));
@@ -100,8 +107,8 @@ export function MapViewport({
     [currentSec, debugClaims],
   );
   const playerRangeLayer = useMemo(
-    () => createPlayerRangeLayer(planetId, marker),
-    [marker, planetId],
+    () => createPlayerRangeLayer(planetId, marker, playerRangeRadiusM),
+    [marker, planetId, playerRangeRadiusM],
   );
   const playerMarkerLayer = useMemo(() => createPlayerMarkerLayer(marker), [marker]);
   const miningDropRadiusLayer = useMemo(

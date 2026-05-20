@@ -14,8 +14,8 @@ function isWindow(win: BrowserWindow | undefined): win is BrowserWindow {
 export function pushPosition(event: OcrPositionEvent): void {
   runtime.lastPosition = event.payload;
 
-  // For now: map + hud are consumers.
-  const targets = [getWindow("map"), getWindow("hud"), getWindow("main")].filter(isWindow);
+  // Keep the high-rate position stream away from diagnostics-heavy windows.
+  const targets = [getWindow("map"), getWindow("hud")].filter(isWindow);
   for (const w of targets) {
     w.webContents.send(IPC_PUSH.POSITION, { event } satisfies PushPosition);
   }
