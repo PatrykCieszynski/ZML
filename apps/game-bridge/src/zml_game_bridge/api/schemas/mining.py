@@ -32,6 +32,7 @@ class MiningDropDto(BaseModel):
     drop_event_id: int
     observed_ts_ms: int
     position: MiningDropPositionDto | None
+    drop_radius_m: float
     modes_mask: int | None
     probes_per_drop: int | None
     ammo_per_drop: int | None
@@ -64,6 +65,7 @@ class MiningDropDto(BaseModel):
             drop_event_id=row.drop_event_id,
             observed_ts_ms=row.observed_ts_ms,
             position=position,
+            drop_radius_m=row.drop_radius_m,
             modes_mask=row.modes_mask,
             probes_per_drop=row.probes_per_drop,
             ammo_per_drop=row.ammo_per_drop,

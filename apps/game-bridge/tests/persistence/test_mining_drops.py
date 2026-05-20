@@ -35,6 +35,7 @@ def test_mining_drop_projector_stores_drop_read_model(tmp_path: Path) -> None:
         assert row.drop_id == "drop-1"
         assert row.observed_ts_ms == 1_000
         assert row.position == WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None)
+        assert row.drop_radius_m == 54.0
         assert row.modes_mask == 1
         assert row.ammo_per_drop == 1_000
         assert row.total_cost_mpec == 10_100
@@ -137,4 +138,5 @@ def _drop_event(*, drop_id: str) -> MiningDropEvent:
             amp_decay_mpec=Mpec(0),
             total_mpec=Mpec(10_100),
         ),
+        drop_radius_m=54.0,
     )

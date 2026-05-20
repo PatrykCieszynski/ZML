@@ -16,11 +16,15 @@ class MiningDropEvent(EventBase):
     probes_per_drop: int | None
     ammo_per_drop: int | None
     cost: DropCostBreakdown
+    drop_radius_m: float | None = None
     raw_status_text: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class MiningHitHintEvent(EventBase):
+    # TODO: This is only the finder-visible preclaim hint. The actual deeds can
+    # arrive through chat/deed OCR at the same timestamp, and one multi-mode drop
+    # can produce multiple deeds even though the finder shows a single hint.
     hit_id: str
     drop_id: str | None
     observed_ts_ms: int

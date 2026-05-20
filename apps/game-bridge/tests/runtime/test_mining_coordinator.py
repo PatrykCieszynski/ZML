@@ -25,7 +25,7 @@ from zml_game_bridge.runtime.mining_coordinator import (
 def test_mining_coordinator_records_probe_drop_with_current_units() -> None:
     coordinator = MiningCoordinator(
         profile=MiningEquipmentProfile(
-            finder=MiningToolProfile(name="Finder", decay_mpec=Mpec(100)),
+            finder=MiningToolProfile(name="Finder", decay_mpec=Mpec(100), radius_m=55.2),
         ),
         id_factory=_id_factory("drop-1"),
     )
@@ -51,6 +51,7 @@ def test_mining_coordinator_records_probe_drop_with_current_units() -> None:
     assert drop.modes_mask == int(MiningMode.ORE)
     assert drop.ammo_per_drop == 1_000
     assert drop.probes_per_drop is None
+    assert drop.drop_radius_m == 55.2
     assert mpec_to_int(drop.cost.ammo.cost_mpec) == 10_000
     assert drop.cost.ammo.source == "ocr"
     assert mpec_to_int(drop.cost.finder_decay_mpec) == 100

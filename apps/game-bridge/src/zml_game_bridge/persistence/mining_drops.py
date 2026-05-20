@@ -24,6 +24,7 @@ class MiningDropRow:
     drop_event_id: int
     observed_ts_ms: int
     position: WorldPos | None
+    drop_radius_m: float
     modes_mask: int | None
     probes_per_drop: int | None
     ammo_per_drop: int | None
@@ -100,13 +101,13 @@ class _MiningDropProjectionWriter:
             """
             INSERT INTO mining_drops (
                 drop_id, drop_event_id, observed_ts_ms,
-                planet_name, x, y, z,
+                planet_name, x, y, z, drop_radius_m,
                 modes_mask, probes_per_drop, ammo_per_drop,
                 ammo_cost_mpec, probes_cost_mpec, finder_decay_mpec,
                 amp_decay_mpec, total_cost_mpec,
                 result
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
             ON CONFLICT(drop_id) DO UPDATE SET
                 drop_event_id = excluded.drop_event_id,
                 observed_ts_ms = excluded.observed_ts_ms,
@@ -114,6 +115,7 @@ class _MiningDropProjectionWriter:
                 x = excluded.x,
                 y = excluded.y,
                 z = excluded.z,
+                drop_radius_m = excluded.drop_radius_m,
                 modes_mask = excluded.modes_mask,
                 probes_per_drop = excluded.probes_per_drop,
                 ammo_per_drop = excluded.ammo_per_drop,
@@ -131,6 +133,7 @@ class _MiningDropProjectionWriter:
                 position.x if position is not None else None,
                 position.y if position is not None else None,
                 position.z if position is not None else None,
+                event.drop_radius_m if event.drop_radius_m is not None else 55.0,
                 event.modes_mask,
                 event.probes_per_drop,
                 event.ammo_per_drop,
@@ -145,6 +148,9 @@ class _MiningDropProjectionWriter:
     def mark_hit(self, *, event: MiningHitHintEvent, event_id: int) -> None:
         if event.drop_id is None:
             return
+        # TODO: This read model stores only the single finder hint for MVP.
+        # Real claims/deeds should be projected into a separate claim/deed model,
+        # because one multi-mode drop can create more than one deed.
         self._conn.execute(
             """
             UPDATE mining_drops
@@ -207,6 +213,7 @@ def _row_to_mining_drop(row: sqlite3.Row) -> MiningDropRow:
         drop_event_id=int(row["drop_event_id"]),
         observed_ts_ms=int(row["observed_ts_ms"]),
         position=position,
+        drop_radius_m=float(row["drop_radius_m"]),
         modes_mask=_optional_int(row["modes_mask"]),
         probes_per_drop=_optional_int(row["probes_per_drop"]),
         ammo_per_drop=_optional_int(row["ammo_per_drop"]),

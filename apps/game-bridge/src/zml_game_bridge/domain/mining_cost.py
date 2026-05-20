@@ -17,6 +17,7 @@ class MiningToolProfile:
     name: str
     decay_mpec: Mpec
     markup_bps: MarkupBps = FULL_MARKUP_BPS
+    radius_m: float | None = None
 
     @property
     def marked_up_decay_mpec(self) -> Mpec:

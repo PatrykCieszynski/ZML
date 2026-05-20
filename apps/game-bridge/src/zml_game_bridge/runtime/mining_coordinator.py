@@ -28,6 +28,7 @@ from zml_game_bridge.inputs.ocr.pipelines.mining_finder.signals import (
 
 IdFactory = Callable[[], str]
 logger = logging.getLogger(__name__)
+DEFAULT_DROP_RADIUS_M = 55.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,7 +38,11 @@ class MiningCoordinatorConfig:
 
 def default_mining_equipment_profile() -> MiningEquipmentProfile:
     return MiningEquipmentProfile(
-        finder=MiningToolProfile(name="unknown-finder", decay_mpec=Mpec(0)),
+        finder=MiningToolProfile(
+            name="unknown-finder",
+            decay_mpec=Mpec(0),
+            radius_m=DEFAULT_DROP_RADIUS_M,
+        ),
     )
 
 
@@ -115,6 +120,7 @@ class MiningCoordinator:
             probes_per_drop=probes_per_drop,
             ammo_per_drop=ammo_per_drop,
             cost=cost,
+            drop_radius_m=self._profile.finder.radius_m or DEFAULT_DROP_RADIUS_M,
             raw_status_text=signal.raw_status_text,
         )
         self._pending_drop = event
@@ -133,6 +139,9 @@ class MiningCoordinator:
     def _record_hit_hint(self, signal: FinderHitHintSignal) -> MiningHitHintEvent:
         linked_drop = self._linked_pending_drop(signal.ts_ms)
         if linked_drop is not None:
+            # TODO: Keep deed/chat claim correlation separate from this pending-drop slot.
+            # Finder shows at most one hint, but multi-mode drops may create multiple
+            # deed/chat claim signals around the same time.
             self._pending_drop = None
 
         event = MiningHitHintEvent(

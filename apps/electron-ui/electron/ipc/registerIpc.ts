@@ -31,6 +31,7 @@ export function registerIpc({ agentRestClient }: RegisterIpcDeps): void {
             agent: runtime.agent,
             streams: runtime.streams,
             position: runtime.lastPosition,
+            miningDrops: runtime.miningDrops,
         };
 
         return state;

@@ -5,9 +5,10 @@ import {
   type OrthographicViewState,
   type ViewStateChangeParameters,
 } from "@deck.gl/core";
-import type { PlanetId } from "@zml/shared";
+import type { MiningDropDto, PlanetId } from "@zml/shared";
 import { createClaimPointLayer, createClaimTimerLayer } from "./layers/claimLayers";
 import { createMapTileLayer } from "./layers/mapTileLayer";
+import { createMiningDropRadiusLayer } from "./layers/miningDropLayers";
 import { createPlayerMarkerLayer, createPlayerRangeLayer } from "./layers/playerLayers";
 import { compactLayers } from "./mapLayerUtils";
 import {
@@ -16,7 +17,7 @@ import {
   type EntropiaMapPoint,
 } from "./mapProjection";
 import { createDebugClaims } from "./mocks/debugClaims";
-import type { DeckPoint } from "./mapTypes";
+import type { DeckPoint, MapMiningDrop } from "./mapTypes";
 
 const MAP_VIEW = new OrthographicView({
   id: "map",
@@ -37,9 +38,11 @@ function nowSec(): number {
 export function MapViewport({
   planetId,
   point,
+  miningDrops,
 }: {
   planetId: PlanetId;
   point: EntropiaMapPoint | null;
+  miningDrops: readonly MiningDropDto[];
 }) {
   const [viewState, setViewState] = useState<OrthographicViewState>(() =>
     createInitialMapViewState(planetId),
@@ -51,6 +54,25 @@ export function MapViewport({
     if (!point) return null;
     return { position: entropiaToDeckPosition(planetId, point) };
   }, [planetId, point]);
+
+  const mapMiningDrops = useMemo<MapMiningDrop[]>(
+    () =>
+      miningDrops.flatMap((drop) => {
+        if (!drop.position || !isDropOnPlanet(planetId, drop)) return [];
+
+        return [
+          {
+            id: drop.dropId,
+            x: drop.position.x,
+            y: drop.position.y,
+            position: entropiaToDeckPosition(planetId, drop.position),
+            result: drop.result,
+            radiusM: drop.dropRadiusM,
+          },
+        ];
+      }),
+    [miningDrops, planetId],
+  );
 
   useEffect(() => {
     setViewState(createInitialMapViewState(planetId));
@@ -82,11 +104,16 @@ export function MapViewport({
     [marker, planetId],
   );
   const playerMarkerLayer = useMemo(() => createPlayerMarkerLayer(marker), [marker]);
+  const miningDropRadiusLayer = useMemo(
+    () => createMiningDropRadiusLayer(planetId, mapMiningDrops),
+    [mapMiningDrops, planetId],
+  );
 
   const layers = useMemo(
     () =>
       compactLayers([
         tileLayer,
+        miningDropRadiusLayer,
         debugClaimPointLayer,
         debugClaimTimerLayer,
         playerRangeLayer,
@@ -95,6 +122,7 @@ export function MapViewport({
     [
       debugClaimPointLayer,
       debugClaimTimerLayer,
+      miningDropRadiusLayer,
       playerMarkerLayer,
       playerRangeLayer,
       tileLayer,
@@ -130,4 +158,10 @@ export function MapViewport({
       />
     </div>
   );
+}
+
+function isDropOnPlanet(planetId: PlanetId, drop: MiningDropDto): boolean {
+  const planetName = drop.position?.planetName;
+  if (!planetName) return true;
+  return planetName.toLowerCase() === planetId;
 }

@@ -1,4 +1,9 @@
-import type { BootstrapAgentState, BootstrapStreamsState, OcrPositionDTO } from "@zml/shared";
+import type {
+    BootstrapAgentState,
+    BootstrapStreamsState,
+    MiningDropDto,
+    OcrPositionDTO,
+} from "@zml/shared";
 
 export type RuntimeState = {
     seq: number;
@@ -6,6 +11,7 @@ export type RuntimeState = {
     streams: BootstrapStreamsState;
     lastError?: string | null;
     lastPosition?: OcrPositionDTO;
+    miningDrops: MiningDropDto[];
 };
 
 export const runtime: RuntimeState = {
@@ -13,4 +19,5 @@ export const runtime: RuntimeState = {
     agent: { status: "connecting" },
     streams: { ws: false, sse: false },
     lastPosition: undefined,
+    miningDrops: [],
 };

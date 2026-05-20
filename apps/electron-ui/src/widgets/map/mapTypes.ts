@@ -16,3 +16,10 @@ export type MapClaim = EntropiaMapPoint & {
   resourceKind: ClaimResourceKind;
   expiresAtSec: number;
 };
+
+export type MapMiningDrop = EntropiaMapPoint & {
+  id: string;
+  position: DeckPosition;
+  result: "pending" | "hit" | "no_resources";
+  radiusM: number;
+};

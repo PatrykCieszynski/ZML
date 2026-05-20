@@ -9,6 +9,11 @@ import { loadRenderer } from "./windows/loadRenderer";
 import { registerWindow } from "./windows/registry";
 
 import {runtime} from "./runtime.ts";
+import {
+  startAgentEventStream,
+  type AgentEventStreamStatus,
+  type StopAgentEventStream,
+} from "./agent/eventStreamClient.ts";
 import {startPositionWsClient} from "./agent/positionWsClient.ts";
 import { AgentRestClient } from "./agent/restClient.ts";
 import { isUiMockMode } from "./mocks/mockConfig.ts";
@@ -16,6 +21,7 @@ import { MockAgentRestClient } from "./mocks/mockAgentRestClient.ts";
 import { startMockPositionSource } from "./mocks/mockPositionSource.ts";
 import { pushPosition } from "./ipc/pushPosition.ts";
 import { pushStatePatch } from "./ipc/pushStatePatch.ts";
+import { applyMiningEvent, replaceMiningDrops } from "./mining/miningDropsState.ts";
 import type { PositionSourceOptions, PositionSourceStatus, StopPositionSource } from "./agent/positionSource.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -37,6 +43,7 @@ const agentRestClient = UI_MOCKS_ENABLED
 let mainWin: BrowserWindow | null
 let mapWin: BrowserWindow | null
 let stopPositionStream: StopPositionSource | null = null;
+let stopEventStream: StopAgentEventStream | null = null;
 
 function handlePositionStatus(status: PositionSourceStatus, err?: string) {
   runtime.agent.status = status;
@@ -65,9 +72,52 @@ function startPositionStream() {
       });
 }
 
+function handleEventStreamStatus(status: AgentEventStreamStatus, err?: string) {
+  runtime.streams.sse = status === "connected";
+  if (err) runtime.lastError = err;
+  pushStatePatch({
+    streams: { ...runtime.streams },
+  });
+
+  if (status === "connected") {
+    void refreshMiningDropsSnapshot();
+  }
+}
+
+async function refreshMiningDropsSnapshot() {
+  try {
+    const miningDrops = await agentRestClient.listMiningDrops({ windowMinutes: 30 });
+    replaceMiningDrops(miningDrops);
+  } catch (error) {
+    runtime.lastError = error instanceof Error ? error.message : String(error);
+    pushStatePatch({
+      streams: { ...runtime.streams },
+    });
+  }
+}
+
+function startEventStream() {
+  if (stopEventStream) return;
+
+  if (UI_MOCKS_ENABLED) {
+    handleEventStreamStatus("connecting");
+    handleEventStreamStatus("connected");
+    stopEventStream = () => handleEventStreamStatus("disconnected");
+    return;
+  }
+
+  stopEventStream = startAgentEventStream({
+    baseUrl: BACKEND_URL,
+    onStatus: handleEventStreamStatus,
+    onEvent: applyMiningEvent,
+  });
+}
+
 function stopPositionStreamIfRunning() {
   stopPositionStream?.();
   stopPositionStream = null;
+  stopEventStream?.();
+  stopEventStream = null;
 }
 
 async function createWindows() {
@@ -87,6 +137,7 @@ async function createWindows() {
 
   // backend connector (single source of truth)
   startPositionStream();
+  startEventStream();
 }
 
 app.on("before-quit", stopPositionStreamIfRunning);
