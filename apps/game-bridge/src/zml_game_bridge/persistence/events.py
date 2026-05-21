@@ -32,16 +32,18 @@ class EventStore:
         payload_json = event_payload_json(event)
 
         raw = getattr(event, "raw", None)
+        run_id = getattr(event, "run_id", None)
+        segment_id = getattr(event, "segment_id", None)
 
         event_dt_obj = getattr(event, "event_dt", None)
         event_dt = event_dt_obj.isoformat() if isinstance(event_dt_obj, datetime) else None
 
         cur = conn.execute(
             """
-            INSERT INTO events (created_ts_ms, event_type, payload_json, event_dt, raw)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO events (created_ts_ms, event_type, payload_json, run_id, segment_id, event_dt, raw)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (created_ts_ms, event_type, payload_json, event_dt, raw),
+            (created_ts_ms, event_type, payload_json, run_id, segment_id, event_dt, raw),
         )
 
         rowid = cur.lastrowid

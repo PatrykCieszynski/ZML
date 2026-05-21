@@ -23,6 +23,7 @@ from zml_game_bridge.inputs.ocr.pipelines.mining_finder.signals import (
     FinderUnitsChangedSignal,
     ProbeFiredSignal,
 )
+from zml_game_bridge.runtime.mining.run_session import DropRunContext
 from zml_game_bridge.runtime.mining.settings import (
     DEFAULT_DROP_RADIUS_M,
     IdFactory,
@@ -31,6 +32,10 @@ from zml_game_bridge.runtime.mining.settings import (
 
 logger = logging.getLogger(__name__)
 MiningEquipmentProfileProvider = Callable[[], MiningEquipmentProfile]
+DropRunContextProvider = Callable[
+    [int, MiningEquipmentProfile],
+    DropRunContext,
+]
 
 
 class FinderDropCorrelator:
@@ -38,10 +43,12 @@ class FinderDropCorrelator:
         self,
         *,
         profile_provider: MiningEquipmentProfileProvider,
+        run_context_provider: DropRunContextProvider | None = None,
         config: MiningCoordinatorConfig,
         id_factory: IdFactory,
     ) -> None:
         self._profile_provider = profile_provider
+        self._run_context_provider = run_context_provider
         self._config = config
         self._id_factory = id_factory
         self._modes_mask: int | None = None
@@ -75,7 +82,7 @@ class FinderDropCorrelator:
             return []
 
         if isinstance(signal, ProbeFiredSignal):
-            return [self._record_drop(signal)]
+            return self._record_drop(signal)
 
         if isinstance(signal, FinderHitHintSignal):
             return [self._record_hit_hint(signal)]
@@ -85,7 +92,7 @@ class FinderDropCorrelator:
 
         return []
 
-    def _record_drop(self, signal: ProbeFiredSignal) -> MiningDropEvent:
+    def _record_drop(self, signal: ProbeFiredSignal) -> list[EventBase]:
         modes_mask = signal.modes_mask if signal.modes_mask is not None else self._modes_mask
         probes_per_drop = (
             signal.probes_per_drop if signal.probes_per_drop is not None else self._probes_per_drop
@@ -100,6 +107,11 @@ class FinderDropCorrelator:
             self._ammo_per_drop = signal.ammo_per_drop
 
         profile = self._profile_provider()
+        run_context = (
+            self._run_context_provider(signal.ts_ms, profile)
+            if self._run_context_provider is not None
+            else DropRunContext(run_id=None, segment_id=None)
+        )
         cost = calculate_drop_cost(
             profile=profile,
             ocr_ammo_per_drop=ammo_per_drop,
@@ -115,6 +127,8 @@ class FinderDropCorrelator:
             cost=cost,
             drop_radius_m=effective_finder_radius_m(profile) or DEFAULT_DROP_RADIUS_M,
             raw_status_text=signal.raw_status_text,
+            run_id=run_context.run_id,
+            segment_id=run_context.segment_id,
         )
         self._pending_drop = event
         if cost.ammo.source == "missing" and cost.probes.source == "missing":
@@ -136,7 +150,7 @@ class FinderDropCorrelator:
             event.probes_per_drop,
             event.cost.total_mpec,
         )
-        return event
+        return [*run_context.lifecycle_events, event]
 
     def _record_hit_hint(self, signal: FinderHitHintSignal) -> MiningHitHintEvent:
         linked_drop = self._linked_pending_drop(signal.ts_ms)

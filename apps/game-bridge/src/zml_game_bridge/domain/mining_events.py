@@ -10,6 +10,24 @@ from zml_game_bridge.events.base import EventBase
 
 
 @dataclass(frozen=True, slots=True)
+class RunSegmentStartedEvent(EventBase):
+    segment_id: str
+    run_id: int
+    segment_index: int
+    started_ts_ms: int
+    setup_hash: str
+    setup_snapshot: dict[str, object]
+
+
+@dataclass(frozen=True, slots=True)
+class RunSegmentEndedEvent(EventBase):
+    segment_id: str
+    run_id: int
+    ended_ts_ms: int
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
 class MiningDropEvent(EventBase):
     drop_id: str
     observed_ts_ms: int
@@ -20,6 +38,8 @@ class MiningDropEvent(EventBase):
     cost: DropCostBreakdown
     drop_radius_m: float | None = None
     raw_status_text: str | None = None
+    run_id: int | None = None
+    segment_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -33,6 +33,8 @@ class MiningDropDto(BaseModel):
 
     drop_id: str
     drop_event_id: int
+    run_id: int | None
+    segment_id: str | None
     observed_ts_ms: int
     position: MiningDropPositionDto | None
     drop_radius_m: float
@@ -67,6 +69,8 @@ class MiningDropDto(BaseModel):
         return cls(
             drop_id=row.drop_id,
             drop_event_id=row.drop_event_id,
+            run_id=row.run_id,
+            segment_id=row.segment_id,
             observed_ts_ms=row.observed_ts_ms,
             position=position,
             drop_radius_m=row.drop_radius_m,

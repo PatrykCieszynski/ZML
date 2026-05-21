@@ -11,7 +11,10 @@ from zml_game_bridge.runtime.mining.claim_lifecycle import (
     ClaimLifecycleCorrelator,
     PositionProvider,
 )
-from zml_game_bridge.runtime.mining.finder_correlator import FinderDropCorrelator
+from zml_game_bridge.runtime.mining.finder_correlator import (
+    DropRunContextProvider,
+    FinderDropCorrelator,
+)
 from zml_game_bridge.runtime.mining.settings import (
     IdFactory,
     MiningCoordinatorConfig,
@@ -32,12 +35,14 @@ class MiningCoordinator:
         id_factory: IdFactory = default_id_factory,
         position_provider: PositionProvider | None = None,
         resource_catalog: MiningResourceCatalog | None = None,
+        run_context_provider: DropRunContextProvider | None = None,
     ) -> None:
         resolved_profile = profile or default_mining_equipment_profile()
         resolved_profile_provider = profile_provider or (lambda: resolved_profile)
         resolved_config = config or MiningCoordinatorConfig()
         self._finder = FinderDropCorrelator(
             profile_provider=resolved_profile_provider,
+            run_context_provider=run_context_provider,
             config=resolved_config,
             id_factory=id_factory,
         )

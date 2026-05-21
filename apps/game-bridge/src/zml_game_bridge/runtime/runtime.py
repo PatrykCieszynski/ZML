@@ -8,6 +8,7 @@ from threading import Thread
 
 from zml_game_bridge.api.channels.position_hub import OcrPositionHub
 from zml_game_bridge.api.channels.sse_hub import SseHub
+from zml_game_bridge.domain.mining_cost import MiningEquipmentProfile
 from zml_game_bridge.domain.position import WorldPos
 from zml_game_bridge.events.in_memory_persisted_event_bus import (
     InMemoryPersistedEventBus,
@@ -19,6 +20,7 @@ from zml_game_bridge.inputs.ocr.runner import start_ocr_input
 from zml_game_bridge.persistence.event_projector import CompositeEventProjector
 from zml_game_bridge.persistence.mining_claims import MiningClaimProjector, MiningClaimReader
 from zml_game_bridge.persistence.mining_drops import MiningDropProjector
+from zml_game_bridge.persistence.runs import RunSegmentProjector
 from zml_game_bridge.persistence.schema import ensure_schema
 from zml_game_bridge.persistence.sqlite import open_sqlite
 from zml_game_bridge.resources.mining_resources import MiningResourceCatalog
@@ -27,6 +29,8 @@ from zml_game_bridge.runtime.db_writer import DbWriterWorker
 from zml_game_bridge.runtime.input_coordinator import InputCoordinator
 from zml_game_bridge.runtime.mining import MiningCoordinator
 from zml_game_bridge.runtime.mining.claim_lifecycle import ActiveClaim
+from zml_game_bridge.runtime.mining.run_session import RunSessionService
+from zml_game_bridge.runtime.mining.settings import default_id_factory
 from zml_game_bridge.runtime.mining.tools import MiningToolService
 from zml_game_bridge.runtime.position_state import LatestPositionState
 
@@ -62,10 +66,15 @@ class AppRuntime:
         self._latest_position = LatestPositionState()
         self._resource_catalog = MiningResourceCatalog(user_path=self._mining_resource_catalog_path)
         self._mining_tool_service = MiningToolService(path=self._mining_tools_path)
+        self._run_session_service = RunSessionService(
+            db_path=self._db_path,
+            id_factory=default_id_factory,
+        )
         self._mining_coordinator = MiningCoordinator(
             profile_provider=self._mining_tool_service.get_equipment_profile,
             position_provider=self._current_position,
             resource_catalog=self._resource_catalog,
+            run_context_provider=self._run_context_for_drop,
         )
         self._input_coordinator = InputCoordinator(
             pending_signals=self._pending_signals,
@@ -78,6 +87,7 @@ class AppRuntime:
             persisted_events=self._persisted_events,
             projector=CompositeEventProjector(
                 [
+                    RunSegmentProjector(),
                     MiningDropProjector(),
                     MiningClaimProjector(),
                 ]
@@ -117,6 +127,10 @@ class AppRuntime:
     @property
     def mining_tool_service(self) -> MiningToolService:
         return self._mining_tool_service
+
+    @property
+    def run_session_service(self) -> RunSessionService:
+        return self._run_session_service
 
     def attach_sse_hub(self, hub: SseHub) -> None:
         self._sse_hub = hub
@@ -204,6 +218,12 @@ class AppRuntime:
     def _current_position(self) -> WorldPos | None:
         position = self._latest_position.get()
         return position.position if position is not None else None
+
+    def _run_context_for_drop(self, observed_ts_ms: int, profile: MiningEquipmentProfile):
+        return self._run_session_service.context_for_drop(
+            observed_ts_ms=observed_ts_ms,
+            profile=profile,
+        )
 
     def _restore_mining_lifecycle(self) -> None:
         conn = open_sqlite(self._db_path)

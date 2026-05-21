@@ -18,6 +18,7 @@ from zml_game_bridge.domain.mining_events import (
     MiningHitHintEvent,
     MiningItemReceivedEvent,
     MiningNoResourcesEvent,
+    RunSegmentStartedEvent,
 )
 from zml_game_bridge.domain.money import Mpec, mpec_to_int
 from zml_game_bridge.domain.position import WorldPos
@@ -42,6 +43,7 @@ from zml_game_bridge.runtime.mining import (
     MiningCoordinatorConfig,
 )
 from zml_game_bridge.runtime.mining.claim_lifecycle import ActiveClaim
+from zml_game_bridge.runtime.mining.run_session import DropRunContext
 
 
 def test_mining_coordinator_records_probe_drop_with_current_units() -> None:
@@ -79,6 +81,36 @@ def test_mining_coordinator_records_probe_drop_with_current_units() -> None:
     assert mpec_to_int(drop.cost.finder_decay_mpec) == 100
     assert mpec_to_int(drop.cost.finder_enhancer_decay_mpec) == 0
     assert mpec_to_int(drop.cost.total_mpec) == 10_100
+
+
+def test_mining_coordinator_attaches_active_run_segment_to_drop() -> None:
+    segment_started = RunSegmentStartedEvent(
+        segment_id="segment-1",
+        run_id=7,
+        segment_index=1,
+        started_ts_ms=1_000,
+        setup_hash="hash-1",
+        setup_snapshot={"finder": {"name": "Finder"}},
+    )
+    coordinator = MiningCoordinator(
+        id_factory=_id_factory("drop-1"),
+        run_context_provider=lambda _ts, _profile: DropRunContext(
+            run_id=7,
+            segment_id="segment-1",
+            lifecycle_events=(segment_started,),
+        ),
+    )
+
+    events = coordinator.process(
+        ProbeFiredSignal(ts_ms=1_000, position=None, modes_mask=1, ammo_per_drop=1_000)
+    )
+
+    assert events[0] == segment_started
+    drop = events[1]
+    assert isinstance(drop, MiningDropEvent)
+    assert drop.drop_id == "drop-1"
+    assert drop.run_id == 7
+    assert drop.segment_id == "segment-1"
 
 
 def test_mining_coordinator_applies_finder_range_enhancer_to_drop_cost_and_radius() -> None:

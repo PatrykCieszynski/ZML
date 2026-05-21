@@ -22,6 +22,8 @@ MiningDropResult = Literal["pending", "hit", "no_resources"]
 class MiningDropRow:
     drop_id: str
     drop_event_id: int
+    run_id: int | None
+    segment_id: str | None
     observed_ts_ms: int
     position: WorldPos | None
     drop_radius_m: float
@@ -102,16 +104,18 @@ class _MiningDropProjectionWriter:
         self._conn.execute(
             """
             INSERT INTO mining_drops (
-                drop_id, drop_event_id, observed_ts_ms,
+                drop_id, drop_event_id, run_id, segment_id, observed_ts_ms,
                 planet_name, x, y, z, drop_radius_m,
                 modes_mask, probes_per_drop, ammo_per_drop,
                 ammo_cost_mpec, probes_cost_mpec, finder_decay_mpec,
                 finder_enhancer_decay_mpec, amp_decay_mpec, total_cost_mpec,
                 result
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
             ON CONFLICT(drop_id) DO UPDATE SET
                 drop_event_id = excluded.drop_event_id,
+                run_id = excluded.run_id,
+                segment_id = excluded.segment_id,
                 observed_ts_ms = excluded.observed_ts_ms,
                 planet_name = excluded.planet_name,
                 x = excluded.x,
@@ -131,6 +135,8 @@ class _MiningDropProjectionWriter:
             (
                 event.drop_id,
                 event_id,
+                event.run_id,
+                event.segment_id,
                 event.observed_ts_ms,
                 position.planet_name if position is not None else None,
                 position.x if position is not None else None,
@@ -217,6 +223,8 @@ def _row_to_mining_drop(row: sqlite3.Row) -> MiningDropRow:
     return MiningDropRow(
         drop_id=str(row["drop_id"]),
         drop_event_id=int(row["drop_event_id"]),
+        run_id=_optional_int(row["run_id"]),
+        segment_id=row["segment_id"],
         observed_ts_ms=int(row["observed_ts_ms"]),
         position=position,
         drop_radius_m=float(row["drop_radius_m"]),

@@ -7,8 +7,13 @@ from typing import Annotated, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from zml_game_bridge.api.schemas.runs import RunDto, StartRunRequestDto, StopRunRequestDto
-from zml_game_bridge.persistence.runs import RunStore
+from zml_game_bridge.api.schemas.runs import (
+    RunDto,
+    RunSegmentDto,
+    StartRunRequestDto,
+    StopRunRequestDto,
+)
+from zml_game_bridge.persistence.runs import RunSegmentStore, RunStore
 from zml_game_bridge.persistence.schema import ensure_schema
 from zml_game_bridge.persistence.sqlite import open_sqlite
 from zml_game_bridge.runs.state import RunState
@@ -60,7 +65,9 @@ def stop_run(request: StopRunRequestDto, conn: RunConn) -> RunDto:
         raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
 
     with conn:
-        store.set_run_status(run_id, status="stopped", ts_ms=_now_ms())
+        ts_ms = _now_ms()
+        store.set_run_status(run_id, status="stopped", ts_ms=ts_ms)
+        RunSegmentStore(conn).end_active_for_run(run_id, ended_ts_ms=ts_ms, ts_ms=ts_ms)
         state.clear_active_run(run_id)
         stopped = store.get_run(run_id)
 
@@ -78,6 +85,23 @@ def active_run(conn: RunConn) -> RunDto | None:
 
     row = RunStore(conn).get_run(run_id)
     return RunDto.from_row(row) if row is not None else None
+
+
+@router.get("/active/segments", response_model=list[RunSegmentDto])
+def active_run_segments(conn: RunConn) -> list[RunSegmentDto]:
+    state = RunState(conn)
+    run_id = state.try_get_active_run_id()
+    if run_id is None:
+        return []
+    return [RunSegmentDto.from_row(row) for row in RunSegmentStore(conn).list_for_run(run_id)]
+
+
+@router.get("/{run_id}/segments", response_model=list[RunSegmentDto])
+def list_run_segments(run_id: int, conn: RunConn) -> list[RunSegmentDto]:
+    row = RunStore(conn).get_run(run_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
+    return [RunSegmentDto.from_row(segment) for segment in RunSegmentStore(conn).list_for_run(run_id)]
 
 
 def _now_ms() -> int:
