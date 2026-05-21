@@ -31,6 +31,7 @@ def create_app() -> FastAPI:
             db_path=settings.db_path,
             chat_log_path=settings.chat_log_path,
             mining_resource_catalog_path=settings.mining_resource_catalog_path,
+            mining_tools_path=settings.mining_tools_path,
             chat_start_at_end=settings.chat_start_at_end,
             ocr_enabled=settings.ocr_enabled,
             mock_inputs_enabled=settings.mock_inputs_enabled,

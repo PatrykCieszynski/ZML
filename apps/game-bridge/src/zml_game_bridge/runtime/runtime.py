@@ -27,6 +27,7 @@ from zml_game_bridge.runtime.db_writer import DbWriterWorker
 from zml_game_bridge.runtime.input_coordinator import InputCoordinator
 from zml_game_bridge.runtime.mining import MiningCoordinator
 from zml_game_bridge.runtime.mining.claim_lifecycle import ActiveClaim
+from zml_game_bridge.runtime.mining.tools import MiningToolService
 from zml_game_bridge.runtime.position_state import LatestPositionState
 
 logger = logging.getLogger(__name__)
@@ -39,6 +40,7 @@ class AppRuntime:
         db_path: Path,
         chat_log_path: Path | None,
         mining_resource_catalog_path: Path,
+        mining_tools_path: Path,
         chat_start_at_end: bool,
         ocr_enabled: bool,
         mock_inputs_enabled: bool,
@@ -47,6 +49,7 @@ class AppRuntime:
         self._db_path = db_path
         self._chat_log_path = chat_log_path
         self._mining_resource_catalog_path = mining_resource_catalog_path
+        self._mining_tools_path = mining_tools_path
         self._chat_start_at_end = chat_start_at_end
         self._ocr_enabled = ocr_enabled
         self._mock_inputs_enabled = mock_inputs_enabled
@@ -58,7 +61,9 @@ class AppRuntime:
         self._persisted_events = InMemoryPersistedEventBus()
         self._latest_position = LatestPositionState()
         self._resource_catalog = MiningResourceCatalog(user_path=self._mining_resource_catalog_path)
+        self._mining_tool_service = MiningToolService(path=self._mining_tools_path)
         self._mining_coordinator = MiningCoordinator(
+            profile_provider=self._mining_tool_service.get_equipment_profile,
             position_provider=self._current_position,
             resource_catalog=self._resource_catalog,
         )
@@ -109,6 +114,10 @@ class AppRuntime:
     def latest_position(self) -> LatestPositionState:
         return self._latest_position
 
+    @property
+    def mining_tool_service(self) -> MiningToolService:
+        return self._mining_tool_service
+
     def attach_sse_hub(self, hub: SseHub) -> None:
         self._sse_hub = hub
 
@@ -122,10 +131,11 @@ class AppRuntime:
         self._started = True
         logger.info(
             "app_started db_path=%s chat_log_path=%s mining_resource_catalog_path=%s "
-            "ocr_enabled=%s mock_inputs_enabled=%s",
+            "mining_tools_path=%s ocr_enabled=%s mock_inputs_enabled=%s",
             self._db_path,
             self._chat_log_path,
             self._mining_resource_catalog_path,
+            self._mining_tools_path,
             self._ocr_enabled,
             self._mock_inputs_enabled,
         )

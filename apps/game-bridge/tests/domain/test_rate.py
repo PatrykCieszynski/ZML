@@ -23,3 +23,12 @@ def test_rate_can_be_added_and_repeated_for_tool_bonuses() -> None:
     rate = multiplier("1").plus(percent("1").times(2))
 
     assert rate.apply_to_float(55.0) == 56.1
+
+
+def test_rate_rejects_invalid_values() -> None:
+    try:
+        percent("abc")
+    except ValueError as exc:
+        assert "Invalid rate value" in str(exc)
+    else:
+        raise AssertionError("Expected invalid rate value")

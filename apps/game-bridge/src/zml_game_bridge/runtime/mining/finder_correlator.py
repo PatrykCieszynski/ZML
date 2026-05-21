@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 
 from zml_game_bridge.domain.claim_size import expected_claim_expires_ts_ms
 from zml_game_bridge.domain.mining_cost import (
@@ -29,17 +30,18 @@ from zml_game_bridge.runtime.mining.settings import (
 )
 
 logger = logging.getLogger(__name__)
+MiningEquipmentProfileProvider = Callable[[], MiningEquipmentProfile]
 
 
 class FinderDropCorrelator:
     def __init__(
         self,
         *,
-        profile: MiningEquipmentProfile,
+        profile_provider: MiningEquipmentProfileProvider,
         config: MiningCoordinatorConfig,
         id_factory: IdFactory,
     ) -> None:
-        self._profile = profile
+        self._profile_provider = profile_provider
         self._config = config
         self._id_factory = id_factory
         self._modes_mask: int | None = None
@@ -97,8 +99,9 @@ class FinderDropCorrelator:
         if signal.ammo_per_drop is not None:
             self._ammo_per_drop = signal.ammo_per_drop
 
+        profile = self._profile_provider()
         cost = calculate_drop_cost(
-            profile=self._profile,
+            profile=profile,
             ocr_ammo_per_drop=ammo_per_drop,
             ocr_probes_per_drop=probes_per_drop,
         )
@@ -110,7 +113,7 @@ class FinderDropCorrelator:
             probes_per_drop=probes_per_drop,
             ammo_per_drop=ammo_per_drop,
             cost=cost,
-            drop_radius_m=effective_finder_radius_m(self._profile) or DEFAULT_DROP_RADIUS_M,
+            drop_radius_m=effective_finder_radius_m(profile) or DEFAULT_DROP_RADIUS_M,
             raw_status_text=signal.raw_status_text,
         )
         self._pending_drop = event

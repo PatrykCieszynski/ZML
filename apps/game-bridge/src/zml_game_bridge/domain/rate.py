@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Self
 
 _PPM_SCALE = 1_000_000
@@ -13,13 +13,13 @@ class Rate:
 
     @classmethod
     def percent(cls, value: str) -> Self:
-        decimal = Decimal(value)
+        decimal = _parse_decimal(value)
         ppm = int((decimal * Decimal("10000")).to_integral_value(rounding=ROUND_HALF_UP))
         return cls(ppm)
 
     @classmethod
     def multiplier(cls, value: str) -> Self:
-        decimal = Decimal(value)
+        decimal = _parse_decimal(value)
         ppm = int((decimal * Decimal(str(_PPM_SCALE))).to_integral_value(rounding=ROUND_HALF_UP))
         return cls(ppm)
 
@@ -50,3 +50,10 @@ def percent(value: str) -> Rate:
 
 def multiplier(value: str) -> Rate:
     return Rate.multiplier(value)
+
+
+def _parse_decimal(value: str) -> Decimal:
+    try:
+        return Decimal(value)
+    except InvalidOperation as exc:
+        raise ValueError(f"Invalid rate value: {value!r}") from exc
