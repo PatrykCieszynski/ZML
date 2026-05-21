@@ -2,6 +2,7 @@ import type { WindowType } from "./windowType";
 import type { OcrPositionDTO } from "../dto/ocrPosition";
 import type { MiningClaimDto } from "../dto/miningClaims";
 import type { MiningDropDto } from "../dto/miningDrops";
+import type { ActiveMiningToolsDto, MiningToolProfileDto } from "../dto/miningTools";
 
 export const IPC_VERSION = 1 as const;
 export type IpcVersion = typeof IPC_VERSION;
@@ -35,4 +36,6 @@ export type BootstrapState = {
     position?: OcrPositionDTO;
     miningClaims?: MiningClaimDto[];
     miningDrops?: MiningDropDto[];
+    miningTools?: MiningToolProfileDto[];
+    activeMiningTools?: ActiveMiningToolsDto;
 };

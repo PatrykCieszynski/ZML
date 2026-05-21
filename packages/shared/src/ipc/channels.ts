@@ -5,6 +5,11 @@ export const IPC_CMD = {
     GET_AGENT_HEALTH: `${IPC_NAMESPACE}:cmd:get_agent_health`,
     START_RUN: `${IPC_NAMESPACE}:cmd:start_run`,
     STOP_RUN: `${IPC_NAMESPACE}:cmd:stop_run`,
+    LIST_MINING_TOOLS: `${IPC_NAMESPACE}:cmd:list_mining_tools`,
+    CREATE_MINING_TOOL: `${IPC_NAMESPACE}:cmd:create_mining_tool`,
+    DELETE_MINING_TOOL: `${IPC_NAMESPACE}:cmd:delete_mining_tool`,
+    GET_ACTIVE_MINING_TOOLS: `${IPC_NAMESPACE}:cmd:get_active_mining_tools`,
+    SET_ACTIVE_MINING_TOOLS: `${IPC_NAMESPACE}:cmd:set_active_mining_tools`,
 } as const;
 
 export const IPC_PUSH = {

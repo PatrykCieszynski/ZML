@@ -1,16 +1,26 @@
 import {
   isRunWire,
+  createMiningToolProfileRequestToWire,
+  isActiveMiningToolsWire,
   isMiningClaimWire,
   isMiningDropWire,
+  isMiningToolProfileWire,
+  setActiveMiningToolsRequestToWire,
   startRunRequestToWire,
   stopRunRequestToWire,
+  wireToActiveMiningToolsDto,
   wireToMiningClaimDto,
   wireToMiningDropDto,
+  wireToMiningToolProfileDto,
   wireToRunDto,
+  type ActiveMiningToolsDto,
   type AgentHealthDto,
+  type CreateMiningToolProfileRequest,
   type MiningClaimDto,
   type MiningDropDto,
+  type MiningToolProfileDto,
   type RunDto,
+  type SetActiveMiningToolsRequest,
   type StartRunRequest,
   type StopRunRequest,
 } from "@zml/shared";
@@ -29,6 +39,11 @@ export type AgentClient = {
   stopRun: (request: StopRunRequest) => Promise<RunDto>;
   listMiningClaims: (request?: ListMiningClaimsRequest) => Promise<MiningClaimDto[]>;
   listMiningDrops: (request?: ListMiningDropsRequest) => Promise<MiningDropDto[]>;
+  listMiningTools: () => Promise<MiningToolProfileDto[]>;
+  createMiningTool: (request: CreateMiningToolProfileRequest) => Promise<MiningToolProfileDto>;
+  deleteMiningTool: (toolId: string) => Promise<void>;
+  getActiveMiningTools: () => Promise<ActiveMiningToolsDto>;
+  setActiveMiningTools: (request: SetActiveMiningToolsRequest) => Promise<ActiveMiningToolsDto>;
 };
 
 export type ListMiningClaimsRequest = {
@@ -104,6 +119,48 @@ export class AgentRestClient implements AgentClient {
     return data.map(wireToMiningDropDto);
   }
 
+  async listMiningTools(): Promise<MiningToolProfileDto[]> {
+    const data = await this.getJson("/api/v1/mining/tools");
+    if (!Array.isArray(data) || !data.every(isMiningToolProfileWire)) {
+      throw new Error("Agent mining tools returned an invalid payload");
+    }
+    return data.map(wireToMiningToolProfileDto);
+  }
+
+  async createMiningTool(request: CreateMiningToolProfileRequest): Promise<MiningToolProfileDto> {
+    const data = await this.postJson(
+      "/api/v1/mining/tools",
+      createMiningToolProfileRequestToWire(request),
+    );
+    if (!isMiningToolProfileWire(data)) {
+      throw new Error("Agent create mining tool returned an invalid payload");
+    }
+    return wireToMiningToolProfileDto(data);
+  }
+
+  async deleteMiningTool(toolId: string): Promise<void> {
+    await this.deleteJson(`/api/v1/mining/tools/${encodeURIComponent(toolId)}`);
+  }
+
+  async getActiveMiningTools(): Promise<ActiveMiningToolsDto> {
+    const data = await this.getJson("/api/v1/mining/tools/active");
+    if (!isActiveMiningToolsWire(data)) {
+      throw new Error("Agent active mining tools returned an invalid payload");
+    }
+    return wireToActiveMiningToolsDto(data);
+  }
+
+  async setActiveMiningTools(request: SetActiveMiningToolsRequest): Promise<ActiveMiningToolsDto> {
+    const data = await this.putJson(
+      "/api/v1/mining/tools/active",
+      setActiveMiningToolsRequestToWire(request),
+    );
+    if (!isActiveMiningToolsWire(data)) {
+      throw new Error("Agent set active mining tools returned an invalid payload");
+    }
+    return wireToActiveMiningToolsDto(data);
+  }
+
   private async getJson(pathname: string): Promise<unknown> {
     return this.requestJson("GET", pathname);
   }
@@ -112,7 +169,15 @@ export class AgentRestClient implements AgentClient {
     return this.requestJson("POST", pathname, body);
   }
 
-  private async requestJson(method: "GET" | "POST", pathname: string, body?: unknown): Promise<unknown> {
+  private async putJson(pathname: string, body: unknown): Promise<unknown> {
+    return this.requestJson("PUT", pathname, body);
+  }
+
+  private async deleteJson(pathname: string): Promise<void> {
+    await this.requestJson("DELETE", pathname);
+  }
+
+  private async requestJson(method: "GET" | "POST" | "PUT" | "DELETE", pathname: string, body?: unknown): Promise<unknown> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
 
@@ -129,6 +194,10 @@ export class AgentRestClient implements AgentClient {
 
       if (!response.ok) {
         throw new Error(`Agent request failed: ${response.status} ${response.statusText}`);
+      }
+
+      if (response.status === 204) {
+        return undefined;
       }
 
       return response.json() as Promise<unknown>;

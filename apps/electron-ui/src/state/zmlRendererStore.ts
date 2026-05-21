@@ -1,14 +1,18 @@
 import { useEffect, useSyncExternalStore } from "react";
 import type {
   AgentHealthDto,
+  ActiveMiningToolsDto,
   BootstrapAgentState,
   BootstrapState,
   BootstrapStreamsState,
+  CreateMiningToolProfileRequest,
   MiningClaimDto,
   MiningDropDto,
+  MiningToolProfileDto,
   OcrPositionDTO,
   OcrPositionEvent,
   RunDto,
+  SetActiveMiningToolsRequest,
   WindowType,
 } from "@zml/shared";
 import { getZml } from "../zml";
@@ -24,9 +28,13 @@ export type ZmlRendererState = {
   activeRun?: RunDto;
   miningClaims: MiningClaimDto[];
   miningDrops: MiningDropDto[];
+  miningTools: MiningToolProfileDto[];
+  activeMiningTools?: ActiveMiningToolsDto;
   agentHealth?: AgentHealthDto;
   agentHealthChecking: boolean;
   runCommandPending: boolean;
+  miningToolsLoading: boolean;
+  toolCommandPending: boolean;
   lastCommandError: string | null;
   error: string | null;
   lastBootstrapTsMs?: number;
@@ -40,8 +48,12 @@ const initialState: ZmlRendererState = {
   streams: { ws: false, sse: false },
   miningClaims: [],
   miningDrops: [],
+  miningTools: [],
+  activeMiningTools: undefined,
   agentHealthChecking: false,
   runCommandPending: false,
+  miningToolsLoading: false,
+  toolCommandPending: false,
   lastCommandError: null,
   error: null,
 };
@@ -77,6 +89,8 @@ function applyBootstrap(bootstrap: BootstrapState): void {
     position: bootstrap.position ?? state.position,
     miningClaims: bootstrap.miningClaims ?? state.miningClaims,
     miningDrops: bootstrap.miningDrops ?? state.miningDrops,
+    miningTools: bootstrap.miningTools ?? state.miningTools,
+    activeMiningTools: bootstrap.activeMiningTools ?? state.activeMiningTools,
     error: null,
     lastBootstrapTsMs: bootstrap.nowTsMs,
   });
@@ -254,6 +268,167 @@ export async function stopRun(): Promise<void> {
       lastCommandError: errorToMessage(error),
     });
   }
+}
+
+export async function refreshMiningTools(): Promise<void> {
+  let api;
+  try {
+    api = getZml();
+  } catch (error) {
+    setState({
+      miningToolsLoading: false,
+      lastCommandError: errorToMessage(error),
+    });
+    return;
+  }
+
+  setState({
+    miningToolsLoading: true,
+    lastCommandError: null,
+  });
+
+  try {
+    const [miningTools, activeMiningTools] = await Promise.all([
+      api.listMiningTools(),
+      api.getActiveMiningTools(),
+    ]);
+    setState({
+      miningTools,
+      activeMiningTools,
+      miningToolsLoading: false,
+      lastCommandError: null,
+    });
+  } catch (error) {
+    setState({
+      miningToolsLoading: false,
+      lastCommandError: errorToMessage(error),
+    });
+  }
+}
+
+export async function createMiningTool(request: CreateMiningToolProfileRequest): Promise<void> {
+  let api;
+  try {
+    api = getZml();
+  } catch (error) {
+    setState({
+      toolCommandPending: false,
+      lastCommandError: errorToMessage(error),
+    });
+    return;
+  }
+
+  setState({
+    toolCommandPending: true,
+    lastCommandError: null,
+  });
+
+  try {
+    const profile = await api.createMiningTool(request);
+    setState({
+      miningTools: upsertMiningTool(state.miningTools, profile),
+      toolCommandPending: false,
+      lastCommandError: null,
+    });
+  } catch (error) {
+    setState({
+      toolCommandPending: false,
+      lastCommandError: errorToMessage(error),
+    });
+  }
+}
+
+export async function deleteMiningTool(toolId: string): Promise<void> {
+  let api;
+  try {
+    api = getZml();
+  } catch (error) {
+    setState({
+      toolCommandPending: false,
+      lastCommandError: errorToMessage(error),
+    });
+    return;
+  }
+
+  setState({
+    toolCommandPending: true,
+    lastCommandError: null,
+  });
+
+  try {
+    await api.deleteMiningTool(toolId);
+    const [miningTools, activeMiningTools] = await Promise.all([
+      api.listMiningTools(),
+      api.getActiveMiningTools(),
+    ]);
+    setState({
+      miningTools,
+      activeMiningTools,
+      toolCommandPending: false,
+      lastCommandError: null,
+    });
+  } catch (error) {
+    setState({
+      toolCommandPending: false,
+      lastCommandError: errorToMessage(error),
+    });
+  }
+}
+
+export async function setActiveMiningTools(request: SetActiveMiningToolsRequest): Promise<void> {
+  let api;
+  try {
+    api = getZml();
+  } catch (error) {
+    setState({
+      toolCommandPending: false,
+      lastCommandError: errorToMessage(error),
+    });
+    return;
+  }
+
+  setState({
+    toolCommandPending: true,
+    lastCommandError: null,
+  });
+
+  try {
+    const activeMiningTools = await api.setActiveMiningTools(request);
+    setState({
+      activeMiningTools,
+      toolCommandPending: false,
+      lastCommandError: null,
+    });
+  } catch (error) {
+    setState({
+      toolCommandPending: false,
+      lastCommandError: errorToMessage(error),
+    });
+  }
+}
+
+function sortMiningTools(tools: MiningToolProfileDto[]): MiningToolProfileDto[] {
+  const kindOrder = new Map<MiningToolProfileDto["kind"], number>([
+    ["finder", 0],
+    ["amp", 1],
+    ["extractor", 2],
+  ]);
+
+  return tools.sort((a, b) => {
+    const byKind = (kindOrder.get(a.kind) ?? 99) - (kindOrder.get(b.kind) ?? 99);
+    if (byKind !== 0) return byKind;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+function upsertMiningTool(
+  tools: readonly MiningToolProfileDto[],
+  profile: MiningToolProfileDto,
+): MiningToolProfileDto[] {
+  return sortMiningTools([
+    ...tools.filter((tool) => tool.toolId !== profile.toolId),
+    profile,
+  ]);
 }
 
 export function useZmlRendererStore(windowType: WindowType): ZmlRendererState {

@@ -25,6 +25,7 @@ export function MapWindow() {
           point={point}
           miningClaims={state.miningClaims}
           miningDrops={state.miningDrops}
+          playerRadiusM={state.activeMiningTools?.effectiveFinderRadiusM}
         />
 
         {/* overlays */}

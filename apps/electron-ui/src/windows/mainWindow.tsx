@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { WindowType } from "@zml/shared";
 import { refreshAgentHealth, startRun, stopRun, useZmlRendererStore } from "../state/zmlRendererStore";
+import { MiningToolsPanel } from "./miningToolsPanel";
 
 export function MainWindow() {
   const windowType: WindowType = "main";
@@ -81,6 +82,13 @@ export function MainWindow() {
               </button>
             </div>
           </section>
+
+          <MiningToolsPanel
+            tools={state.miningTools}
+            activeTools={state.activeMiningTools}
+            loading={state.miningToolsLoading}
+            pending={state.toolCommandPending}
+          />
         </div>
       )}
 

@@ -1,8 +1,13 @@
 import type {
+    ActiveMiningToolsDto,
     AgentHealthDto,
+    CreateMiningToolProfileRequest,
     MiningClaimDto,
     MiningDropDto,
+    MiningToolKind,
+    MiningToolProfileDto,
     RunDto,
+    SetActiveMiningToolsRequest,
     StartRunRequest,
     StopRunRequest,
 } from "@zml/shared";
@@ -26,7 +31,21 @@ const MOCK_MINING_DROPS: MiningDropDto[] = [
 
 export class MockAgentRestClient implements AgentClient {
     private nextRunId = 1;
+    private nextToolId = 4;
     private activeRun: RunDto | null = null;
+    private miningTools: MiningToolProfileDto[] = [
+        createMockMiningTool("mock-finder-1", "finder", "Ziplex Z20", 0, "100", 55),
+        createMockMiningTool("mock-amp-1", "amp", "Level 2 Amp", 4200, "108", null),
+        createMockMiningTool("mock-extractor-1", "extractor", "Genesis Star Excavator", 170, "100", null),
+    ];
+    private activeMiningTools: ActiveMiningToolsDto = {
+        finderId: "mock-finder-1",
+        ampId: null,
+        extractorId: "mock-extractor-1",
+        finderRangeEnhancerCount: 0,
+        effectiveFinderRadiusM: 55,
+        extractionCostMpec: 170,
+    };
 
     async getHealth(): Promise<AgentHealthDto> {
         return { status: "mock" };
@@ -78,6 +97,85 @@ export class MockAgentRestClient implements AgentClient {
         const cutoff = Date.now() - windowMs;
         return MOCK_MINING_DROPS.filter((drop) => drop.observedTsMs >= cutoff);
     }
+
+    async listMiningTools(): Promise<MiningToolProfileDto[]> {
+        return [...this.miningTools];
+    }
+
+    async createMiningTool(request: CreateMiningToolProfileRequest): Promise<MiningToolProfileDto> {
+        const profile: MiningToolProfileDto = {
+            toolId: `mock-tool-${this.nextToolId}`,
+            kind: request.kind,
+            name: request.name.trim(),
+            decayMpec: request.decayMpec,
+            markupPercent: request.markupPercent,
+            radiusM: request.radiusM,
+        };
+        this.nextToolId += 1;
+        this.miningTools = [...this.miningTools, profile];
+        return profile;
+    }
+
+    async deleteMiningTool(toolId: string): Promise<void> {
+        this.miningTools = this.miningTools.filter((profile) => profile.toolId !== toolId);
+        if (this.activeMiningTools.finderId === toolId) {
+            this.activeMiningTools = {
+                ...this.activeMiningTools,
+                finderId: null,
+                finderRangeEnhancerCount: 0,
+                effectiveFinderRadiusM: null,
+            };
+        }
+        if (this.activeMiningTools.ampId === toolId) {
+            this.activeMiningTools = { ...this.activeMiningTools, ampId: null };
+        }
+        if (this.activeMiningTools.extractorId === toolId) {
+            this.activeMiningTools = {
+                ...this.activeMiningTools,
+                extractorId: null,
+                extractionCostMpec: null,
+            };
+        }
+    }
+
+    async getActiveMiningTools(): Promise<ActiveMiningToolsDto> {
+        return this.activeMiningTools;
+    }
+
+    async setActiveMiningTools(request: SetActiveMiningToolsRequest): Promise<ActiveMiningToolsDto> {
+        const finder = this.miningTools.find((profile) => profile.toolId === request.finderId);
+        const extractor = this.miningTools.find((profile) => profile.toolId === request.extractorId);
+        this.activeMiningTools = {
+            finderId: request.finderId,
+            ampId: request.ampId,
+            extractorId: request.extractorId,
+            finderRangeEnhancerCount: request.finderRangeEnhancerCount,
+            effectiveFinderRadiusM:
+                finder?.radiusM === null || finder === undefined
+                    ? null
+                    : finder.radiusM * (1 + request.finderRangeEnhancerCount * 0.01),
+            extractionCostMpec: extractor?.decayMpec ?? null,
+        };
+        return this.activeMiningTools;
+    }
+}
+
+function createMockMiningTool(
+    toolId: string,
+    kind: MiningToolKind,
+    name: string,
+    decayMpec: number,
+    markupPercent: string,
+    radiusM: number | null,
+): MiningToolProfileDto {
+    return {
+        toolId,
+        kind,
+        name,
+        decayMpec,
+        markupPercent,
+        radiusM,
+    };
 }
 
 function createMockMiningDrop(

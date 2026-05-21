@@ -1,13 +1,17 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type {
   AgentHealthDto,
+  ActiveMiningToolsDto,
   BootstrapState,
+  CreateMiningToolProfileRequest,
   GetBootstrapStateReq,
+  MiningToolProfileDto,
   OcrPositionEvent,
   PushPosition,
   PushStatePatch,
   RuntimeStatePatch,
   RunDto,
+  SetActiveMiningToolsRequest,
   StartRunRequest,
   StopRunRequest,
   WindowType,
@@ -21,6 +25,11 @@ type ZmlApi = {
   getAgentHealth: () => Promise<AgentHealthDto>;
   startRun: (request: StartRunRequest) => Promise<RunDto>;
   stopRun: (request?: StopRunRequest) => Promise<RunDto>;
+  listMiningTools: () => Promise<MiningToolProfileDto[]>;
+  createMiningTool: (request: CreateMiningToolProfileRequest) => Promise<MiningToolProfileDto>;
+  deleteMiningTool: (toolId: string) => Promise<void>;
+  getActiveMiningTools: () => Promise<ActiveMiningToolsDto>;
+  setActiveMiningTools: (request: SetActiveMiningToolsRequest) => Promise<ActiveMiningToolsDto>;
   onPosition: (cb: (event: OcrPositionEvent) => void) => Unsubscribe;
   onStatePatch: (cb: (patch: RuntimeStatePatch) => void) => Unsubscribe;
 };
@@ -41,6 +50,26 @@ const api: ZmlApi = {
 
   async stopRun(request = {}) {
     return ipcRenderer.invoke(IPC_CMD.STOP_RUN, request) as Promise<RunDto>;
+  },
+
+  async listMiningTools() {
+    return ipcRenderer.invoke(IPC_CMD.LIST_MINING_TOOLS) as Promise<MiningToolProfileDto[]>;
+  },
+
+  async createMiningTool(request) {
+    return ipcRenderer.invoke(IPC_CMD.CREATE_MINING_TOOL, request) as Promise<MiningToolProfileDto>;
+  },
+
+  async deleteMiningTool(toolId) {
+    return ipcRenderer.invoke(IPC_CMD.DELETE_MINING_TOOL, toolId) as Promise<void>;
+  },
+
+  async getActiveMiningTools() {
+    return ipcRenderer.invoke(IPC_CMD.GET_ACTIVE_MINING_TOOLS) as Promise<ActiveMiningToolsDto>;
+  },
+
+  async setActiveMiningTools(request) {
+    return ipcRenderer.invoke(IPC_CMD.SET_ACTIVE_MINING_TOOLS, request) as Promise<ActiveMiningToolsDto>;
   },
 
   onPosition(cb) {

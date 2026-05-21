@@ -100,6 +100,23 @@ async function refreshMiningSnapshot() {
   }
 }
 
+async function refreshMiningToolSnapshot() {
+  try {
+    const [miningTools, activeMiningTools] = await Promise.all([
+      agentRestClient.listMiningTools(),
+      agentRestClient.getActiveMiningTools(),
+    ]);
+    runtime.miningTools = miningTools;
+    runtime.activeMiningTools = activeMiningTools;
+    pushStatePatch({ miningTools, activeMiningTools });
+  } catch (error) {
+    runtime.lastError = error instanceof Error ? error.message : String(error);
+    pushStatePatch({
+      agent: { ...runtime.agent },
+    });
+  }
+}
+
 function startEventStream() {
   if (stopEventStream) return;
 
@@ -142,6 +159,7 @@ async function createWindows() {
   // backend connector (single source of truth)
   startPositionStream();
   startEventStream();
+  void refreshMiningToolSnapshot();
 }
 
 app.on("before-quit", stopPositionStreamIfRunning);

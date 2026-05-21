@@ -1,8 +1,10 @@
 import type {
     BootstrapAgentState,
     BootstrapStreamsState,
+    ActiveMiningToolsDto,
     MiningClaimDto,
     MiningDropDto,
+    MiningToolProfileDto,
     OcrPositionDTO,
 } from "@zml/shared";
 
@@ -14,6 +16,8 @@ export type RuntimeState = {
     lastPosition?: OcrPositionDTO;
     miningClaims: MiningClaimDto[];
     miningDrops: MiningDropDto[];
+    miningTools: MiningToolProfileDto[];
+    activeMiningTools?: ActiveMiningToolsDto;
 };
 
 export const runtime: RuntimeState = {
@@ -23,4 +27,6 @@ export const runtime: RuntimeState = {
     lastPosition: undefined,
     miningClaims: [],
     miningDrops: [],
+    miningTools: [],
+    activeMiningTools: undefined,
 };

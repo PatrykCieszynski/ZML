@@ -41,11 +41,13 @@ export function MapViewport({
   point,
   miningClaims,
   miningDrops,
+  playerRadiusM,
 }: {
   planetId: PlanetId;
   point: EntropiaMapPoint | null;
   miningClaims: readonly MiningClaimDto[];
   miningDrops: readonly MiningDropDto[];
+  playerRadiusM?: number | null;
 }) {
   const [viewState, setViewState] = useState<OrthographicViewState>(() =>
     createInitialMapViewState(planetId),
@@ -82,9 +84,10 @@ export function MapViewport({
   );
   const playerRangeRadiusM = useMemo(
     () =>
+      playerRadiusM ??
       miningDrops.find((drop) => isDropOnPlanet(planetId, drop))?.dropRadiusM ??
       DEFAULT_PLAYER_RADIUS_M,
-    [miningDrops, planetId],
+    [miningDrops, planetId, playerRadiusM],
   );
   const mapMiningClaims = useMemo<MapClaim[]>(
     () =>
