@@ -12,7 +12,7 @@ from rich.table import Table
 from zml_game_bridge.settings import Settings
 
 app = typer.Typer(
-    help="Developer CLI for running and inspecting the ZML Game Bridge.",
+    help="Developer CLI for running and inspecting the Z Mining Log Game Bridge.",
     no_args_is_help=True,
 )
 console = Console()
@@ -66,7 +66,7 @@ def _apply_env_overrides(
 
 
 def _settings_table(settings: Settings) -> Table:
-    table = Table(title="ZML Game Bridge config", show_header=True, header_style="bold")
+    table = Table(title="Z Mining Log Game Bridge config", show_header=True, header_style="bold")
     table.add_column("Setting", style="cyan", no_wrap=True)
     table.add_column("Value", overflow="fold")
 
@@ -75,6 +75,7 @@ def _settings_table(settings: Settings) -> Table:
     table.add_row("reload", _format_bool(settings.reload))
     table.add_row("db_path", str(settings.db_path))
     table.add_row("chat_log_path", _format_path(settings.chat_log_path))
+    table.add_row("mining_resource_catalog_path", str(settings.mining_resource_catalog_path))
     table.add_row(
         "chat_log_exists",
         _format_bool(settings.chat_log_path is not None and settings.chat_log_path.exists()),

@@ -1,4 +1,4 @@
-# Zabu Mining Log
+# Z Mining Log
 
 Work-in-progress local mining assistant for Entropia Universe.
 
@@ -138,6 +138,7 @@ ZML_LOG_LEVEL
 ZML_ERROR_LOG_PATH
 ZML_DB_PATH
 ZML_CHAT_LOG_PATH
+ZML_MINING_RESOURCE_CATALOG_PATH
 ZML_CHAT_START_AT_END
 ZML_OCR_ENABLED
 ZML_MOCK_INPUTS
@@ -162,6 +163,10 @@ Current durable mining facts include:
 - `MiningEnhancerBrokeEvent`: chat reported enhancer breakage.
 
 Profit tracking should primarily aggregate by run/segment, not by claim. Claim lifecycle is mostly for map state, timers, and operational decisions.
+
+Mining resources are loaded from a seed JSON in the backend package and a user JSON under
+LocalAppData. Claim deed chat messages can learn/update resources in the user JSON, which lets the
+loot whitelist grow from real gameplay while still allowing manual overrides later.
 
 ## Known Rough Edges
 

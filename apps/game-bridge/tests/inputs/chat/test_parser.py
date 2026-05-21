@@ -62,10 +62,10 @@ def test_parse_chat_line_returns_none_for_invalid(raw: str) -> None:
 
 
 def test_parse_chat_line_public_channel() -> None:
-    raw = "2026-01-10 12:37:50 [#cyrenetrade] [Zabu] WTS stuff"
+    raw = "2026-01-10 12:37:50 [#cyrenetrade] [Example Trader] WTS stuff"
     line = parse_chat_line(raw)
     assert line is not None
     assert line.channel_type == ChannelType.PUBLIC
     assert line.channel_token == "#cyrenetrade"
-    assert line.speaker == "Zabu"
+    assert line.speaker == "Example Trader"
     assert line.message == "WTS stuff"

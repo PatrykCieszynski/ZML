@@ -10,7 +10,7 @@ export function MainWindow() {
 
   return (
     <div style={{ padding: 16, fontFamily: "system-ui, sans-serif" }}>
-      <h2>ZML Desktop</h2>
+      <h2>Z Mining Log</h2>
 
       {state.error && (
         <div style={{ background: "#2a0f0f", color: "#ffdada", padding: 12, borderRadius: 8 }}>

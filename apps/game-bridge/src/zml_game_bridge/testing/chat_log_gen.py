@@ -46,7 +46,7 @@ class ChatLogGenerator:
 		]
 
 		self._avatars = [
-			"Zabujca Sheaki Ortografjii",
+			"Example Miner",
 			"Nark Oo Allon",
 			"Mr TERN-- Sir",
 			"Drax Thunderclaw Bloodshot",

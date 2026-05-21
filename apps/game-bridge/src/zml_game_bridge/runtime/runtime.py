@@ -21,6 +21,7 @@ from zml_game_bridge.persistence.mining_claims import MiningClaimProjector, Mini
 from zml_game_bridge.persistence.mining_drops import MiningDropProjector
 from zml_game_bridge.persistence.schema import ensure_schema
 from zml_game_bridge.persistence.sqlite import open_sqlite
+from zml_game_bridge.resources.mining_resources import MiningResourceCatalog
 from zml_game_bridge.runtime.channels import EventChannel, SignalChannel
 from zml_game_bridge.runtime.db_writer import DbWriterWorker
 from zml_game_bridge.runtime.input_coordinator import InputCoordinator
@@ -37,6 +38,7 @@ class AppRuntime:
         *,
         db_path: Path,
         chat_log_path: Path | None,
+        mining_resource_catalog_path: Path,
         chat_start_at_end: bool,
         ocr_enabled: bool,
         mock_inputs_enabled: bool,
@@ -44,6 +46,7 @@ class AppRuntime:
     ) -> None:
         self._db_path = db_path
         self._chat_log_path = chat_log_path
+        self._mining_resource_catalog_path = mining_resource_catalog_path
         self._chat_start_at_end = chat_start_at_end
         self._ocr_enabled = ocr_enabled
         self._mock_inputs_enabled = mock_inputs_enabled
@@ -54,7 +57,11 @@ class AppRuntime:
         self._pending_events = EventChannel()
         self._persisted_events = InMemoryPersistedEventBus()
         self._latest_position = LatestPositionState()
-        self._mining_coordinator = MiningCoordinator(position_provider=self._current_position)
+        self._resource_catalog = MiningResourceCatalog(user_path=self._mining_resource_catalog_path)
+        self._mining_coordinator = MiningCoordinator(
+            position_provider=self._current_position,
+            resource_catalog=self._resource_catalog,
+        )
         self._input_coordinator = InputCoordinator(
             pending_signals=self._pending_signals,
             pending_events=self._pending_events,
@@ -114,9 +121,11 @@ class AppRuntime:
         self._restore_mining_lifecycle()
         self._started = True
         logger.info(
-            "app_started db_path=%s chat_log_path=%s ocr_enabled=%s mock_inputs_enabled=%s",
+            "app_started db_path=%s chat_log_path=%s mining_resource_catalog_path=%s "
+            "ocr_enabled=%s mock_inputs_enabled=%s",
             self._db_path,
             self._chat_log_path,
+            self._mining_resource_catalog_path,
             self._ocr_enabled,
             self._mock_inputs_enabled,
         )

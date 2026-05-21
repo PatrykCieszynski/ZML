@@ -4,7 +4,7 @@ export function createMapWindow(preloadPath: string): BrowserWindow {
     return new BrowserWindow({
         width: 900,
         height: 560,
-        title: "ZML — Map",
+        title: "Z Mining Log - Map",
         // frame: false,
         autoHideMenuBar: true,
         backgroundColor: "#000000",

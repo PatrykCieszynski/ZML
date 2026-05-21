@@ -49,6 +49,6 @@ def test_config_command_prints_resolved_settings(monkeypatch, tmp_path: Path) ->
     result = CliRunner().invoke(app, ["config", "--mode", "mock"])
 
     assert result.exit_code == 0
-    assert "ZML Game Bridge config" in result.output
+    assert "Z Mining Log Game Bridge config" in result.output
     assert "mock_inputs_enabled" in result.output
     assert "ocr_enabled" in result.output

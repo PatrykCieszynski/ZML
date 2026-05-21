@@ -4,7 +4,7 @@ export function createMainWindow(preloadPath: string): BrowserWindow {
     return new BrowserWindow({
         width: 1180,
         height: 820,
-        title: "ZML — Main",
+        title: "Z Mining Log - Main",
         webPreferences: {
             preload: preloadPath,
             contextIsolation: true,

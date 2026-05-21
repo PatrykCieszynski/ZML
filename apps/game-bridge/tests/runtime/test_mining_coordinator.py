@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 
 from zml_game_bridge.domain.mining import MiningMode
 from zml_game_bridge.domain.mining_cost import MiningEquipmentProfile, MiningToolProfile
@@ -30,6 +31,7 @@ from zml_game_bridge.inputs.ocr.pipelines.mining_finder.signals import (
     FinderUnitsChangedSignal,
     ProbeFiredSignal,
 )
+from zml_game_bridge.resources.mining_resources import MiningResourceCatalog
 from zml_game_bridge.runtime.mining import (
     MiningCoordinator,
     MiningCoordinatorConfig,
@@ -306,6 +308,42 @@ def test_mining_coordinator_records_claim_deed_received_chat_event() -> None:
     assert event.claimed_raw == claimed_raw
 
 
+def test_mining_coordinator_learns_claim_deed_resource(tmp_path: Path) -> None:
+    seed_path = tmp_path / "seed.json"
+    user_path = tmp_path / "mining_resources.json"
+    seed_path.write_text("{}", encoding="utf-8")
+    resource_catalog = MiningResourceCatalog(seed_path=seed_path, user_path=user_path)
+    coordinator = MiningCoordinator(resource_catalog=resource_catalog)
+    event_dt = datetime(2026, 1, 10, 12, 37, 50)
+
+    coordinator.process(
+        ItemReceivedSignal(
+            event_dt=event_dt,
+            channel_type=ChannelType.SYSTEM,
+            channel_token="System",
+            raw="deed raw",
+            item_name="Mineral Resource Deed",
+            qty=1,
+            value_mpec=Mpec(0),
+        )
+    )
+    coordinator.process(
+        ResourceClaimedSignal(
+            event_dt=event_dt,
+            channel_type=ChannelType.SYSTEM,
+            channel_token="System",
+            raw="claimed raw",
+            resource_name="Narcanisum Stone",
+        )
+    )
+
+    learned = resource_catalog.get("Narcanisum Stone")
+    assert learned is not None
+    assert learned.resource_type == "ore"
+    assert learned.source == "learned"
+    assert user_path.exists()
+
+
 def test_mining_coordinator_orders_multiple_pending_claim_deeds() -> None:
     coordinator = MiningCoordinator()
     event_dt = datetime(2026, 1, 10, 12, 37, 50)
@@ -530,6 +568,29 @@ def test_mining_coordinator_records_item_received_chat_event() -> None:
     assert event.item_name == "Blue Crystal"
     assert event.qty == 8
     assert event.value_mpec == Mpec(16_000)
+
+
+def test_mining_coordinator_ignores_unknown_item_received_chat_event(tmp_path: Path) -> None:
+    seed_path = tmp_path / "seed.json"
+    seed_path.write_text("{}", encoding="utf-8")
+    coordinator = MiningCoordinator(
+        resource_catalog=MiningResourceCatalog(seed_path=seed_path, user_path=None)
+    )
+    event_dt = datetime(2026, 1, 10, 12, 37, 50)
+
+    events = coordinator.process(
+        ItemReceivedSignal(
+            event_dt=event_dt,
+            channel_type=ChannelType.SYSTEM,
+            channel_token="System",
+            raw="2026-01-10 12:37:50 [System] [] You received Random Item x (1) Value: 0.0100 PED",
+            item_name="Random Item",
+            qty=1,
+            value_mpec=Mpec(1_000),
+        )
+    )
+
+    assert events == []
 
 
 def test_mining_coordinator_records_enhancer_broke_chat_event() -> None:

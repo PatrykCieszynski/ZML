@@ -30,6 +30,7 @@ def create_app() -> FastAPI:
         runtime = AppRuntime(
             db_path=settings.db_path,
             chat_log_path=settings.chat_log_path,
+            mining_resource_catalog_path=settings.mining_resource_catalog_path,
             chat_start_at_end=settings.chat_start_at_end,
             ocr_enabled=settings.ocr_enabled,
             mock_inputs_enabled=settings.mock_inputs_enabled,
@@ -50,7 +51,7 @@ def create_app() -> FastAPI:
         finally:
             runtime.stop()
 
-    app = FastAPI(title="ZML Game Bridge", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="Z Mining Log Game Bridge", version="0.1.0", lifespan=lifespan)
     app.state.settings = settings
     register_routes(app)
     return app

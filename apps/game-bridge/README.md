@@ -1,6 +1,6 @@
-# ZML Game Bridge
+# Z Mining Log Game Bridge
 
-Local Python backend for Zabu Mining Log. It watches Entropia inputs, derives mining domain events, persists durable state to SQLite, and exposes REST/SSE/WebSocket APIs for the Electron UI.
+Local Python backend for Z Mining Log. It watches Entropia inputs, derives mining domain events, persists durable state to SQLite, and exposes REST/SSE/WebSocket APIs for the Electron UI.
 
 The backend is offline-first and currently designed for one local UI client.
 
@@ -75,6 +75,7 @@ Input modes:
 - `ZML_ERROR_LOG_PATH`: optional override for error-only log file.
 - `ZML_DB_PATH`: optional override for SQLite DB path.
 - `ZML_CHAT_LOG_PATH`: optional override for Entropia `chat.log`.
+- `ZML_MINING_RESOURCE_CATALOG_PATH`: optional override for learned/user mining resources JSON.
 - `ZML_CHAT_START_AT_END`: start tailing from the end of the file, defaults to `true`.
 - `ZML_OCR_ENABLED`: enable live OCR input.
 - `ZML_MOCK_INPUTS`: enable mock mining input.
@@ -84,7 +85,7 @@ Input modes:
 By default, error logs are written to:
 
 ```text
-%LOCALAPPDATA%\zabu-mining-log\logs\errors.log
+%LOCALAPPDATA%\z-mining-log\logs\errors.log
 ```
 
 Only `ERROR` and `CRITICAL` records go to that file. Normal `INFO` runtime logs stay on the console.
@@ -139,3 +140,4 @@ npm run bridge:verify
 - Claim lifecycle creates map-facing claim events such as `MiningClaimCreatedEvent` and `MiningClaimDepletedEvent`.
 - Chat currently contributes deed, item received, enhancer, and depleted signals/events.
 - Loot/profit aggregation should primarily happen at run/segment level, not claim level.
+- Mining resources are seeded from package JSON and learned into user JSON from claim deed chat lines.

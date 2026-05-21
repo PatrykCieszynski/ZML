@@ -9,6 +9,8 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from types import TracebackType
 
+APP_DATA_DIR_NAME = "z-mining-log"
+
 
 def get_documents_dir() -> Path:
     """Return the current user's Documents directory (handles folder redirection on Windows)."""
@@ -103,7 +105,7 @@ def _default_db_path() -> Path:
         return env_path
 
     app_data = os.getenv("LOCALAPPDATA") or os.getenv("APPDATA") or str(Path.home())
-    return Path(app_data) / "zabu-mining-log" / "db" / "zabu-mining-log.sqlite3"
+    return Path(app_data) / APP_DATA_DIR_NAME / "db" / "z-mining-log.sqlite3"
 
 
 def _default_error_log_path() -> Path:
@@ -112,7 +114,16 @@ def _default_error_log_path() -> Path:
         return env_path
 
     app_data = os.getenv("LOCALAPPDATA") or os.getenv("APPDATA") or str(Path.home())
-    return Path(app_data) / "zabu-mining-log" / "logs" / "errors.log"
+    return Path(app_data) / APP_DATA_DIR_NAME / "logs" / "errors.log"
+
+
+def _default_mining_resource_catalog_path() -> Path:
+    env_path = _env_path("ZML_MINING_RESOURCE_CATALOG_PATH")
+    if env_path is not None:
+        return env_path
+
+    app_data = os.getenv("LOCALAPPDATA") or os.getenv("APPDATA") or str(Path.home())
+    return Path(app_data) / APP_DATA_DIR_NAME / "config" / "mining_resources.json"
 
 
 def _default_chat_log_path() -> Path | None:
@@ -223,6 +234,9 @@ class Settings:
     # Paths
     db_path: Path = field(default_factory=_default_db_path)
     chat_log_path: Path | None = field(default_factory=_default_chat_log_path)
+    mining_resource_catalog_path: Path = field(
+        default_factory=_default_mining_resource_catalog_path
+    )
 
     chat_start_at_end: bool = field(default_factory=_default_chat_start_at_end)
     ocr_enabled: bool = field(default_factory=_default_ocr_enabled)

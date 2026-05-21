@@ -18,6 +18,7 @@ from zml_game_bridge.inputs.chat.signals import (
     ResourceClaimedSignal,
     ResourceDepletedSignal,
 )
+from zml_game_bridge.resources.mining_resources import MiningResourceCatalog
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +34,9 @@ class PendingClaimDeed:
 
 
 class MiningChatCorrelator:
-    def __init__(self) -> None:
+    def __init__(self, *, resource_catalog: MiningResourceCatalog | None = None) -> None:
         self._pending_deeds: list[PendingClaimDeed] = []
+        self._resource_catalog = resource_catalog or MiningResourceCatalog()
 
     def process(self, signal: EventBase) -> list[EventBase]:
         if not isinstance(signal, ChatSignalBase):
@@ -45,7 +47,8 @@ class MiningChatCorrelator:
             if claim_deed is not None:
                 self._pending_deeds.append(claim_deed)
                 return []
-            return [self._record_item_received(signal)]
+            event = self._record_item_received(signal)
+            return [event] if event is not None else []
 
         if isinstance(signal, ResourceClaimedSignal):
             event = self._record_claim_deed_received(signal)
@@ -86,16 +89,33 @@ class MiningChatCorrelator:
             received_raw=deed.raw,
             claimed_raw=signal.raw,
         )
+        learned = self._resource_catalog.learn_resource(
+            name=signal.resource_name,
+            resource_type=deed.mining_type,
+            event_dt=signal.event_dt,
+        )
         logger.debug(
-            "claim_deed_received_recorded event_type=%s resource=%r mining_type=%s event_dt=%s",
+            "claim_deed_received_recorded event_type=%s resource=%r mining_type=%s "
+            "learned_source=%s event_dt=%s",
             type(event).__name__,
             event.resource_name,
             event.mining_type,
+            learned.source,
             event.event_dt,
         )
         return event
 
-    def _record_item_received(self, signal: ItemReceivedSignal) -> MiningItemReceivedEvent:
+    def _record_item_received(self, signal: ItemReceivedSignal) -> MiningItemReceivedEvent | None:
+        resource = self._resource_catalog.get(signal.item_name)
+        if resource is None or not resource.track_as_loot:
+            logger.debug(
+                "item_received_ignored item=%r qty=%s value_mpec=%s reason=not_tracked_resource",
+                signal.item_name,
+                signal.qty,
+                signal.value_mpec,
+            )
+            return None
+
         event = MiningItemReceivedEvent(
             event_dt=signal.event_dt,
             item_name=signal.item_name,
