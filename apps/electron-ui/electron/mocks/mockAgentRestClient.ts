@@ -7,6 +7,7 @@ import type {
     MiningToolKind,
     MiningToolProfileDto,
     RunDto,
+    RunSegmentDto,
     SetActiveMiningToolsRequest,
     StartRunRequest,
     StopRunRequest,
@@ -33,6 +34,7 @@ export class MockAgentRestClient implements AgentClient {
     private nextRunId = 1;
     private nextToolId = 4;
     private activeRun: RunDto | null = null;
+    private runSegments: RunSegmentDto[] = [];
     private miningTools: MiningToolProfileDto[] = [
         createMockMiningTool("mock-finder-1", "finder", "Ziplex Z20", 0, "100", 55),
         createMockMiningTool("mock-amp-1", "amp", "Level 2 Amp", 4200, "108", null),
@@ -62,6 +64,7 @@ export class MockAgentRestClient implements AgentClient {
             updatedTsMs: now,
         };
         this.nextRunId += 1;
+        this.runSegments = [];
 
         return this.activeRun;
     }
@@ -83,8 +86,22 @@ export class MockAgentRestClient implements AgentClient {
         };
 
         this.activeRun = null;
+        this.runSegments = [];
 
         return stoppedRun;
+    }
+
+    async getActiveRun(): Promise<RunDto | null> {
+        return this.activeRun;
+    }
+
+    async listActiveRunSegments(): Promise<RunSegmentDto[]> {
+        return this.activeRun === null ? [] : [...this.runSegments];
+    }
+
+    async listRunSegments(runId: number): Promise<RunSegmentDto[]> {
+        if (this.activeRun?.runId !== runId) return [];
+        return [...this.runSegments];
     }
 
     async listMiningClaims(request: ListMiningClaimsRequest = {}): Promise<MiningClaimDto[]> {
@@ -188,10 +205,12 @@ function createMockMiningDrop(
     const isHit = result === "hit";
     const isFinished = result !== "pending";
 
-    return {
-        dropId,
-        dropEventId: -1,
-        observedTsMs,
+        return {
+            dropId,
+            dropEventId: -1,
+            runId: null,
+            segmentId: null,
+            observedTsMs,
         position: {
             planetName: "Calypso",
             x,

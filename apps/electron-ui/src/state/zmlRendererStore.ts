@@ -12,6 +12,7 @@ import type {
   OcrPositionDTO,
   OcrPositionEvent,
   RunDto,
+  RunSegmentDto,
   SetActiveMiningToolsRequest,
   WindowType,
 } from "@zml/shared";
@@ -25,7 +26,8 @@ export type ZmlRendererState = {
   streams: BootstrapStreamsState;
   position?: OcrPositionDTO;
   positionEvent?: OcrPositionEvent;
-  activeRun?: RunDto;
+  activeRun: RunDto | null;
+  runSegments: RunSegmentDto[];
   miningClaims: MiningClaimDto[];
   miningDrops: MiningDropDto[];
   miningTools: MiningToolProfileDto[];
@@ -46,6 +48,8 @@ const initialState: ZmlRendererState = {
   bootstrapping: false,
   agent: { status: "connecting" },
   streams: { ws: false, sse: false },
+  activeRun: null,
+  runSegments: [],
   miningClaims: [],
   miningDrops: [],
   miningTools: [],
@@ -87,6 +91,8 @@ function applyBootstrap(bootstrap: BootstrapState): void {
     agent: bootstrap.agent,
     streams: bootstrap.streams,
     position: bootstrap.position ?? state.position,
+    activeRun: bootstrap.activeRun ?? null,
+    runSegments: bootstrap.runSegments ?? state.runSegments,
     miningClaims: bootstrap.miningClaims ?? state.miningClaims,
     miningDrops: bootstrap.miningDrops ?? state.miningDrops,
     miningTools: bootstrap.miningTools ?? state.miningTools,
@@ -227,12 +233,39 @@ export async function startRun(name: string): Promise<void> {
     const activeRun = await api.startRun({ name: trimmedName });
     setState({
       activeRun,
+      runSegments: [],
       runCommandPending: false,
       lastCommandError: null,
     });
   } catch (error) {
     setState({
       runCommandPending: false,
+      lastCommandError: errorToMessage(error),
+    });
+  }
+}
+
+export async function refreshRunState(): Promise<void> {
+  let api;
+  try {
+    api = getZml();
+  } catch (error) {
+    setState({
+      lastCommandError: errorToMessage(error),
+    });
+    return;
+  }
+
+  try {
+    const activeRun = await api.getActiveRun();
+    const runSegments = activeRun === null ? [] : await api.listActiveRunSegments();
+    setState({
+      activeRun,
+      runSegments,
+      lastCommandError: null,
+    });
+  } catch (error) {
+    setState({
       lastCommandError: errorToMessage(error),
     });
   }
@@ -256,9 +289,10 @@ export async function stopRun(): Promise<void> {
   });
 
   try {
-    const activeRun = await api.stopRun(state.activeRun ? { runId: state.activeRun.runId } : {});
+    await api.stopRun(state.activeRun ? { runId: state.activeRun.runId } : {});
     setState({
-      activeRun,
+      activeRun: null,
+      runSegments: [],
       runCommandPending: false,
       lastCommandError: null,
     });

@@ -7,6 +7,7 @@ import type {
   OcrPositionEvent,
   RuntimeStatePatch,
   RunDto,
+  RunSegmentDto,
   SetActiveMiningToolsRequest,
   StartRunRequest,
   StopRunRequest,
@@ -18,6 +19,9 @@ declare global {
     zml: {
       getBootstrapState: (windowType: WindowType) => Promise<BootstrapState>;
       getAgentHealth: () => Promise<AgentHealthDto>;
+      getActiveRun: () => Promise<RunDto | null>;
+      listActiveRunSegments: () => Promise<RunSegmentDto[]>;
+      listRunSegments: (runId: number) => Promise<RunSegmentDto[]>;
       startRun: (request: StartRunRequest) => Promise<RunDto>;
       stopRun: (request?: StopRunRequest) => Promise<RunDto>;
       listMiningTools: () => Promise<MiningToolProfileDto[]>;

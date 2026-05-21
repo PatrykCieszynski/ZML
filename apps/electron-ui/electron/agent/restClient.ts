@@ -1,4 +1,6 @@
 import {
+  isRunSegmentWire,
+  isRunWireOrNull,
   isRunWire,
   createMiningToolProfileRequestToWire,
   isActiveMiningToolsWire,
@@ -12,6 +14,7 @@ import {
   wireToMiningClaimDto,
   wireToMiningDropDto,
   wireToMiningToolProfileDto,
+  wireToRunSegmentDto,
   wireToRunDto,
   type ActiveMiningToolsDto,
   type AgentHealthDto,
@@ -20,6 +23,7 @@ import {
   type MiningDropDto,
   type MiningToolProfileDto,
   type RunDto,
+  type RunSegmentDto,
   type SetActiveMiningToolsRequest,
   type StartRunRequest,
   type StopRunRequest,
@@ -35,6 +39,9 @@ type AgentRestClientOptions = {
 
 export type AgentClient = {
   getHealth: () => Promise<AgentHealthDto>;
+  getActiveRun: () => Promise<RunDto | null>;
+  listActiveRunSegments: () => Promise<RunSegmentDto[]>;
+  listRunSegments: (runId: number) => Promise<RunSegmentDto[]>;
   startRun: (request: StartRunRequest) => Promise<RunDto>;
   stopRun: (request: StopRunRequest) => Promise<RunDto>;
   listMiningClaims: (request?: ListMiningClaimsRequest) => Promise<MiningClaimDto[]>;
@@ -71,6 +78,30 @@ export class AgentRestClient implements AgentClient {
       throw new Error("Agent /health returned an invalid payload");
     }
     return data;
+  }
+
+  async getActiveRun(): Promise<RunDto | null> {
+    const data = await this.getJson("/api/v1/runs/active");
+    if (!isRunWireOrNull(data)) {
+      throw new Error("Agent active run returned an invalid payload");
+    }
+    return data === null ? null : wireToRunDto(data);
+  }
+
+  async listActiveRunSegments(): Promise<RunSegmentDto[]> {
+    const data = await this.getJson("/api/v1/runs/active/segments");
+    if (!Array.isArray(data) || !data.every(isRunSegmentWire)) {
+      throw new Error("Agent active run segments returned an invalid payload");
+    }
+    return data.map(wireToRunSegmentDto);
+  }
+
+  async listRunSegments(runId: number): Promise<RunSegmentDto[]> {
+    const data = await this.getJson(`/api/v1/runs/${encodeURIComponent(String(runId))}/segments`);
+    if (!Array.isArray(data) || !data.every(isRunSegmentWire)) {
+      throw new Error("Agent run segments returned an invalid payload");
+    }
+    return data.map(wireToRunSegmentDto);
   }
 
   async startRun(request: StartRunRequest): Promise<RunDto> {

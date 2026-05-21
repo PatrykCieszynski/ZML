@@ -6,6 +6,8 @@ import type {
     MiningDropDto,
     MiningToolProfileDto,
     OcrPositionDTO,
+    RunDto,
+    RunSegmentDto,
 } from "@zml/shared";
 
 export type RuntimeState = {
@@ -14,6 +16,8 @@ export type RuntimeState = {
     streams: BootstrapStreamsState;
     lastError?: string | null;
     lastPosition?: OcrPositionDTO;
+    activeRun: RunDto | null;
+    runSegments: RunSegmentDto[];
     miningClaims: MiningClaimDto[];
     miningDrops: MiningDropDto[];
     miningTools: MiningToolProfileDto[];
@@ -25,6 +29,8 @@ export const runtime: RuntimeState = {
     agent: { status: "connecting" },
     streams: { ws: false, sse: false },
     lastPosition: undefined,
+    activeRun: null,
+    runSegments: [],
     miningClaims: [],
     miningDrops: [],
     miningTools: [],

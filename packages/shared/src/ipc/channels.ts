@@ -3,6 +3,9 @@ export const IPC_NAMESPACE = "zml" as const;
 export const IPC_CMD = {
     GET_BOOTSTRAP_STATE: `${IPC_NAMESPACE}:cmd:get_bootstrap_state`,
     GET_AGENT_HEALTH: `${IPC_NAMESPACE}:cmd:get_agent_health`,
+    GET_ACTIVE_RUN: `${IPC_NAMESPACE}:cmd:get_active_run`,
+    LIST_ACTIVE_RUN_SEGMENTS: `${IPC_NAMESPACE}:cmd:list_active_run_segments`,
+    LIST_RUN_SEGMENTS: `${IPC_NAMESPACE}:cmd:list_run_segments`,
     START_RUN: `${IPC_NAMESPACE}:cmd:start_run`,
     STOP_RUN: `${IPC_NAMESPACE}:cmd:stop_run`,
     LIST_MINING_TOOLS: `${IPC_NAMESPACE}:cmd:list_mining_tools`,

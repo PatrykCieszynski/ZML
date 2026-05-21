@@ -16,6 +16,8 @@ export type MiningDropCostDto = {
 export type MiningDropDto = {
     dropId: string;
     dropEventId: number;
+    runId: number | null;
+    segmentId: string | null;
     observedTsMs: number;
     position: MiningDropPositionDto | null;
     dropRadiusM: number;
@@ -55,6 +57,8 @@ export type MiningDropCostWire = {
 export type MiningDropWire = {
     drop_id: string;
     drop_event_id: number;
+    run_id?: number | null;
+    segment_id?: string | null;
     observed_ts_ms: number;
     position: MiningDropPositionWire | null;
     drop_radius_m: number;
@@ -92,6 +96,8 @@ type MiningDropEventCostWire = {
 
 export type MiningDropEventWire = {
     drop_id: string;
+    run_id?: number | null;
+    segment_id?: string | null;
     observed_ts_ms: number;
     position: MiningDropPositionWire | null;
     drop_radius_m: number;
@@ -134,6 +140,8 @@ export function isMiningDropWire(value: unknown): value is MiningDropWire {
     return (
         typeof value.drop_id === "string" &&
         isFiniteNumber(value.drop_event_id) &&
+        (value.run_id === undefined || isNullableNumber(value.run_id)) &&
+        (value.segment_id === undefined || isNullableString(value.segment_id)) &&
         isFiniteNumber(value.observed_ts_ms) &&
         isNullablePositionWire(value.position) &&
         isFiniteNumber(value.drop_radius_m) &&
@@ -159,6 +167,8 @@ export function isMiningDropEventWire(value: unknown): value is MiningDropEventW
     if (!isRecord(value)) return false;
     return (
         typeof value.drop_id === "string" &&
+        (value.run_id === undefined || isNullableNumber(value.run_id)) &&
+        (value.segment_id === undefined || isNullableString(value.segment_id)) &&
         isFiniteNumber(value.observed_ts_ms) &&
         isNullablePositionWire(value.position) &&
         isFiniteNumber(value.drop_radius_m) &&
@@ -199,6 +209,8 @@ export function wireToMiningDropDto(wire: MiningDropWire): MiningDropDto {
     return {
         dropId: wire.drop_id,
         dropEventId: wire.drop_event_id,
+        runId: wire.run_id ?? null,
+        segmentId: wire.segment_id ?? null,
         observedTsMs: wire.observed_ts_ms,
         position: wire.position ? wireToPositionDto(wire.position) : null,
         dropRadiusM: wire.drop_radius_m,
@@ -234,6 +246,8 @@ export function miningDropDtoFromMiningDropEventWire(
     return {
         dropId: wire.drop_id,
         dropEventId: eventId,
+        runId: wire.run_id ?? null,
+        segmentId: wire.segment_id ?? null,
         observedTsMs: wire.observed_ts_ms,
         position: wire.position ? wireToPositionDto(wire.position) : null,
         dropRadiusM: wire.drop_radius_m,

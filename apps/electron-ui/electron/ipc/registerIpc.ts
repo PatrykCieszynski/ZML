@@ -13,6 +13,7 @@ import {
 import { runtime } from "../runtime";
 import type { AgentClient } from "../agent/restClient.ts";
 import { pushStatePatch } from "./pushStatePatch.ts";
+import { replaceActiveRun, replaceRunSegments } from "../runs/runSegmentsState.ts";
 
 type RegisterIpcDeps = {
     agentRestClient: AgentClient;
@@ -34,6 +35,8 @@ export function registerIpc({ agentRestClient }: RegisterIpcDeps): void {
             agent: runtime.agent,
             streams: runtime.streams,
             position: runtime.lastPosition,
+            activeRun: runtime.activeRun,
+            runSegments: runtime.runSegments,
             miningClaims: runtime.miningClaims,
             miningDrops: runtime.miningDrops,
             miningTools: runtime.miningTools,
@@ -45,18 +48,51 @@ export function registerIpc({ agentRestClient }: RegisterIpcDeps): void {
 
     ipcMain.handle(IPC_CMD.GET_AGENT_HEALTH, () => agentRestClient.getHealth());
 
-    ipcMain.handle(IPC_CMD.START_RUN, (_evt, req: unknown) => {
+    ipcMain.handle(IPC_CMD.GET_ACTIVE_RUN, async () => {
+        const activeRun = await agentRestClient.getActiveRun();
+        if (activeRun === null) {
+            runtime.activeRun = null;
+            runtime.runSegments = [];
+            pushStatePatch({ activeRun: null, runSegments: [] });
+            return activeRun;
+        }
+        replaceActiveRun(activeRun);
+        return activeRun;
+    });
+
+    ipcMain.handle(IPC_CMD.LIST_ACTIVE_RUN_SEGMENTS, async () => {
+        const runSegments = await agentRestClient.listActiveRunSegments();
+        replaceRunSegments(runSegments);
+        return runSegments;
+    });
+
+    ipcMain.handle(IPC_CMD.LIST_RUN_SEGMENTS, async (_evt, runId: unknown) => {
+        if (typeof runId !== "number" || !Number.isFinite(runId)) {
+            throw new Error("Invalid list run segments request");
+        }
+        return agentRestClient.listRunSegments(runId);
+    });
+
+    ipcMain.handle(IPC_CMD.START_RUN, async (_evt, req: unknown) => {
         if (!isStartRunRequest(req)) {
             throw new Error("Invalid start run request");
         }
-        return agentRestClient.startRun(req);
+        const activeRun = await agentRestClient.startRun(req);
+        runtime.activeRun = activeRun;
+        runtime.runSegments = [];
+        pushStatePatch({ activeRun, runSegments: [] });
+        return activeRun;
     });
 
-    ipcMain.handle(IPC_CMD.STOP_RUN, (_evt, req: unknown) => {
+    ipcMain.handle(IPC_CMD.STOP_RUN, async (_evt, req: unknown) => {
         if (!isStopRunRequest(req)) {
             throw new Error("Invalid stop run request");
         }
-        return agentRestClient.stopRun(req);
+        const stoppedRun = await agentRestClient.stopRun(req);
+        runtime.activeRun = null;
+        runtime.runSegments = [];
+        pushStatePatch({ activeRun: null, runSegments: [] });
+        return stoppedRun;
     });
 
     ipcMain.handle(IPC_CMD.LIST_MINING_TOOLS, async () => {

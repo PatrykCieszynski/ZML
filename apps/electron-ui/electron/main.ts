@@ -22,6 +22,7 @@ import { startMockPositionSource } from "./mocks/mockPositionSource.ts";
 import { pushPosition } from "./ipc/pushPosition.ts";
 import { pushStatePatch } from "./ipc/pushStatePatch.ts";
 import { applyMiningEvent, replaceMiningClaims, replaceMiningDrops } from "./mining/miningDropsState.ts";
+import { applyRunEvent, replaceActiveRun, replaceRunSegments } from "./runs/runSegmentsState.ts";
 import type { PositionSourceOptions, PositionSourceStatus, StopPositionSource } from "./agent/positionSource.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -81,6 +82,7 @@ function handleEventStreamStatus(status: AgentEventStreamStatus, err?: string) {
 
   if (status === "connected") {
     void refreshMiningSnapshot();
+    void refreshRunSnapshot();
   }
 }
 
@@ -96,6 +98,22 @@ async function refreshMiningSnapshot() {
     runtime.lastError = error instanceof Error ? error.message : String(error);
     pushStatePatch({
       streams: { ...runtime.streams },
+    });
+  }
+}
+
+async function refreshRunSnapshot() {
+  try {
+    const activeRun = await agentRestClient.getActiveRun();
+    const runSegments = activeRun === null
+      ? []
+      : await agentRestClient.listActiveRunSegments();
+    replaceActiveRun(activeRun);
+    replaceRunSegments(runSegments);
+  } catch (error) {
+    runtime.lastError = error instanceof Error ? error.message : String(error);
+    pushStatePatch({
+      agent: { ...runtime.agent },
     });
   }
 }
@@ -130,8 +148,13 @@ function startEventStream() {
   stopEventStream = startAgentEventStream({
     baseUrl: BACKEND_URL,
     onStatus: handleEventStreamStatus,
-    onEvent: applyMiningEvent,
+    onEvent: applyAgentEvent,
   });
+}
+
+function applyAgentEvent(event: Parameters<typeof applyMiningEvent>[0]): void {
+  applyMiningEvent(event);
+  applyRunEvent(event);
 }
 
 function stopPositionStreamIfRunning() {
@@ -159,6 +182,7 @@ async function createWindows() {
   // backend connector (single source of truth)
   startPositionStream();
   startEventStream();
+  void refreshRunSnapshot();
   void refreshMiningToolSnapshot();
 }
 

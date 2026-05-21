@@ -11,6 +11,7 @@ import type {
   PushStatePatch,
   RuntimeStatePatch,
   RunDto,
+  RunSegmentDto,
   SetActiveMiningToolsRequest,
   StartRunRequest,
   StopRunRequest,
@@ -23,6 +24,9 @@ type Unsubscribe = () => void;
 type ZmlApi = {
   getBootstrapState: (windowType: WindowType) => Promise<BootstrapState>;
   getAgentHealth: () => Promise<AgentHealthDto>;
+  getActiveRun: () => Promise<RunDto | null>;
+  listActiveRunSegments: () => Promise<RunSegmentDto[]>;
+  listRunSegments: (runId: number) => Promise<RunSegmentDto[]>;
   startRun: (request: StartRunRequest) => Promise<RunDto>;
   stopRun: (request?: StopRunRequest) => Promise<RunDto>;
   listMiningTools: () => Promise<MiningToolProfileDto[]>;
@@ -42,6 +46,18 @@ const api: ZmlApi = {
 
   async getAgentHealth() {
     return ipcRenderer.invoke(IPC_CMD.GET_AGENT_HEALTH) as Promise<AgentHealthDto>;
+  },
+
+  async getActiveRun() {
+    return ipcRenderer.invoke(IPC_CMD.GET_ACTIVE_RUN) as Promise<RunDto | null>;
+  },
+
+  async listActiveRunSegments() {
+    return ipcRenderer.invoke(IPC_CMD.LIST_ACTIVE_RUN_SEGMENTS) as Promise<RunSegmentDto[]>;
+  },
+
+  async listRunSegments(runId) {
+    return ipcRenderer.invoke(IPC_CMD.LIST_RUN_SEGMENTS, runId) as Promise<RunSegmentDto[]>;
   },
 
   async startRun(request) {
