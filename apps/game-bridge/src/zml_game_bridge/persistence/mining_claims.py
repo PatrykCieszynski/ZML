@@ -74,6 +74,16 @@ class MiningClaimReader:
         )
         return [_row_to_mining_claim(row) for row in cur.fetchall()]
 
+    def list_all(self) -> list[MiningClaimRow]:
+        cur = self._conn.execute(
+            """
+            SELECT *
+            FROM mining_claims
+            ORDER BY observed_ts_ms DESC, created_event_id DESC
+            """,
+        )
+        return [_row_to_mining_claim(row) for row in cur.fetchall()]
+
 
 class MiningClaimProjector(EventProjector):
     def project(

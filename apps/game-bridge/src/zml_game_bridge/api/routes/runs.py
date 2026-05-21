@@ -19,7 +19,7 @@ router = APIRouter(prefix="/api/v1/runs", tags=["runs"])
 
 def get_run_conn(request: Request) -> Iterator[sqlite3.Connection]:
     runtime = cast(AppRuntime, request.app.state.runtime)
-    conn = open_sqlite(runtime.db_path)
+    conn = open_sqlite(runtime.db_path, check_same_thread=False)
     ensure_schema(conn)
     try:
         yield conn

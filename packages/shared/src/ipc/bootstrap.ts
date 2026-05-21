@@ -1,5 +1,6 @@
 import type { WindowType } from "./windowType";
 import type { OcrPositionDTO } from "../dto/ocrPosition";
+import type { MiningClaimDto } from "../dto/miningClaims";
 import type { MiningDropDto } from "../dto/miningDrops";
 
 export const IPC_VERSION = 1 as const;
@@ -32,5 +33,6 @@ export type BootstrapState = {
 
     // Last known position (if any)
     position?: OcrPositionDTO;
+    miningClaims?: MiningClaimDto[];
     miningDrops?: MiningDropDto[];
 };

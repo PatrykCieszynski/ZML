@@ -107,8 +107,10 @@ def _default_chat_log_path() -> Path | None:
     if env_path is not None:
         return env_path
 
-    # Keep local development predictable. Switch to find_entropia_chat_log() once
-    # app settings expose explicit chat.log selection.
+    detected_path = find_entropia_chat_log()
+    if detected_path is not None:
+        return detected_path
+
     return Path("testing/chat.log")
 
 

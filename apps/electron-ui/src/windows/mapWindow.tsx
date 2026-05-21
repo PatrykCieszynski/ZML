@@ -20,7 +20,12 @@ export function MapWindow() {
 
   return (
       <div style={{ position: "fixed", inset: 0, background: "#000" }}>
-        <MapViewport planetId={planetId} point={point} miningDrops={state.miningDrops} />
+        <MapViewport
+          planetId={planetId}
+          point={point}
+          miningClaims={state.miningClaims}
+          miningDrops={state.miningDrops}
+        />
 
         {/* overlays */}
         {state.error && (

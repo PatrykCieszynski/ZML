@@ -24,7 +24,7 @@ def get_event_reader(request: Request) -> Iterator[EventReader]:
     - always closes
     """
     runtime = cast(AppRuntime, request.app.state.runtime)
-    event_reader = EventReader(db_path=runtime.db_path)
+    event_reader = EventReader(db_path=runtime.db_path, check_same_thread=False)
     event_reader.open()
     try:
         yield event_reader
@@ -73,7 +73,7 @@ async def events_stream(request: Request) -> StreamingResponse:
     if hub is None:
 
         async def empty() -> AsyncIterator[str]:
-            yield "event: error\ndata: {\"error\":\"sse hub not configured\"}\n\n"
+            yield 'event: error\ndata: {"error":"sse hub not configured"}\n\n'
 
         return StreamingResponse(empty(), media_type="text/event-stream")
 

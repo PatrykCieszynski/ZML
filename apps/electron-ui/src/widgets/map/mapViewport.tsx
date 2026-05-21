@@ -5,10 +5,10 @@ import {
   type OrthographicViewState,
   type ViewStateChangeParameters,
 } from "@deck.gl/core";
-import type { MiningDropDto, PlanetId } from "@zml/shared";
+import type { MiningClaimDto, MiningDropDto, PlanetId } from "@zml/shared";
 import { createClaimPointLayer, createClaimTimerLayer } from "./layers/claimLayers";
 import { createMapTileLayer } from "./layers/mapTileLayer";
-import { createMiningDropRadiusLayer, createMiningHitTimerLayer } from "./layers/miningDropLayers";
+import { createMiningDropRadiusLayer } from "./layers/miningDropLayers";
 import { createPlayerMarkerLayer, createPlayerRangeLayer } from "./layers/playerLayers";
 import { compactLayers } from "./mapLayerUtils";
 import {
@@ -17,7 +17,7 @@ import {
   type EntropiaMapPoint,
 } from "./mapProjection";
 import { createDebugClaims } from "./mocks/debugClaims";
-import type { DeckPoint, MapMiningDrop } from "./mapTypes";
+import type { ClaimResourceKind, DeckPoint, MapClaim, MapMiningDrop } from "./mapTypes";
 
 const MAP_VIEW = new OrthographicView({
   id: "map",
@@ -39,10 +39,12 @@ function nowSec(): number {
 export function MapViewport({
   planetId,
   point,
+  miningClaims,
   miningDrops,
 }: {
   planetId: PlanetId;
   point: EntropiaMapPoint | null;
+  miningClaims: readonly MiningClaimDto[];
   miningDrops: readonly MiningDropDto[];
 }) {
   const [viewState, setViewState] = useState<OrthographicViewState>(() =>
@@ -84,9 +86,32 @@ export function MapViewport({
       DEFAULT_PLAYER_RADIUS_M,
     [miningDrops, planetId],
   );
-  const hasMiningHitTimers = useMemo(
-    () => mapMiningDrops.some((drop) => drop.result === "hit" && drop.hitExpiresAtSec !== null),
-    [mapMiningDrops],
+  const mapMiningClaims = useMemo<MapClaim[]>(
+    () =>
+      miningClaims.flatMap((claim) => {
+        if (claim.status !== "active" || !claim.position || !isClaimOnPlanet(planetId, claim)) {
+          return [];
+        }
+
+        return [
+          {
+            id: claim.claimId,
+            x: claim.position.x,
+            y: claim.position.y,
+            position: entropiaToDeckPosition(planetId, claim.position),
+            resourceKind: resourceKindFromName(claim.resourceName),
+            expiresAtSec:
+              claim.expectedExpiresTsMs !== null
+                ? Math.floor(claim.expectedExpiresTsMs / 1000)
+                : null,
+          },
+        ];
+      }),
+    [miningClaims, planetId],
+  );
+  const hasClaimTimers = useMemo(
+    () => mapMiningClaims.some((claim) => claim.expiresAtSec !== null),
+    [mapMiningClaims],
   );
 
   useEffect(() => {
@@ -94,11 +119,11 @@ export function MapViewport({
   }, [planetId]);
 
   useEffect(() => {
-    if (!DEBUG_CLAIMS_ENABLED && !hasMiningHitTimers) return;
+    if (!DEBUG_CLAIMS_ENABLED && !hasClaimTimers) return;
 
     const timer = window.setInterval(() => setCurrentSec(nowSec()), 1000);
     return () => window.clearInterval(timer);
-  }, [hasMiningHitTimers]);
+  }, [hasClaimTimers]);
 
   const tileLayer = useMemo(() => createMapTileLayer(planetId), [planetId]);
   const debugClaims = useMemo(
@@ -109,10 +134,14 @@ export function MapViewport({
     [debugClaimSeedSec, planetId],
   );
 
-  const debugClaimPointLayer = useMemo(() => createClaimPointLayer(debugClaims), [debugClaims]);
-  const debugClaimTimerLayer = useMemo(
-    () => createClaimTimerLayer(debugClaims, currentSec),
-    [currentSec, debugClaims],
+  const activeClaims = useMemo(
+    () => (DEBUG_CLAIMS_ENABLED ? [...mapMiningClaims, ...debugClaims] : mapMiningClaims),
+    [debugClaims, mapMiningClaims],
+  );
+  const claimPointLayer = useMemo(() => createClaimPointLayer(activeClaims), [activeClaims]);
+  const claimTimerLayer = useMemo(
+    () => createClaimTimerLayer(activeClaims, currentSec),
+    [activeClaims, currentSec],
   );
   const playerRangeLayer = useMemo(
     () => createPlayerRangeLayer(planetId, marker, playerRangeRadiusM),
@@ -123,26 +152,19 @@ export function MapViewport({
     () => createMiningDropRadiusLayer(planetId, mapMiningDrops),
     [mapMiningDrops, planetId],
   );
-  const miningHitTimerLayer = useMemo(
-    () => createMiningHitTimerLayer(mapMiningDrops, currentSec),
-    [currentSec, mapMiningDrops],
-  );
-
   const layers = useMemo(
     () =>
       compactLayers([
         tileLayer,
         miningDropRadiusLayer,
-        miningHitTimerLayer,
-        debugClaimPointLayer,
-        debugClaimTimerLayer,
+        claimPointLayer,
+        claimTimerLayer,
         playerRangeLayer,
         playerMarkerLayer,
       ]),
     [
-      debugClaimPointLayer,
-      debugClaimTimerLayer,
-      miningHitTimerLayer,
+      claimPointLayer,
+      claimTimerLayer,
       miningDropRadiusLayer,
       playerMarkerLayer,
       playerRangeLayer,
@@ -185,4 +207,18 @@ function isDropOnPlanet(planetId: PlanetId, drop: MiningDropDto): boolean {
   const planetName = drop.position?.planetName;
   if (!planetName) return true;
   return planetName.toLowerCase() === planetId;
+}
+
+function isClaimOnPlanet(planetId: PlanetId, claim: MiningClaimDto): boolean {
+  const planetName = claim.position?.planetName;
+  if (!planetName) return true;
+  return planetName.toLowerCase() === planetId;
+}
+
+function resourceKindFromName(resourceName: string | null): ClaimResourceKind {
+  const normalized = resourceName?.trim().toLowerCase();
+  if (normalized === "crude oil") return "crude_oil";
+  if (normalized === "lysterium stone") return "lysterium_stone";
+  if (normalized === "belkar stone") return "belkar_stone";
+  return "unknown";
 }

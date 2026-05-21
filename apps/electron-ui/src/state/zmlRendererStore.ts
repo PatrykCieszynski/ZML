@@ -4,6 +4,7 @@ import type {
   BootstrapAgentState,
   BootstrapState,
   BootstrapStreamsState,
+  MiningClaimDto,
   MiningDropDto,
   OcrPositionDTO,
   OcrPositionEvent,
@@ -21,6 +22,7 @@ export type ZmlRendererState = {
   position?: OcrPositionDTO;
   positionEvent?: OcrPositionEvent;
   activeRun?: RunDto;
+  miningClaims: MiningClaimDto[];
   miningDrops: MiningDropDto[];
   agentHealth?: AgentHealthDto;
   agentHealthChecking: boolean;
@@ -36,6 +38,7 @@ const initialState: ZmlRendererState = {
   bootstrapping: false,
   agent: { status: "connecting" },
   streams: { ws: false, sse: false },
+  miningClaims: [],
   miningDrops: [],
   agentHealthChecking: false,
   runCommandPending: false,
@@ -72,6 +75,7 @@ function applyBootstrap(bootstrap: BootstrapState): void {
     agent: bootstrap.agent,
     streams: bootstrap.streams,
     position: bootstrap.position ?? state.position,
+    miningClaims: bootstrap.miningClaims ?? state.miningClaims,
     miningDrops: bootstrap.miningDrops ?? state.miningDrops,
     error: null,
     lastBootstrapTsMs: bootstrap.nowTsMs,

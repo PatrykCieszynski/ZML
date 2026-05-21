@@ -3,6 +3,8 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict
 
 from zml_game_bridge.domain.money import mpec_to_int
+from zml_game_bridge.domain.position import WorldPos
+from zml_game_bridge.persistence.mining_claims import MiningClaimRow
 from zml_game_bridge.persistence.mining_drops import MiningDropRow
 
 
@@ -89,3 +91,73 @@ class MiningDropDto(BaseModel):
             range_m=row.range_m,
             depth_m=row.depth_m,
         )
+
+
+class MiningClaimPositionDto(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    planet_name: str | None
+    x: int
+    y: int
+    z: int | None = None
+
+
+class MiningClaimDto(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    claim_id: str
+    created_event_id: int
+    hit_id: str | None
+    drop_id: str | None
+    observed_ts_ms: int
+    position: MiningClaimPositionDto | None
+    search_radius_m: float | None
+    resource_name: str | None
+    size_label: str | None
+    size_index: int | None
+    expected_expires_ts_ms: int | None
+    range_m: float | None
+    depth_m: float | None
+    status: str
+    depleted_event_id: int | None
+    depleted_event_dt: str | None
+    depleted_position: MiningClaimPositionDto | None
+    depleted_distance_m: float | None
+
+    @classmethod
+    def from_row(cls, row: MiningClaimRow) -> MiningClaimDto:
+        return cls(
+            claim_id=row.claim_id,
+            created_event_id=row.created_event_id,
+            hit_id=row.hit_id,
+            drop_id=row.drop_id,
+            observed_ts_ms=row.observed_ts_ms,
+            position=_claim_position_dto(row.position),
+            search_radius_m=row.search_radius_m,
+            resource_name=row.resource_name,
+            size_label=row.size_label,
+            size_index=row.size_index,
+            expected_expires_ts_ms=row.expected_expires_ts_ms,
+            range_m=row.range_m,
+            depth_m=row.depth_m,
+            status=row.status,
+            depleted_event_id=row.depleted_event_id,
+            depleted_event_dt=(
+                row.depleted_event_dt.isoformat() if row.depleted_event_dt is not None else None
+            ),
+            depleted_position=_claim_position_dto(row.depleted_position),
+            depleted_distance_m=row.depleted_distance_m,
+        )
+
+
+def _claim_position_dto(position: WorldPos | None) -> MiningClaimPositionDto | None:
+    return (
+        MiningClaimPositionDto(
+            planet_name=position.planet_name,
+            x=position.x,
+            y=position.y,
+            z=position.z,
+        )
+        if position is not None
+        else None
+    )

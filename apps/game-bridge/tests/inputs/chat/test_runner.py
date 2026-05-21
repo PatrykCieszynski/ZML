@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import threading
+from pathlib import Path
 
 from zml_game_bridge.inputs.chat import runner as chat_runner
 from zml_game_bridge.inputs.chat.model import ChannelType, ChatLine
@@ -23,12 +24,14 @@ def _mk_line(message: str) -> ChatLine:
     )
 
 
-def test_chat_runner_emits_signal(monkeypatch) -> None:
+def test_chat_runner_emits_signal(monkeypatch, tmp_path: Path) -> None:
     # Tailer yields exactly one line
     monkeypatch.setattr(chat_runner, "tail_lines", lambda *a, **k: iter(["RAW"]))
 
     # Parser returns a ChatLine
-    monkeypatch.setattr(chat_runner, "parse_chat_line", lambda raw: _mk_line("This resource is depleted"))
+    monkeypatch.setattr(
+        chat_runner, "parse_chat_line", lambda raw: _mk_line("This resource is depleted")
+    )
 
     # Interpreter returns a domain event
     monkeypatch.setattr(
@@ -48,7 +51,12 @@ def test_chat_runner_emits_signal(monkeypatch) -> None:
         out.append(ev)
 
     stop = threading.Event()
-    chat_runner.start_chat_input(path=None, signal_sink=sink, stop_event=stop, start_at_end=True)  # type: ignore[arg-type]
+    chat_runner.start_chat_input(
+        path=tmp_path / "chat.log",
+        signal_sink=sink,
+        stop_event=stop,
+        start_at_end=True,
+    )
 
     assert len(out) == 1
     assert isinstance(out[0], ResourceDepletedSignal)

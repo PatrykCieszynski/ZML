@@ -7,7 +7,8 @@ from typing import Annotated, cast
 
 from fastapi import APIRouter, Depends, Query, Request
 
-from zml_game_bridge.api.schemas.mining import MiningDropDto
+from zml_game_bridge.api.schemas.mining import MiningClaimDto, MiningDropDto
+from zml_game_bridge.persistence.mining_claims import MiningClaimReader
 from zml_game_bridge.persistence.mining_drops import MiningDropReader
 from zml_game_bridge.persistence.schema import ensure_schema
 from zml_game_bridge.persistence.sqlite import open_sqlite
@@ -18,7 +19,7 @@ router = APIRouter(prefix="/api/v1/mining", tags=["mining"])
 
 def get_mining_conn(request: Request) -> Iterator[sqlite3.Connection]:
     runtime = cast(AppRuntime, request.app.state.runtime)
-    conn = open_sqlite(runtime.db_path)
+    conn = open_sqlite(runtime.db_path, check_same_thread=False)
     ensure_schema(conn)
     try:
         yield conn
@@ -37,6 +38,18 @@ def list_mining_drops(
     since_ts_ms = _now_ms() - window_minutes * 60_000
     rows = MiningDropReader(conn).list_since(since_ts_ms=since_ts_ms)
     return [MiningDropDto.from_row(row) for row in rows]
+
+
+@router.get("/claims", response_model=list[MiningClaimDto])
+def list_mining_claims(
+    conn: MiningConn,
+    active: Annotated[bool, Query()] = True,
+) -> list[MiningClaimDto]:
+    if not active:
+        rows = MiningClaimReader(conn).list_all()
+    else:
+        rows = MiningClaimReader(conn).list_active(now_ts_ms=_now_ms())
+    return [MiningClaimDto.from_row(row) for row in rows]
 
 
 def _now_ms() -> int:

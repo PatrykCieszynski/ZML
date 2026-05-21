@@ -1,11 +1,14 @@
 import {
   isRunWire,
+  isMiningClaimWire,
   isMiningDropWire,
   startRunRequestToWire,
   stopRunRequestToWire,
+  wireToMiningClaimDto,
   wireToMiningDropDto,
   wireToRunDto,
   type AgentHealthDto,
+  type MiningClaimDto,
   type MiningDropDto,
   type RunDto,
   type StartRunRequest,
@@ -24,7 +27,12 @@ export type AgentClient = {
   getHealth: () => Promise<AgentHealthDto>;
   startRun: (request: StartRunRequest) => Promise<RunDto>;
   stopRun: (request: StopRunRequest) => Promise<RunDto>;
+  listMiningClaims: (request?: ListMiningClaimsRequest) => Promise<MiningClaimDto[]>;
   listMiningDrops: (request?: ListMiningDropsRequest) => Promise<MiningDropDto[]>;
+};
+
+export type ListMiningClaimsRequest = {
+  active?: boolean;
 };
 
 export type ListMiningDropsRequest = {
@@ -64,6 +72,21 @@ export class AgentRestClient implements AgentClient {
       throw new Error("Agent stop run returned an invalid payload");
     }
     return wireToRunDto(data);
+  }
+
+  async listMiningClaims(request: ListMiningClaimsRequest = {}): Promise<MiningClaimDto[]> {
+    const params = new URLSearchParams();
+    if (request.active !== undefined) {
+      params.set("active", request.active ? "yes" : "no");
+    }
+
+    const serializedParams = params.toString();
+    const query = serializedParams ? `?${serializedParams}` : "";
+    const data = await this.getJson(`/api/v1/mining/claims${query}`);
+    if (!Array.isArray(data) || !data.every(isMiningClaimWire)) {
+      throw new Error("Agent mining claims returned an invalid payload");
+    }
+    return data.map(wireToMiningClaimDto);
   }
 
   async listMiningDrops(request: ListMiningDropsRequest = {}): Promise<MiningDropDto[]> {

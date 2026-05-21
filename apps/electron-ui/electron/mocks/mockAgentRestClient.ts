@@ -1,6 +1,22 @@
-import type { AgentHealthDto, MiningDropDto, RunDto, StartRunRequest, StopRunRequest } from "@zml/shared";
+import type {
+    AgentHealthDto,
+    MiningClaimDto,
+    MiningDropDto,
+    RunDto,
+    StartRunRequest,
+    StopRunRequest,
+} from "@zml/shared";
 
-import type { AgentClient, ListMiningDropsRequest } from "../agent/restClient.ts";
+import type {
+    AgentClient,
+    ListMiningClaimsRequest,
+    ListMiningDropsRequest,
+} from "../agent/restClient.ts";
+
+const MOCK_MINING_CLAIMS: MiningClaimDto[] = [
+    createMockMiningClaim("mock-claim-1", Date.now() - 5 * 60_000, 58913, 84653, "Lysterium Stone"),
+    createMockMiningClaim("mock-claim-2", Date.now() - 90_000, 58940, 84667, "Crude Oil"),
+];
 
 const MOCK_MINING_DROPS: MiningDropDto[] = [
     createMockMiningDrop("mock-drop-1", Date.now() - 9 * 60_000, 58890, 84639, "no_resources"),
@@ -52,6 +68,11 @@ export class MockAgentRestClient implements AgentClient {
         return stoppedRun;
     }
 
+    async listMiningClaims(request: ListMiningClaimsRequest = {}): Promise<MiningClaimDto[]> {
+        if (request.active === false) return MOCK_MINING_CLAIMS;
+        return MOCK_MINING_CLAIMS.filter((claim) => claim.status === "active");
+    }
+
     async listMiningDrops(request: ListMiningDropsRequest = {}): Promise<MiningDropDto[]> {
         const windowMs = (request.windowMinutes ?? 30) * 60_000;
         const cutoff = Date.now() - windowMs;
@@ -101,5 +122,39 @@ function createMockMiningDrop(
         expectedExpiresTsMs: isHit ? observedTsMs + 60 * 60_000 : null,
         rangeM: isHit ? 51.14 : null,
         depthM: isHit ? 53 : null,
+    };
+}
+
+function createMockMiningClaim(
+    claimId: string,
+    observedTsMs: number,
+    x: number,
+    y: number,
+    resourceName: string,
+): MiningClaimDto {
+    return {
+        claimId,
+        createdEventId: -1,
+        hitId: `${claimId}-hit`,
+        dropId: `${claimId}-drop`,
+        observedTsMs,
+        position: {
+            planetName: "Calypso",
+            x,
+            y,
+            z: null,
+        },
+        searchRadiusM: 55,
+        resourceName,
+        sizeLabel: "Minimal",
+        sizeIndex: 1,
+        expectedExpiresTsMs: observedTsMs + 60 * 60_000,
+        rangeM: 51.14,
+        depthM: 53,
+        status: "active",
+        depletedEventId: null,
+        depletedEventDt: null,
+        depletedPosition: null,
+        depletedDistanceM: null,
     };
 }

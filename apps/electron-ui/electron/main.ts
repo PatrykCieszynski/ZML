@@ -21,7 +21,7 @@ import { MockAgentRestClient } from "./mocks/mockAgentRestClient.ts";
 import { startMockPositionSource } from "./mocks/mockPositionSource.ts";
 import { pushPosition } from "./ipc/pushPosition.ts";
 import { pushStatePatch } from "./ipc/pushStatePatch.ts";
-import { applyMiningEvent, replaceMiningDrops } from "./mining/miningDropsState.ts";
+import { applyMiningEvent, replaceMiningClaims, replaceMiningDrops } from "./mining/miningDropsState.ts";
 import type { PositionSourceOptions, PositionSourceStatus, StopPositionSource } from "./agent/positionSource.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -80,13 +80,17 @@ function handleEventStreamStatus(status: AgentEventStreamStatus, err?: string) {
   });
 
   if (status === "connected") {
-    void refreshMiningDropsSnapshot();
+    void refreshMiningSnapshot();
   }
 }
 
-async function refreshMiningDropsSnapshot() {
+async function refreshMiningSnapshot() {
   try {
-    const miningDrops = await agentRestClient.listMiningDrops({ windowMinutes: 30 });
+    const [miningClaims, miningDrops] = await Promise.all([
+      agentRestClient.listMiningClaims({ active: true }),
+      agentRestClient.listMiningDrops({ windowMinutes: 30 }),
+    ]);
+    replaceMiningClaims(miningClaims);
     replaceMiningDrops(miningDrops);
   } catch (error) {
     runtime.lastError = error instanceof Error ? error.message : String(error);

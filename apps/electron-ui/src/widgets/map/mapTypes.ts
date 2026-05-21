@@ -7,14 +7,13 @@ export type DeckPoint = {
 };
 
 export type MiningType = "ore" | "enmatter" | "treasure";
-export type ClaimResourceKind = "crude_oil" | "lysterium_stone" | "belkar_stone";
+export type ClaimResourceKind = "crude_oil" | "lysterium_stone" | "belkar_stone" | "unknown";
 
 export type MapClaim = EntropiaMapPoint & {
   id: string;
   position: DeckPosition;
-  miningType: MiningType;
   resourceKind: ClaimResourceKind;
-  expiresAtSec: number;
+  expiresAtSec: number | null;
 };
 
 export type MapMiningDrop = EntropiaMapPoint & {

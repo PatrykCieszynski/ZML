@@ -1,6 +1,6 @@
 import { MAP_CONFIG, type PlanetId } from "@zml/shared";
 import { entropiaToDeckPosition } from "../mapProjection";
-import type { ClaimResourceKind, MapClaim, MiningType } from "../mapTypes";
+import type { ClaimResourceKind, MapClaim } from "../mapTypes";
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -11,7 +11,6 @@ export function createDebugClaims(planetId: PlanetId, seedSec: number): MapClaim
   const centerX = (planet.minLon + planet.maxLon) / 2;
   const centerY = (planet.minLat + planet.maxLat) / 2;
   const resources: ClaimResourceKind[] = ["crude_oil", "lysterium_stone", "belkar_stone"];
-  const miningTypes: MiningType[] = ["enmatter", "ore", "ore"];
 
   return Array.from({ length: 320 }, (_, index) => {
     const ring = 1 + (index % 8);
@@ -25,7 +24,6 @@ export function createDebugClaims(planetId: PlanetId, seedSec: number): MapClaim
       x,
       y,
       position: entropiaToDeckPosition(planetId, { x, y }),
-      miningType: miningTypes[index % miningTypes.length],
       resourceKind: resources[index % resources.length],
       expiresAtSec: seedSec + 90 + index * 11,
     };

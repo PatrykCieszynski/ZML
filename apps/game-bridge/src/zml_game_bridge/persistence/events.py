@@ -58,12 +58,13 @@ class EventStore:
 
 
 class EventReader:
-    def __init__(self, db_path: Path) -> None:
+    def __init__(self, db_path: Path, *, check_same_thread: bool = True) -> None:
         self._db_path = db_path
+        self._check_same_thread = check_same_thread
         self._conn: sqlite3.Connection | None = None
 
     def open(self) -> None:
-        self._conn = open_sqlite(self._db_path)
+        self._conn = open_sqlite(self._db_path, check_same_thread=self._check_same_thread)
 
     def close(self) -> None:
         if self._conn is not None:
@@ -108,4 +109,3 @@ def _row_to_event_envelope(row: sqlite3.Row) -> EventEnvelope:
         event_type=str(row["event_type"]),
         payload_json=str(row["payload_json"]),
     )
-
