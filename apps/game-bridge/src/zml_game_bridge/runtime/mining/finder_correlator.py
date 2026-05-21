@@ -3,7 +3,11 @@ from __future__ import annotations
 import logging
 
 from zml_game_bridge.domain.claim_size import expected_claim_expires_ts_ms
-from zml_game_bridge.domain.mining_cost import MiningEquipmentProfile, calculate_drop_cost
+from zml_game_bridge.domain.mining_cost import (
+    MiningEquipmentProfile,
+    calculate_drop_cost,
+    effective_finder_radius_m,
+)
 from zml_game_bridge.domain.mining_events import (
     MiningDropEvent,
     MiningHitHintEvent,
@@ -106,7 +110,7 @@ class FinderDropCorrelator:
             probes_per_drop=probes_per_drop,
             ammo_per_drop=ammo_per_drop,
             cost=cost,
-            drop_radius_m=self._profile.finder.radius_m or DEFAULT_DROP_RADIUS_M,
+            drop_radius_m=effective_finder_radius_m(self._profile) or DEFAULT_DROP_RADIUS_M,
             raw_status_text=signal.raw_status_text,
         )
         self._pending_drop = event

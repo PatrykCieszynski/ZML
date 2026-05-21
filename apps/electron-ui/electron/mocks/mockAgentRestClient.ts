@@ -108,6 +108,7 @@ function createMockMiningDrop(
             ammoCostMpec: 10000,
             probesCostMpec: 0,
             finderDecayMpec: 0,
+            finderEnhancerDecayMpec: 0,
             ampDecayMpec: 0,
             totalMpec: 10000,
         },

@@ -31,6 +31,7 @@ class MiningDropRow:
     ammo_cost_mpec: Mpec
     probes_cost_mpec: Mpec
     finder_decay_mpec: Mpec
+    finder_enhancer_decay_mpec: Mpec
     amp_decay_mpec: Mpec
     total_cost_mpec: Mpec
     result: MiningDropResult
@@ -105,10 +106,10 @@ class _MiningDropProjectionWriter:
                 planet_name, x, y, z, drop_radius_m,
                 modes_mask, probes_per_drop, ammo_per_drop,
                 ammo_cost_mpec, probes_cost_mpec, finder_decay_mpec,
-                amp_decay_mpec, total_cost_mpec,
+                finder_enhancer_decay_mpec, amp_decay_mpec, total_cost_mpec,
                 result
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
             ON CONFLICT(drop_id) DO UPDATE SET
                 drop_event_id = excluded.drop_event_id,
                 observed_ts_ms = excluded.observed_ts_ms,
@@ -123,6 +124,7 @@ class _MiningDropProjectionWriter:
                 ammo_cost_mpec = excluded.ammo_cost_mpec,
                 probes_cost_mpec = excluded.probes_cost_mpec,
                 finder_decay_mpec = excluded.finder_decay_mpec,
+                finder_enhancer_decay_mpec = excluded.finder_enhancer_decay_mpec,
                 amp_decay_mpec = excluded.amp_decay_mpec,
                 total_cost_mpec = excluded.total_cost_mpec
             """,
@@ -141,6 +143,7 @@ class _MiningDropProjectionWriter:
                 mpec_to_int(event.cost.ammo.cost_mpec),
                 mpec_to_int(event.cost.probes.cost_mpec),
                 mpec_to_int(event.cost.finder_decay_mpec),
+                mpec_to_int(event.cost.finder_enhancer_decay_mpec),
                 mpec_to_int(event.cost.amp_decay_mpec),
                 mpec_to_int(event.cost.total_mpec),
             ),
@@ -223,6 +226,7 @@ def _row_to_mining_drop(row: sqlite3.Row) -> MiningDropRow:
         ammo_cost_mpec=Mpec(int(row["ammo_cost_mpec"])),
         probes_cost_mpec=Mpec(int(row["probes_cost_mpec"])),
         finder_decay_mpec=Mpec(int(row["finder_decay_mpec"])),
+        finder_enhancer_decay_mpec=Mpec(int(row["finder_enhancer_decay_mpec"])),
         amp_decay_mpec=Mpec(int(row["amp_decay_mpec"])),
         total_cost_mpec=Mpec(int(row["total_cost_mpec"])),
         result=cast(MiningDropResult, row["result"]),

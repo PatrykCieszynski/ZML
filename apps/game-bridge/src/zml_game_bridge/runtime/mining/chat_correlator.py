@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -21,6 +22,7 @@ from zml_game_bridge.inputs.chat.signals import (
 from zml_game_bridge.resources.mining_resources import MiningResourceCatalog
 
 logger = logging.getLogger(__name__)
+ExtractionCostProvider = Callable[[], Mpec | None]
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,9 +36,15 @@ class PendingClaimDeed:
 
 
 class MiningChatCorrelator:
-    def __init__(self, *, resource_catalog: MiningResourceCatalog | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        resource_catalog: MiningResourceCatalog | None = None,
+        extraction_cost_provider: ExtractionCostProvider | None = None,
+    ) -> None:
         self._pending_deeds: list[PendingClaimDeed] = []
         self._resource_catalog = resource_catalog or MiningResourceCatalog()
+        self._extraction_cost_provider = extraction_cost_provider or _missing_extraction_cost
 
     def process(self, signal: EventBase) -> list[EventBase]:
         if not isinstance(signal, ChatSignalBase):
@@ -122,13 +130,16 @@ class MiningChatCorrelator:
             qty=signal.qty,
             value_mpec=signal.value_mpec,
             raw=signal.raw,
+            extraction_cost_mpec=self._extraction_cost_provider(),
         )
         logger.debug(
-            "item_received_recorded event_type=%s item=%r qty=%s value_mpec=%s event_dt=%s",
+            "item_received_recorded event_type=%s item=%r qty=%s value_mpec=%s "
+            "extraction_cost_mpec=%s event_dt=%s",
             type(event).__name__,
             event.item_name,
             event.qty,
             event.value_mpec,
+            event.extraction_cost_mpec,
             event.event_dt,
         )
         return event
@@ -180,3 +191,7 @@ def _mining_type_from_deed_item_name(item_name: str) -> str | None:
             return "treasure"
         case _:
             return None
+
+
+def _missing_extraction_cost() -> Mpec | None:
+    return None

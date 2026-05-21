@@ -8,6 +8,7 @@ export type MiningDropCostDto = {
     ammoCostMpec: number;
     probesCostMpec: number;
     finderDecayMpec: number;
+    finderEnhancerDecayMpec: number;
     ampDecayMpec: number;
     totalMpec: number;
 };
@@ -46,6 +47,7 @@ export type MiningDropCostWire = {
     ammo_cost_mpec: number;
     probes_cost_mpec: number;
     finder_decay_mpec: number;
+    finder_enhancer_decay_mpec: number;
     amp_decay_mpec: number;
     total_mpec: number;
 };
@@ -83,6 +85,7 @@ type MiningDropEventCostWire = {
     ammo: MiningDropEventCostComponentWire;
     probes: MiningDropEventCostComponentWire;
     finder_decay_mpec: number;
+    finder_enhancer_decay_mpec?: number;
     amp_decay_mpec: number;
     total_mpec: number;
 };
@@ -206,6 +209,7 @@ export function wireToMiningDropDto(wire: MiningDropWire): MiningDropDto {
             ammoCostMpec: wire.cost.ammo_cost_mpec,
             probesCostMpec: wire.cost.probes_cost_mpec,
             finderDecayMpec: wire.cost.finder_decay_mpec,
+            finderEnhancerDecayMpec: wire.cost.finder_enhancer_decay_mpec,
             ampDecayMpec: wire.cost.amp_decay_mpec,
             totalMpec: wire.cost.total_mpec,
         },
@@ -240,6 +244,7 @@ export function miningDropDtoFromMiningDropEventWire(
             ammoCostMpec: wire.cost.ammo.cost_mpec,
             probesCostMpec: wire.cost.probes.cost_mpec,
             finderDecayMpec: wire.cost.finder_decay_mpec,
+            finderEnhancerDecayMpec: wire.cost.finder_enhancer_decay_mpec ?? 0,
             ampDecayMpec: wire.cost.amp_decay_mpec,
             totalMpec: wire.cost.total_mpec,
         },
@@ -306,6 +311,7 @@ function isMiningDropCostWire(value: unknown): value is MiningDropCostWire {
         isFiniteNumber(value.ammo_cost_mpec) &&
         isFiniteNumber(value.probes_cost_mpec) &&
         isFiniteNumber(value.finder_decay_mpec) &&
+        isFiniteNumber(value.finder_enhancer_decay_mpec) &&
         isFiniteNumber(value.amp_decay_mpec) &&
         isFiniteNumber(value.total_mpec)
     );
@@ -317,6 +323,8 @@ function isMiningDropEventCostWire(value: unknown): value is MiningDropEventCost
         isCostComponentWire(value.ammo) &&
         isCostComponentWire(value.probes) &&
         isFiniteNumber(value.finder_decay_mpec) &&
+        (value.finder_enhancer_decay_mpec === undefined ||
+            isFiniteNumber(value.finder_enhancer_decay_mpec)) &&
         isFiniteNumber(value.amp_decay_mpec) &&
         isFiniteNumber(value.total_mpec)
     );

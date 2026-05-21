@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from zml_game_bridge.domain.mining_cost import MiningEquipmentProfile
+from zml_game_bridge.domain.mining_cost import MiningEquipmentProfile, calculate_extraction_cost
 from zml_game_bridge.events.base import EventBase
 from zml_game_bridge.resources.mining_resources import MiningResourceCatalog
 from zml_game_bridge.runtime.mining.chat_correlator import MiningChatCorrelator
@@ -37,7 +37,10 @@ class MiningCoordinator:
             config=resolved_config,
             id_factory=id_factory,
         )
-        self._chat = MiningChatCorrelator(resource_catalog=resource_catalog)
+        self._chat = MiningChatCorrelator(
+            resource_catalog=resource_catalog,
+            extraction_cost_provider=lambda: calculate_extraction_cost(resolved_profile),
+        )
         self._claim_lifecycle = ClaimLifecycleCorrelator(
             config=resolved_config,
             id_factory=id_factory,

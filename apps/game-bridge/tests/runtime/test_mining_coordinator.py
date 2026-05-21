@@ -4,7 +4,11 @@ from datetime import datetime
 from pathlib import Path
 
 from zml_game_bridge.domain.mining import MiningMode
-from zml_game_bridge.domain.mining_cost import MiningEquipmentProfile, MiningToolProfile
+from zml_game_bridge.domain.mining_cost import (
+    FinderRangeEnhancerLoadout,
+    MiningEquipmentProfile,
+    MiningToolProfile,
+)
 from zml_game_bridge.domain.mining_events import (
     MiningClaimCreatedEvent,
     MiningClaimDeedReceivedEvent,
@@ -17,6 +21,7 @@ from zml_game_bridge.domain.mining_events import (
 )
 from zml_game_bridge.domain.money import Mpec, mpec_to_int
 from zml_game_bridge.domain.position import WorldPos
+from zml_game_bridge.domain.rate import percent
 from zml_game_bridge.inputs.chat.model import ChannelType
 from zml_game_bridge.inputs.chat.signals import (
     EnhancerBrokeSignal,
@@ -72,7 +77,29 @@ def test_mining_coordinator_records_probe_drop_with_current_units() -> None:
     assert mpec_to_int(drop.cost.ammo.cost_mpec) == 10_000
     assert drop.cost.ammo.source == "ocr"
     assert mpec_to_int(drop.cost.finder_decay_mpec) == 100
+    assert mpec_to_int(drop.cost.finder_enhancer_decay_mpec) == 0
     assert mpec_to_int(drop.cost.total_mpec) == 10_100
+
+
+def test_mining_coordinator_applies_finder_range_enhancer_to_drop_cost_and_radius() -> None:
+    coordinator = MiningCoordinator(
+        profile=MiningEquipmentProfile(
+            finder=MiningToolProfile(name="Finder", decay_mpec=Mpec(1_000), radius_m=55.0),
+            finder_range_enhancers=FinderRangeEnhancerLoadout(count=1),
+        ),
+        id_factory=_id_factory("drop-1"),
+    )
+
+    events = coordinator.process(
+        ProbeFiredSignal(ts_ms=1_000, position=None, modes_mask=1, ammo_per_drop=1_000)
+    )
+
+    drop = events[0]
+    assert isinstance(drop, MiningDropEvent)
+    assert drop.drop_radius_m == 55.55
+    assert mpec_to_int(drop.cost.finder_decay_mpec) == 1_000
+    assert mpec_to_int(drop.cost.finder_enhancer_decay_mpec) == 100
+    assert mpec_to_int(drop.cost.total_mpec) == 11_100
 
 
 def test_mining_coordinator_uses_current_modes_when_probe_signal_lacks_modes() -> None:
@@ -568,6 +595,33 @@ def test_mining_coordinator_records_item_received_chat_event() -> None:
     assert event.item_name == "Blue Crystal"
     assert event.qty == 8
     assert event.value_mpec == Mpec(16_000)
+    assert event.extraction_cost_mpec is None
+
+
+def test_mining_coordinator_adds_extractor_cost_to_item_received_event() -> None:
+    coordinator = MiningCoordinator(
+        profile=MiningEquipmentProfile(
+            finder=MiningToolProfile(name="Finder", decay_mpec=Mpec(0)),
+            extractor=MiningToolProfile(name="Extractor", decay_mpec=Mpec(100), markup=percent("125")),
+        )
+    )
+    event_dt = datetime(2026, 1, 10, 12, 37, 50)
+
+    events = coordinator.process(
+        ItemReceivedSignal(
+            event_dt=event_dt,
+            channel_type=ChannelType.SYSTEM,
+            channel_token="System",
+            raw="2026-01-10 12:37:50 [System] [] You received Blue Crystal x (8) Value: 0.1600 PED",
+            item_name="Blue Crystal",
+            qty=8,
+            value_mpec=Mpec(16_000),
+        )
+    )
+
+    event = events[0]
+    assert isinstance(event, MiningItemReceivedEvent)
+    assert event.extraction_cost_mpec == Mpec(125)
 
 
 def test_mining_coordinator_ignores_unknown_item_received_chat_event(tmp_path: Path) -> None:

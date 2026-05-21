@@ -23,6 +23,7 @@ class MiningDropCostDto(BaseModel):
     ammo_cost_mpec: int
     probes_cost_mpec: int
     finder_decay_mpec: int
+    finder_enhancer_decay_mpec: int
     amp_decay_mpec: int
     total_mpec: int
 
@@ -76,6 +77,7 @@ class MiningDropDto(BaseModel):
                 ammo_cost_mpec=mpec_to_int(row.ammo_cost_mpec),
                 probes_cost_mpec=mpec_to_int(row.probes_cost_mpec),
                 finder_decay_mpec=mpec_to_int(row.finder_decay_mpec),
+                finder_enhancer_decay_mpec=mpec_to_int(row.finder_enhancer_decay_mpec),
                 amp_decay_mpec=mpec_to_int(row.amp_decay_mpec),
                 total_mpec=mpec_to_int(row.total_cost_mpec),
             ),
