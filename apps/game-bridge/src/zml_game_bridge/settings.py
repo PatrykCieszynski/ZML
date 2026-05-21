@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
+import threading
 from dataclasses import dataclass, field
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from types import TracebackType
 
 
 def get_documents_dir() -> Path:
@@ -102,6 +106,15 @@ def _default_db_path() -> Path:
     return Path(app_data) / "zabu-mining-log" / "db" / "zabu-mining-log.sqlite3"
 
 
+def _default_error_log_path() -> Path:
+    env_path = _env_path("ZML_ERROR_LOG_PATH")
+    if env_path is not None:
+        return env_path
+
+    app_data = os.getenv("LOCALAPPDATA") or os.getenv("APPDATA") or str(Path.home())
+    return Path(app_data) / "zabu-mining-log" / "logs" / "errors.log"
+
+
 def _default_chat_log_path() -> Path | None:
     env_path = _env_path("ZML_CHAT_LOG_PATH")
     if env_path is not None:
@@ -142,10 +155,63 @@ def _default_mock_mining_interval_ms() -> int:
 
 def configure_logging_from_env() -> None:
     logging_level = os.getenv("ZML_LOG_LEVEL", "INFO").strip().upper()
-    logging.basicConfig(
-        level=getattr(logging, logging_level, logging.INFO),
-        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    log_format = "%(asctime)s %(levelname)s [%(name)s] %(message)s"
+    root_logger = logging.getLogger()
+    root_logger.handlers.clear()
+    root_logger.setLevel(logging.DEBUG)
+
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(getattr(logging, logging_level, logging.INFO))
+    console_handler.setFormatter(logging.Formatter(log_format))
+    root_logger.addHandler(console_handler)
+
+    error_log_path = _default_error_log_path()
+    error_log_path.parent.mkdir(parents=True, exist_ok=True)
+    error_file_handler = RotatingFileHandler(
+        error_log_path,
+        maxBytes=1_000_000,
+        backupCount=3,
+        encoding="utf-8",
     )
+    error_file_handler.setLevel(logging.ERROR)
+    error_file_handler.setFormatter(logging.Formatter(log_format))
+    root_logger.addHandler(error_file_handler)
+
+    _install_exception_hooks()
+
+
+def _install_exception_hooks() -> None:
+    def log_unhandled_exception(
+        exc_type: type[BaseException],
+        exc_value: BaseException,
+        exc_traceback: TracebackType | None,
+    ) -> None:
+        if issubclass(exc_type, KeyboardInterrupt):
+            sys.__excepthook__(exc_type, exc_value, exc_traceback)
+            return
+        logging.getLogger(__name__).critical(
+            "unhandled_runtime_exception",
+            exc_info=(exc_type, exc_value, exc_traceback),
+        )
+
+    def log_thread_exception(args: threading.ExceptHookArgs) -> None:
+        if issubclass(args.exc_type, KeyboardInterrupt):
+            return
+        if args.exc_value is None:
+            logging.getLogger(__name__).critical(
+                "unhandled_thread_exception thread_name=%s exc_type=%s",
+                args.thread.name if args.thread is not None else None,
+                args.exc_type.__name__,
+            )
+            return
+        logging.getLogger(__name__).critical(
+            "unhandled_thread_exception thread_name=%s",
+            args.thread.name if args.thread is not None else None,
+            exc_info=(args.exc_type, args.exc_value, args.exc_traceback),
+        )
+
+    sys.excepthook = log_unhandled_exception
+    threading.excepthook = log_thread_exception
 
 
 @dataclass(frozen=True, slots=True)

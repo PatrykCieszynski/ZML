@@ -17,7 +17,13 @@ logger = logging.getLogger(__name__)
 
 def create_app() -> FastAPI:
     settings = Settings()
-    logger.info("Starting ZML Game Bridge with chat_log_path=%s", settings.chat_log_path)
+    logger.info(
+        "api_started host=%s port=%s db_path=%s chat_log_path=%s",
+        settings.host,
+        settings.port,
+        settings.db_path,
+        settings.chat_log_path,
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):

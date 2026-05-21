@@ -1,7 +1,10 @@
+import logging
 from threading import Lock
 
 from zml_game_bridge.events.bus import EventHandler, PersistedEventBus, Subscription
 from zml_game_bridge.events.envelope import EventEnvelope
+
+logger = logging.getLogger(__name__)
 
 
 class InMemoryPersistedEventBus(PersistedEventBus):
@@ -17,11 +20,13 @@ class InMemoryPersistedEventBus(PersistedEventBus):
         for handler in handlers:
             try:
                 handler(envelope)
-            except Exception as e:
-                #TODO log error properly
-                print(f"Error in event handler: {e}")
+            except Exception:
+                logger.exception(
+                    "persisted_event_handler_failed event_id=%s event_type=%s",
+                    envelope.event_id,
+                    envelope.event_type,
+                )
                 continue
-
 
     def subscribe(self, handler: EventHandler) -> Subscription:
         with self._lock:
@@ -34,7 +39,6 @@ class InMemoryPersistedEventBus(PersistedEventBus):
                 self._handlers.pop(sub_id, None)
 
         return Subscription(unsubscribe=unsubscribe)
-
 
     def close(self) -> None:
         with self._lock:

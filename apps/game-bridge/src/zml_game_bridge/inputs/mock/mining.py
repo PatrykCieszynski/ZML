@@ -77,6 +77,7 @@ def start_mock_mining_input(
 ) -> None:
     interval_s = max(MIN_INTERVAL_MS, interval_ms) / 1_000
     start_ts_ms = _now_ms()
+    logger.info("mock_mining_input_started interval_ms=%s", interval_ms)
 
     for signal in iter_mock_mining_signals(start_ts_ms=start_ts_ms, drop_count=0):
         if stop_event.is_set():
@@ -156,8 +157,8 @@ def _log_mock_signal(
     | FinderHitHintSignal
     | FinderNoResourcesSignal,
 ) -> None:
-    logger.info(
-        "mock mining signal type=%s ts=%s position=%s modes=%s ammo=%s resource=%s",
+    logger.debug(
+        "mock_mining_signal signal_type=%s ts=%s position=%s modes=%s ammo=%s resource=%s",
         type(signal).__name__,
         signal.ts_ms,
         getattr(signal, "position", None),

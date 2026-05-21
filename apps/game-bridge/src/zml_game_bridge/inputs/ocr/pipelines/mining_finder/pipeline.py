@@ -244,8 +244,8 @@ class MiningFinderPipeline:
             return
 
         if features.status_kind != self._last_status_kind:
-            logger.info(
-                "finder status ts=%s %s -> %s modes=%s units=(probes=%s ammo=%s) "
+            logger.debug(
+                "finder_status_changed ts=%s previous=%s current=%s modes=%s units=(probes=%s ammo=%s) "
                 "radar=%s raw_status=%r raw_details=%r",
                 ts_ms,
                 self._last_status_kind,
@@ -259,8 +259,8 @@ class MiningFinderPipeline:
             )
 
         for signal in signals:
-            logger.info(
-                "finder signal ts=%s kind=%s modes=%s units=(probes=%s ammo=%s) "
+            logger.debug(
+                "finder_signal_emitted ts=%s kind=%s modes=%s units=(probes=%s ammo=%s) "
                 "resource=%r size=%r range_m=%s depth_m=%s raw=%r",
                 signal.ts_ms,
                 signal.kind,

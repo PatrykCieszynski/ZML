@@ -21,7 +21,9 @@ dev = [
     "pyright>=1.1.408",
     "pytest>=9.0.2",
     "pytest-timeout>=2.4.0",
+    "rich>=14.2.0",
     "ruff>=0.14.11",
+    "typer>=0.20.0",
 ]
 
 [build-system]

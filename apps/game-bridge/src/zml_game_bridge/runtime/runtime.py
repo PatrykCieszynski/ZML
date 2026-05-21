@@ -9,7 +9,6 @@ from threading import Thread
 from zml_game_bridge.api.channels.position_hub import OcrPositionHub
 from zml_game_bridge.api.channels.sse_hub import SseHub
 from zml_game_bridge.domain.position import WorldPos
-from zml_game_bridge.events.envelope import EventEnvelope
 from zml_game_bridge.events.in_memory_persisted_event_bus import (
     InMemoryPersistedEventBus,
 )
@@ -79,7 +78,6 @@ class AppRuntime:
         self._t_ocr: Thread | None = None
         self._t_mock: Thread | None = None
 
-        self._sub_print = None
         self._sub_sse = None
 
         self._sse_hub: SseHub | None = None
@@ -115,6 +113,13 @@ class AppRuntime:
             return
         self._restore_mining_lifecycle()
         self._started = True
+        logger.info(
+            "app_started db_path=%s chat_log_path=%s ocr_enabled=%s mock_inputs_enabled=%s",
+            self._db_path,
+            self._chat_log_path,
+            self._ocr_enabled,
+            self._mock_inputs_enabled,
+        )
 
         self._t_input = Thread(
             target=self._input_coordinator.run,
@@ -169,8 +174,6 @@ class AppRuntime:
             )
             self._t_mock.start()
 
-        self._sub_print = self._persisted_events.subscribe(self._log_event_envelope)
-
         # SSE fan-out (if attached)
         if self._sse_hub is not None:
             self._sub_sse = self._persisted_events.subscribe(self._sse_hub.on_envelope)
@@ -202,19 +205,13 @@ class AppRuntime:
             for row in rows
         )
 
-    def _log_event_envelope(self, env: EventEnvelope) -> None:
-        logger.info("New event stored: %s", env)
-
     def stop(self) -> None:
+        logger.info("app_stopping")
         self._stop_event.set()
 
         if self._sub_sse is not None:
             self._sub_sse.close()
             self._sub_sse = None
-
-        if self._sub_print is not None:
-            self._sub_print.close()
-            self._sub_print = None
 
         if self._t_chat is not None:
             self._t_chat.join(timeout=2.0)
@@ -227,6 +224,7 @@ class AppRuntime:
         if self._t_db is not None:
             self._t_db.join(timeout=2.0)
         self._started = False
+        logger.info("app_stopped")
 
 
 def _now_ms() -> int:

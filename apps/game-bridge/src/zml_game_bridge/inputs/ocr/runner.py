@@ -46,6 +46,7 @@ def start_ocr_input(
     finder_debug_logging: bool | None = None,
 ) -> None:
     windll.user32.SetProcessDPIAware()  # do once per process
+    logger.info("ocr_worker_started target_hz=%s", target_hz)
     cap = WindowCapturer(title_contains="Entropia Universe Client")
     period = 1.0 / target_hz
     next_t = time.perf_counter()
@@ -62,7 +63,7 @@ def start_ocr_input(
         finder_debug_logging = _env_bool("ZML_FINDER_DEBUG", default=False)
     if finder_debug_logging:
         _configure_finder_debug_logging()
-        logger.info("Finder OCR debug logging enabled")
+        logger.info("finder_debug_enabled")
 
     finder_pipeline = MiningFinderPipeline(
         cfg=MiningFinderPipelineConfig(debug_logging=finder_debug_logging)
@@ -106,7 +107,7 @@ def start_ocr_input(
                 try:
                     signals = finder_future.result()
                 except Exception:
-                    logger.exception("Finder OCR worker failed")
+                    logger.exception("finder_ocr_worker_crashed")
                 else:
                     if signal_sink is not None:
                         for signal in signals:
@@ -126,6 +127,9 @@ def start_ocr_input(
                 # deeds = ROI_DEEDS.crop(frame)
                 # if deeds is not None:
                 #     deeds_pipeline.step(deeds, ts_ms)
+    except Exception:
+        logger.exception("ocr_worker_crashed")
+        raise
     finally:
         if finder_future is not None:
             finder_future.cancel()
@@ -158,12 +162,12 @@ def _env_bool(name: str, *, default: bool) -> bool:
 
 def _configure_finder_debug_logging() -> None:
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.DEBUG,
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
     )
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
     logging.getLogger("zml_game_bridge.inputs.ocr.pipelines.mining_finder").setLevel(
-        logging.INFO
+        logging.DEBUG
     )
 
 

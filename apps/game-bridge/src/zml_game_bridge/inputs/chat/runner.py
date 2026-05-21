@@ -25,13 +25,13 @@ def start_chat_input(
     # 2026-01-12 15:18:40 [System] [] You have claimed a resource! (Blue Crystal)
     path_exists = path.exists()
     logger.info(
-        "chat input started path=%s exists=%s start_at_end=%s",
+        "chat_tail_started path=%s exists=%s start_at_end=%s",
         path,
         path_exists,
         start_at_end,
     )
     if not path_exists:
-        logger.warning("chat log path does not exist yet: %s", path)
+        logger.warning("chat_tail_missing_path path=%s", path)
 
     for line in tail_lines(
         path, start_at_end=start_at_end, poll_interval_s=poll_interval_s, stop_event=stop_event
@@ -39,11 +39,17 @@ def start_chat_input(
         chat_line = parse_chat_line(line)
         if chat_line is None:
             continue
+        logger.debug(
+            "chat_line_parsed event_dt=%s channel=%s raw=%r",
+            chat_line.event_dt,
+            chat_line.channel_type,
+            line,
+        )
         chat_event = interpret_chat_line(chat_line)
         if chat_event is None:
             continue
-        logger.info(
-            "chat signal type=%s event_dt=%s raw=%r",
+        logger.debug(
+            "chat_signal_emitted signal_type=%s event_dt=%s raw=%r",
             type(chat_event).__name__,
             chat_event.event_dt,
             chat_event.raw,

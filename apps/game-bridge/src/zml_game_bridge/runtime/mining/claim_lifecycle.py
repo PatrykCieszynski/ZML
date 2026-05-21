@@ -45,7 +45,7 @@ class ClaimLifecycleCorrelator:
 
     def restore_active_claims(self, claims: Iterable[ActiveClaim]) -> None:
         self._active_claims = {claim.claim_id: claim for claim in claims}
-        logger.info("mining claim lifecycle restored active_claims=%s", len(self._active_claims))
+        logger.info("claim_lifecycle_restored active_claims=%s", len(self._active_claims))
 
     def process_event(self, event: EventBase) -> list[EventBase]:
         if isinstance(event, MiningDropEvent):
@@ -91,8 +91,8 @@ class ClaimLifecycleCorrelator:
             position=position,
             search_radius_m=search_radius_m,
         )
-        logger.info(
-            "mining event derived type=%s claim_id=%s hit_id=%s drop_id=%s resource=%r",
+        logger.debug(
+            "claim_created event_type=%s claim_id=%s hit_id=%s drop_id=%s resource=%r",
             type(created).__name__,
             created.claim_id,
             created.hit_id,
@@ -107,12 +107,12 @@ class ClaimLifecycleCorrelator:
     ) -> MiningClaimDepletedEvent | None:
         position = self._position_provider()
         if position is None:
-            logger.info("mining claim depleted signal ignored: missing current position")
+            logger.warning("claim_depleted_without_position event_dt=%s", signal.event_dt)
             return None
 
         nearest = self._nearest_active_claim(position)
         if nearest is None:
-            logger.info("mining claim depleted signal ignored: no active claim near %s", position)
+            logger.warning("claim_depleted_without_nearby_claim position=%s event_dt=%s", position, signal.event_dt)
             return None
 
         claim, distance_m = nearest
@@ -126,8 +126,8 @@ class ClaimLifecycleCorrelator:
             distance_m=distance_m,
             raw=signal.raw,
         )
-        logger.info(
-            "mining event derived type=%s claim_id=%s distance_m=%.2f event_dt=%s",
+        logger.debug(
+            "claim_depleted event_type=%s claim_id=%s distance_m=%.2f event_dt=%s",
             type(event).__name__,
             event.claim_id,
             event.distance_m,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import sqlite3
 import time
 from collections.abc import Iterator
@@ -15,6 +16,7 @@ from zml_game_bridge.persistence.sqlite import open_sqlite
 from zml_game_bridge.runtime.runtime import AppRuntime
 
 router = APIRouter(prefix="/api/v1/mining", tags=["mining"])
+logger = logging.getLogger(__name__)
 
 
 def get_mining_conn(request: Request) -> Iterator[sqlite3.Connection]:
@@ -37,6 +39,7 @@ def list_mining_drops(
 ) -> list[MiningDropDto]:
     since_ts_ms = _now_ms() - window_minutes * 60_000
     rows = MiningDropReader(conn).list_since(since_ts_ms=since_ts_ms)
+    logger.debug("api_request_read_drops window_minutes=%s rows=%s", window_minutes, len(rows))
     return [MiningDropDto.from_row(row) for row in rows]
 
 
@@ -49,6 +52,7 @@ def list_mining_claims(
         rows = MiningClaimReader(conn).list_all()
     else:
         rows = MiningClaimReader(conn).list_active(now_ts_ms=_now_ms())
+    logger.debug("api_request_read_claims active=%s rows=%s", active, len(rows))
     return [MiningClaimDto.from_row(row) for row in rows]
 
 

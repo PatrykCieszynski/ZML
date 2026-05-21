@@ -1,163 +1,141 @@
-# ZML Game Bridge (Python Agent)
+# ZML Game Bridge
 
-Local headless backend (“agent”) for **Z Mining Log**.  
-It tails `chat.log`, turns raw lines into structured domain events, persists them to SQLite, and exposes them via REST + SSE for the UI (Electron/React).
+Local Python backend for Zabu Mining Log. It watches Entropia inputs, derives mining domain events, persists durable state to SQLite, and exposes REST/SSE/WebSocket APIs for the Electron UI.
 
-> Goal: one local backend process, one client (Electron Main), offline-first.
+The backend is offline-first and currently designed for one local UI client.
 
----
+## Current Shape
 
-## Features (current)
+- Chat input tails Entropia `chat.log` and emits internal chat signals.
+- OCR input reads position continuously and finder state periodically.
+- Mock mining input can generate deterministic mining signals for UI/dev work.
+- `InputCoordinator` receives signals and asks domain coordinators to derive durable events.
+- `DbWriterWorker` is the only SQLite writer.
+- Durable events are appended to `events` and projected into read-model tables such as mining drops and claims in the same DB transaction.
+- Persisted event envelopes are published to SSE only after the DB write succeeds.
+- High-frequency position updates bypass SQLite and go through `/ws/position`.
 
-- Tails `chat.log` (continuous append-only read)
-- Parses log lines into `ChatLine`
-- Interprets lines into domain events (`EventBase`)
-- Persists events to SQLite (single-writer thread)
-- Publishes persisted `EventEnvelope` to an in-memory fan-out bus
-- API:
-  - `GET /health`
-  - `GET /events/latest`
-  - `GET /events/after/{id}`
-  - `GET /events/stream?after={id}` (SSE)
-
----
-
-## Runtime architecture
-
-### Data flow
+## Runtime Flow
 
 ```text
-chat.log
-  -> tailer -> parser(ChatLine) -> interpreter(EventBase)
-  -> EventChannel (Queue, cross-thread boundary)
-  -> DbWriter thread:
-        EventStore.append(EventBase) -> EventEnvelope
-        PersistedEventBus.publish(EventEnvelope)
-  -> API:
-        REST: EventReader queries SQLite
-        SSE: SseHub subscribes to PersistedEventBus
+chat.log / OCR / mocks
+  -> SignalChannel
+  -> InputCoordinator
+  -> MiningCoordinator
+       -> FinderDropCorrelator
+       -> MiningChatCorrelator
+       -> ClaimLifecycleCorrelator
+  -> EventChannel
+  -> DbWriterWorker
+       -> EventStore.append(...)
+       -> read-model projectors
+  -> PersistedEventBus
+       -> SSE fan-out to UI
 ```
 
-### Why two “buses”
+Signals are internal observations. They are not persisted.
 
-- **EventChannel** is a *thread boundary* (producer threads → single DB writer). It provides backpressure via `Queue.put`.
-- **PersistedEventBus** is *fan-out* for already-persisted envelopes (broadcast to SSE, logging, future processors).
+Events are durable domain facts. They are persisted and can be streamed to the UI.
 
-This keeps SQLite writes single-threaded and predictable.
+Read models are query-friendly tables derived from events, for example active mining claims. They are written by the same single DB writer, so they do not introduce a second SQLite writer.
 
----
+## Running
 
-## Monetary amounts: mPEC
-
-All monetary amounts are stored as integer **mPEC** (milli-PEC) to avoid float/Decimal drift.
-
-- `1 PED = 100 PEC = 100000 mPEC`
-- `1 mPEC = 0.001 PEC = 0.00001 PED`
-- Example: `0.123 PEC = 123 mPEC = 0.00123 PED`
-
-In code you’ll typically see a:
-
-```python
-from typing import NewType
-Mpec = NewType("Mpec", int)
-```
-
----
-
-## Configuration & paths
-
-- Config is read from `Settings` (see `zml_game_bridge/settings.py`).
-- Database is stored under **LocalAppData** (Windows) by default.
-- `chat.log` path can be configured (supports non-default “Documents” drive).
-
----
-
-## Running locally
-
-### Run API (dev)
+From the repository root:
 
 ```bash
-uv run python -m zml_game_bridge.main
+npm run bridge:config
+npm run bridge:dev
+npm run bridge:ocr
+npm run bridge:mock
+npm run bridge:finder-debug
 ```
 
-This starts Uvicorn using the factory:
-
-- `uvicorn.run("zml_game_bridge.api.app:create_app", factory=True, ...)`
-
-### Test SSE quickly
+Directly from `apps/game-bridge`:
 
 ```bash
-curl -N "http://127.0.0.1:17171/events/stream?after=0"
+uv run python -m zml_game_bridge.dev_cli config
+uv run python -m zml_game_bridge.dev_cli serve
+uv run python -m zml_game_bridge.dev_cli serve --mode live
+uv run python -m zml_game_bridge.dev_cli serve --mode mock
+uv run python -m zml_game_bridge.dev_cli serve --mode live --finder-debug
 ```
 
-You should see `id: ...`, `event: ...`, `data: ...` frames.
+Input modes:
 
----
+- `env`: use current environment variables.
+- `live`: OCR on, mocks off.
+- `mock`: OCR off, mocks on.
+- `hybrid`: OCR on, mocks on.
+- `no-inputs`: OCR off, mocks off.
 
-## SQLite schema (events)
+## Useful Environment Variables
 
-Table: `events`
+- `ZML_LOG_LEVEL`: console log level, defaults to `INFO`.
+- `ZML_ERROR_LOG_PATH`: optional override for error-only log file.
+- `ZML_DB_PATH`: optional override for SQLite DB path.
+- `ZML_CHAT_LOG_PATH`: optional override for Entropia `chat.log`.
+- `ZML_CHAT_START_AT_END`: start tailing from the end of the file, defaults to `true`.
+- `ZML_OCR_ENABLED`: enable live OCR input.
+- `ZML_MOCK_INPUTS`: enable mock mining input.
+- `ZML_MOCK_MINING_INTERVAL_MS`: mock drop interval.
+- `ZML_FINDER_DEBUG`: enable detailed finder OCR debug logging.
 
-- `event_id` (INTEGER PRIMARY KEY)
-- `created_ts_ms` (INTEGER) — local creation timestamp (ingestion time)
-- `event_type` (TEXT)
-- `payload_json` (TEXT) — JSON object
-- optional helpers:
-  - `event_dt` (TEXT | NULL) — timestamp from log line (naive)
-  - `raw` (TEXT | NULL) — raw line for debugging / forensics
+By default, error logs are written to:
 
-Indexes:
+```text
+%LOCALAPPDATA%\zabu-mining-log\logs\errors.log
+```
 
-- `idx_events_created_ts_ms`
-- `idx_events_event_type`
+Only `ERROR` and `CRITICAL` records go to that file. Normal `INFO` runtime logs stay on the console.
 
----
+## APIs
 
-## API semantics
+- `GET /health`
+- `GET /events/latest?limit=200`
+- `GET /events/after/{event_id}?limit=200`
+- `GET /events/stream`
+- `GET /api/v1/mining/drops?window_minutes=30`
+- `GET /api/v1/mining/claims?active=true`
+- `POST /api/v1/runs/start`
+- `POST /api/v1/runs/stop`
+- `GET /api/v1/runs/active`
+- `WS /ws/position`
 
-### REST
+## SQLite Rules
 
-- `GET /events/latest?limit=...`
-  - Returns last N events (ascending order)
-- `GET /events/after/{event_id}?limit=...`
-  - Returns events with `event_id > after`, ascending
+- SQLite writes must go through `DbWriterWorker`.
+- API routes may open their own read connections.
+- Events and projections are written in one transaction.
+- Position is live state and is not written to SQLite.
 
-### SSE
+This keeps the app safe from multiple concurrent writers while still allowing REST reads.
 
-- `GET /events/stream?after={event_id}`
-  - Streams live events from `PersistedEventBus`
-  - Each SSE message:
-    - `id:` = `event_id`
-    - `event:` = `event_type`
-    - `data:` = DTO JSON (you may exclude duplicated fields)
+## Monetary Amounts
 
----
+Amounts are stored as integer mPEC to avoid float drift.
 
-## Testing
+```text
+1 PED = 100 PEC = 100000 mPEC
+1 mPEC = 0.001 PEC = 0.00001 PED
+```
 
-Unit tests cover:
+## Verification
 
-- chat parser (`parse_chat_line`)
-- interpreter regex matching (`interpret_chat_line`)
-- runner wiring (monkeypatch tailer/parser/interpreter)
-- DB store/reader basics (SQLite temp DB)
+From the repository root:
 
-> Tailer tests are intentionally minimal right now (file-system tailing is annoying; keep it pragmatic).
+```bash
+npm run bridge:lint
+npm run bridge:typecheck
+npm run bridge:test
+npm run bridge:verify
+```
 
----
+`bridge:verify` runs Ruff, Pyright, and Pytest.
 
-## Notes / planned work
+## Notes
 
-- OCR input producer (radar/position/probe fired) feeding into `EventChannel`
-- Filtering noisy events (e.g. deed items) via config whitelist
-- “Runs” aggregation (derived state) built on top of persisted events
-- WS channel for high-frequency position updates (non-persisted)
-
----
-
-## Developer guidelines
-
-- SQLite writes must go through the single DB writer thread.
-- Event producers (`chat`, `ocr`, etc.) emit `EventBase` into `EventChannel`.
-- Anything that goes to the UI must be an `EventEnvelope` (persisted, stable id).
-- Avoid putting “state” into the SSE stream; stream deltas, resync via REST when needed.
+- Finder OCR currently creates `MiningDropEvent`, `MiningHitHintEvent`, and `MiningNoResourcesEvent`.
+- Claim lifecycle creates map-facing claim events such as `MiningClaimCreatedEvent` and `MiningClaimDepletedEvent`.
+- Chat currently contributes deed, item received, enhancer, and depleted signals/events.
+- Loot/profit aggregation should primarily happen at run/segment level, not claim level.

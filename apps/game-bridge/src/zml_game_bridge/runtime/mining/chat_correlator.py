@@ -67,8 +67,8 @@ class MiningChatCorrelator:
     ) -> MiningClaimDeedReceivedEvent | None:
         deed = self._pending_deeds.pop(0) if self._pending_deeds else None
         if deed is None:
-            logger.info(
-                "mining chat resource claim has no pending deed resource=%r event_dt=%s",
+            logger.warning(
+                "resource_claimed_without_pending_deed resource=%r event_dt=%s",
                 signal.resource_name,
                 signal.event_dt,
             )
@@ -86,8 +86,8 @@ class MiningChatCorrelator:
             received_raw=deed.raw,
             claimed_raw=signal.raw,
         )
-        logger.info(
-            "mining event derived type=%s resource=%r mining_type=%s event_dt=%s",
+        logger.debug(
+            "claim_deed_received_recorded event_type=%s resource=%r mining_type=%s event_dt=%s",
             type(event).__name__,
             event.resource_name,
             event.mining_type,
@@ -103,8 +103,8 @@ class MiningChatCorrelator:
             value_mpec=signal.value_mpec,
             raw=signal.raw,
         )
-        logger.info(
-            "mining event derived type=%s item=%r qty=%s value_mpec=%s event_dt=%s",
+        logger.debug(
+            "item_received_recorded event_type=%s item=%r qty=%s value_mpec=%s event_dt=%s",
             type(event).__name__,
             event.item_name,
             event.qty,
@@ -124,8 +124,8 @@ class MiningChatCorrelator:
             remaining=signal.remaining,
             raw=signal.raw,
         )
-        logger.info(
-            "mining event derived type=%s enhancer=%r item=%r remaining=%s event_dt=%s",
+        logger.debug(
+            "enhancer_broke_recorded event_type=%s enhancer=%r item=%r remaining=%s event_dt=%s",
             type(event).__name__,
             event.enhancer_name,
             event.item_name,
