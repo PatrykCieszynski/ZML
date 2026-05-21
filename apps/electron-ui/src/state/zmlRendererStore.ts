@@ -8,6 +8,7 @@ import type {
   CreateMiningToolProfileRequest,
   MiningClaimDto,
   MiningDropDto,
+  MiningLootItemDto,
   MiningToolProfileDto,
   OcrPositionDTO,
   OcrPositionEvent,
@@ -26,10 +27,14 @@ export type ZmlRendererState = {
   streams: BootstrapStreamsState;
   position?: OcrPositionDTO;
   positionEvent?: OcrPositionEvent;
+  mapWindowVisible: boolean;
+  overlayWindowVisible: boolean;
   activeRun: RunDto | null;
+  runs: RunDto[];
   runSegments: RunSegmentDto[];
   miningClaims: MiningClaimDto[];
   miningDrops: MiningDropDto[];
+  miningLoot: MiningLootItemDto[];
   miningTools: MiningToolProfileDto[];
   activeMiningTools?: ActiveMiningToolsDto;
   agentHealth?: AgentHealthDto;
@@ -48,10 +53,14 @@ const initialState: ZmlRendererState = {
   bootstrapping: false,
   agent: { status: "connecting" },
   streams: { ws: false, sse: false },
+  mapWindowVisible: false,
+  overlayWindowVisible: false,
   activeRun: null,
+  runs: [],
   runSegments: [],
   miningClaims: [],
   miningDrops: [],
+  miningLoot: [],
   miningTools: [],
   activeMiningTools: undefined,
   agentHealthChecking: false,
@@ -91,10 +100,14 @@ function applyBootstrap(bootstrap: BootstrapState): void {
     agent: bootstrap.agent,
     streams: bootstrap.streams,
     position: bootstrap.position ?? state.position,
+    mapWindowVisible: bootstrap.mapWindowVisible ?? state.mapWindowVisible,
+    overlayWindowVisible: bootstrap.overlayWindowVisible ?? state.overlayWindowVisible,
     activeRun: bootstrap.activeRun ?? null,
+    runs: bootstrap.runs ?? state.runs,
     runSegments: bootstrap.runSegments ?? state.runSegments,
     miningClaims: bootstrap.miningClaims ?? state.miningClaims,
     miningDrops: bootstrap.miningDrops ?? state.miningDrops,
+    miningLoot: bootstrap.miningLoot ?? state.miningLoot,
     miningTools: bootstrap.miningTools ?? state.miningTools,
     activeMiningTools: bootstrap.activeMiningTools ?? state.activeMiningTools,
     error: null,
@@ -231,8 +244,10 @@ export async function startRun(name: string): Promise<void> {
 
   try {
     const activeRun = await api.startRun({ name: trimmedName });
+    const runs = await api.listRuns();
     setState({
       activeRun,
+      runs,
       runSegments: [],
       runCommandPending: false,
       lastCommandError: null,
@@ -258,9 +273,13 @@ export async function refreshRunState(): Promise<void> {
 
   try {
     const activeRun = await api.getActiveRun();
-    const runSegments = activeRun === null ? [] : await api.listActiveRunSegments();
+    const [runs, runSegments] = await Promise.all([
+      api.listRuns(),
+      activeRun === null ? Promise.resolve([]) : api.listActiveRunSegments(),
+    ]);
     setState({
       activeRun,
+      runs,
       runSegments,
       lastCommandError: null,
     });
@@ -290,8 +309,10 @@ export async function stopRun(): Promise<void> {
 
   try {
     await api.stopRun(state.activeRun ? { runId: state.activeRun.runId } : {});
+    const runs = await api.listRuns();
     setState({
       activeRun: null,
+      runs,
       runSegments: [],
       runCommandPending: false,
       lastCommandError: null,
@@ -337,6 +358,95 @@ export async function refreshMiningTools(): Promise<void> {
       miningToolsLoading: false,
       lastCommandError: errorToMessage(error),
     });
+  }
+}
+
+export async function refreshRuns(): Promise<void> {
+  let api;
+  try {
+    api = getZml();
+  } catch (error) {
+    setState({ lastCommandError: errorToMessage(error) });
+    return;
+  }
+
+  try {
+    const runs = await api.listRuns();
+    setState({ runs, lastCommandError: null });
+  } catch (error) {
+    setState({ lastCommandError: errorToMessage(error) });
+  }
+}
+
+export async function resumeRun(runId: number): Promise<void> {
+  let api;
+  try {
+    api = getZml();
+  } catch (error) {
+    setState({
+      runCommandPending: false,
+      lastCommandError: errorToMessage(error),
+    });
+    return;
+  }
+
+  setState({
+    runCommandPending: true,
+    lastCommandError: null,
+  });
+
+  try {
+    const activeRun = await api.resumeRun(runId);
+    const [runs, runSegments] = await Promise.all([
+      api.listRuns(),
+      api.listActiveRunSegments(),
+    ]);
+    setState({
+      activeRun,
+      runs,
+      runSegments,
+      runCommandPending: false,
+      lastCommandError: null,
+    });
+  } catch (error) {
+    setState({
+      runCommandPending: false,
+      lastCommandError: errorToMessage(error),
+    });
+  }
+}
+
+export async function toggleMapWindow(): Promise<void> {
+  let api;
+  try {
+    api = getZml();
+  } catch (error) {
+    setState({ lastCommandError: errorToMessage(error) });
+    return;
+  }
+
+  try {
+    const mapWindowVisible = await api.toggleMapWindow();
+    setState({ mapWindowVisible, lastCommandError: null });
+  } catch (error) {
+    setState({ lastCommandError: errorToMessage(error) });
+  }
+}
+
+export async function toggleOverlayWindow(): Promise<void> {
+  let api;
+  try {
+    api = getZml();
+  } catch (error) {
+    setState({ lastCommandError: errorToMessage(error) });
+    return;
+  }
+
+  try {
+    const overlayWindowVisible = await api.toggleOverlayWindow();
+    setState({ overlayWindowVisible, lastCommandError: null });
+  } catch (error) {
+    setState({ lastCommandError: errorToMessage(error) });
   }
 }
 

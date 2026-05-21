@@ -1,0 +1,80 @@
+body[data-window-type="overlay"] {
+  background: transparent;
+  overflow: hidden;
+}
+
+body[data-window-type="overlay"] #root {
+  background: transparent;
+}
+
+.zml-stream-overlay {
+  height: 100vh;
+  padding: 10px 12px;
+  border: 1px solid rgba(126, 170, 229, 0.45);
+  border-radius: 8px;
+  background: rgba(9, 13, 20, 0.68);
+  color: #f4f8ff;
+  -webkit-app-region: drag;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+}
+
+.zml-overlay-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.zml-overlay-title strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.zml-overlay-title span {
+  color: #54df9b;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.zml-overlay-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.zml-overlay-metric {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.zml-overlay-metric span {
+  color: #aebbd0;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.zml-overlay-metric strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #ffffff;
+  font-family: "Cascadia Mono", "Consolas", monospace;
+  font-size: 13px;
+}
+
+.zml-overlay-metric .is-gain {
+  color: #46de90;
+}
+
+.zml-overlay-metric .is-loss {
+  color: #ff6872;
+}

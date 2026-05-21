@@ -1,7 +1,8 @@
 import { BrowserWindow } from "electron";
+import { trackWindowBounds, withSavedWindowBounds } from "./windowState.ts";
 
 export function createMapWindow(preloadPath: string): BrowserWindow {
-    return new BrowserWindow({
+    const win = new BrowserWindow(withSavedWindowBounds("map", {
         width: 900,
         height: 560,
         title: "Z Mining Log - Map",
@@ -14,5 +15,7 @@ export function createMapWindow(preloadPath: string): BrowserWindow {
             contextIsolation: true,
             nodeIntegration: false,
         },
-    });
+    }));
+    trackWindowBounds("map", win);
+    return win;
 }

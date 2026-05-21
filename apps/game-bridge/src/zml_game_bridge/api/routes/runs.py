@@ -76,6 +76,41 @@ def stop_run(request: StopRunRequestDto, conn: RunConn) -> RunDto:
     return RunDto.from_row(stopped)
 
 
+@router.get("", response_model=list[RunDto])
+def list_runs(conn: RunConn, status: str | None = None, limit: int = 200) -> list[RunDto]:
+    safe_limit = max(1, min(limit, 1000))
+    return [RunDto.from_row(row) for row in RunStore(conn).list_runs(status=status, limit=safe_limit)]
+
+
+@router.post("/{run_id}/resume", response_model=RunDto)
+def resume_run(run_id: int, conn: RunConn) -> RunDto:
+    store = RunStore(conn)
+    state = RunState(conn)
+
+    row = store.get_run(run_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
+
+    with conn:
+        ts_ms = _now_ms()
+        active_run_id = state.try_get_active_run_id()
+        if active_run_id is not None and active_run_id != run_id:
+            store.set_run_status(active_run_id, status="stopped", ts_ms=ts_ms)
+            RunSegmentStore(conn).end_active_for_run(
+                active_run_id,
+                ended_ts_ms=ts_ms,
+                ts_ms=ts_ms,
+            )
+
+        store.set_run_status(run_id, status="running", ts_ms=ts_ms)
+        state.set_active_run(run_id)
+        resumed = store.get_run(run_id)
+
+    if resumed is None:
+        raise HTTPException(status_code=500, detail="Run disappeared while resuming")
+    return RunDto.from_row(resumed)
+
+
 @router.get("/active", response_model=RunDto | None)
 def active_run(conn: RunConn) -> RunDto | None:
     state = RunState(conn)

@@ -40,6 +40,8 @@ type AgentRestClientOptions = {
 export type AgentClient = {
   getHealth: () => Promise<AgentHealthDto>;
   getActiveRun: () => Promise<RunDto | null>;
+  listRuns: () => Promise<RunDto[]>;
+  resumeRun: (runId: number) => Promise<RunDto>;
   listActiveRunSegments: () => Promise<RunSegmentDto[]>;
   listRunSegments: (runId: number) => Promise<RunSegmentDto[]>;
   startRun: (request: StartRunRequest) => Promise<RunDto>;
@@ -86,6 +88,22 @@ export class AgentRestClient implements AgentClient {
       throw new Error("Agent active run returned an invalid payload");
     }
     return data === null ? null : wireToRunDto(data);
+  }
+
+  async listRuns(): Promise<RunDto[]> {
+    const data = await this.getJson("/api/v1/runs");
+    if (!Array.isArray(data) || !data.every(isRunWire)) {
+      throw new Error("Agent runs returned an invalid payload");
+    }
+    return data.map(wireToRunDto);
+  }
+
+  async resumeRun(runId: number): Promise<RunDto> {
+    const data = await this.postJson(`/api/v1/runs/${encodeURIComponent(String(runId))}/resume`, {});
+    if (!isRunWire(data)) {
+      throw new Error("Agent resume run returned an invalid payload");
+    }
+    return wireToRunDto(data);
   }
 
   async listActiveRunSegments(): Promise<RunSegmentDto[]> {

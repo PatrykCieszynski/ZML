@@ -7,6 +7,7 @@ export * from "./dto/worldPos.js";
 export * from "./dto/ocrPosition.js";
 export * from "./dto/miningClaims.js";
 export * from "./dto/miningDrops.js";
+export * from "./dto/miningLoot.js";
 export * from "./dto/miningTools.js";
 
 export * from "./events/envelope.js";

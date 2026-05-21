@@ -34,6 +34,7 @@ export class MockAgentRestClient implements AgentClient {
     private nextRunId = 1;
     private nextToolId = 4;
     private activeRun: RunDto | null = null;
+    private runs: RunDto[] = [];
     private runSegments: RunSegmentDto[] = [];
     private miningTools: MiningToolProfileDto[] = [
         createMockMiningTool("mock-finder-1", "finder", "Ziplex Z20", 0, "100", 55),
@@ -64,6 +65,7 @@ export class MockAgentRestClient implements AgentClient {
             updatedTsMs: now,
         };
         this.nextRunId += 1;
+        this.runs = [this.activeRun, ...this.runs.filter((run) => run.runId !== this.activeRun?.runId)];
         this.runSegments = [];
 
         return this.activeRun;
@@ -86,12 +88,32 @@ export class MockAgentRestClient implements AgentClient {
         };
 
         this.activeRun = null;
+        this.runs = [stoppedRun, ...this.runs.filter((item) => item.runId !== stoppedRun.runId)];
         this.runSegments = [];
 
         return stoppedRun;
     }
 
     async getActiveRun(): Promise<RunDto | null> {
+        return this.activeRun;
+    }
+
+    async listRuns(): Promise<RunDto[]> {
+        return [...this.runs];
+    }
+
+    async resumeRun(runId: number): Promise<RunDto> {
+        const now = Date.now();
+        this.activeRun = {
+            runId,
+            name: `Mock run #${runId}`,
+            status: "running",
+            notes: null,
+            createdTsMs: now,
+            updatedTsMs: now,
+        };
+        this.runs = [this.activeRun, ...this.runs.filter((run) => run.runId !== runId)];
+        this.runSegments = [];
         return this.activeRun;
     }
 
