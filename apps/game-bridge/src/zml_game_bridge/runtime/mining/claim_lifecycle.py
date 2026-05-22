@@ -14,6 +14,7 @@ from zml_game_bridge.domain.mining_events import (
 from zml_game_bridge.domain.position import WorldPos
 from zml_game_bridge.events.base import EventBase
 from zml_game_bridge.inputs.chat.signals import ResourceDepletedSignal
+from zml_game_bridge.resources.mining_resources import MiningResourceCatalog
 from zml_game_bridge.runtime.mining.settings import IdFactory, MiningCoordinatorConfig
 
 PositionProvider = Callable[[], WorldPos | None]
@@ -36,10 +37,12 @@ class ClaimLifecycleCorrelator:
         config: MiningCoordinatorConfig,
         id_factory: IdFactory,
         position_provider: PositionProvider | None = None,
+        resource_catalog: MiningResourceCatalog | None = None,
     ) -> None:
         self._config = config
         self._id_factory = id_factory
         self._position_provider = position_provider or _none_position_provider
+        self._resource_catalog = resource_catalog or MiningResourceCatalog()
         self._drops_by_id: dict[str, MiningDropEvent] = {}
         self._active_claims: dict[str, ActiveClaim] = {}
 
@@ -78,6 +81,7 @@ class ClaimLifecycleCorrelator:
             position=position,
             search_radius_m=search_radius_m,
             resource_name=event.resource_name,
+            mining_type=self._resolve_mining_type(event.resource_name),
             size_label=event.size_label,
             size_index=event.size_index,
             expected_expires_ts_ms=event.expected_expires_ts_ms,
@@ -101,6 +105,12 @@ class ClaimLifecycleCorrelator:
         )
         return created
 
+    def _resolve_mining_type(self, resource_name: str | None) -> str | None:
+        if resource_name is None:
+            return None
+        resource = self._resource_catalog.get(resource_name)
+        return resource.resource_type if resource is not None else None
+
     def _deplete_nearest_claim(
         self,
         signal: ResourceDepletedSignal,
@@ -112,7 +122,11 @@ class ClaimLifecycleCorrelator:
 
         nearest = self._nearest_active_claim(position)
         if nearest is None:
-            logger.warning("claim_depleted_without_nearby_claim position=%s event_dt=%s", position, signal.event_dt)
+            logger.warning(
+                "claim_depleted_without_nearby_claim position=%s event_dt=%s",
+                position,
+                signal.event_dt,
+            )
             return None
 
         claim, distance_m = nearest

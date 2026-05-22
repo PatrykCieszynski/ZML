@@ -2,6 +2,7 @@
   "venvPath": ".",
   "venv": ".venv",
   "pythonVersion": "3.13",
+  "pythonPlatform": "Windows",
   "typeCheckingMode": "strict",
   "reportMissingModuleSource": "none",
   "reportMissingTypeStubs": "none",
@@ -12,6 +13,8 @@
     "**/.uv-cache",
     "**/__pycache__",
     "src/zml_game_bridge/testing",
+    "**/build",
+    "**/dist",
     "tests"
   ]
 }

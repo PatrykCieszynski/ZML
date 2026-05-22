@@ -101,6 +101,7 @@ def test_list_mining_claims_returns_active_unexpired_claims(
         assert [claim.claim_id for claim in claims] == ["active", "non-expiring"]
         assert claims[0].position is not None
         assert claims[0].position.x == 58_890
+        assert claims[0].mining_type == "ore"
         assert claims[0].status == "active"
     finally:
         conn.close()
@@ -138,6 +139,7 @@ def _claim_created_event(
         position=WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None),
         search_radius_m=55.0,
         resource_name="Lysterium Stone",
+        mining_type="ore",
         size_label="Minimal",
         size_index=1,
         expected_expires_ts_ms=expected_expires_ts_ms,

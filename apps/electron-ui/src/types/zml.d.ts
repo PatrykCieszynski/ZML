@@ -11,6 +11,7 @@ import type {
   SetActiveMiningToolsRequest,
   StartRunRequest,
   StopRunRequest,
+  UpdateRunRequest,
   WindowType,
 } from "@zml/shared";
 
@@ -20,8 +21,13 @@ declare global {
       getBootstrapState: (windowType: WindowType) => Promise<BootstrapState>;
       getAgentHealth: () => Promise<AgentHealthDto>;
       getActiveRun: () => Promise<RunDto | null>;
+      listRuns: () => Promise<RunDto[]>;
+      resumeRun: (runId: number) => Promise<RunDto>;
+      updateRun: (runId: number, request: UpdateRunRequest) => Promise<RunDto>;
       listActiveRunSegments: () => Promise<RunSegmentDto[]>;
       listRunSegments: (runId: number) => Promise<RunSegmentDto[]>;
+      toggleMapWindow: () => Promise<boolean>;
+      toggleOverlayWindow: () => Promise<boolean>;
       startRun: (request: StartRunRequest) => Promise<RunDto>;
       stopRun: (request?: StopRunRequest) => Promise<RunDto>;
       listMiningTools: () => Promise<MiningToolProfileDto[]>;

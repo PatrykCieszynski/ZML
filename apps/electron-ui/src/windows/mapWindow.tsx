@@ -1,13 +1,15 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { WindowType } from "@zml/shared";
-import {MapViewport} from "../widgets/map/mapViewport.tsx";
-import { useZmlRendererStore } from "../state/zmlRendererStore";
+import { MapViewport } from "../widgets/map/mapViewport.tsx";
+import { toggleMapWindow, useZmlRendererStore } from "../state/zmlRendererStore";
+import "./mapWindow.css";
 
 type MapPoint = { x: number; y: number };
 
 export function MapWindow() {
   const windowType: WindowType = "map";
   const state = useZmlRendererStore(windowType);
+  const [followPlayer, setFollowPlayer] = useState(true);
 
   const point: MapPoint | null = useMemo(() => {
     const pos = state.position?.position;
@@ -19,57 +21,49 @@ export function MapWindow() {
   const planetId = "calypso" as const;
 
   return (
-      <div style={{ position: "fixed", inset: 0, background: "#000" }}>
+    <div className="zml-map-window">
+      <header className="zml-map-titlebar">
+        <div className="zml-map-title">
+          <strong>Z Mining Log Map</strong>
+          <span>{planetId}</span>
+        </div>
+        <div className="zml-map-actions">
+          <button
+            type="button"
+            className={followPlayer ? "is-active" : undefined}
+            onClick={() => setFollowPlayer((current) => !current)}
+          >
+            {followPlayer ? "Following" : "Follow Player"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              void toggleMapWindow();
+            }}
+          >
+            Hide
+          </button>
+        </div>
+      </header>
+
+      <div className="zml-map-canvas">
         <MapViewport
           planetId={planetId}
           point={point}
           miningClaims={state.miningClaims}
           miningDrops={state.miningDrops}
           playerRadiusM={state.activeMiningTools?.effectiveFinderRadiusM}
+          followPlayer={followPlayer}
+          onFollowPlayerChange={setFollowPlayer}
         />
-
-        {/* overlays */}
-        {state.error && (
-            <div
-                style={{
-                  position: "absolute",
-                  left: 12,
-                  top: 12,
-                  background: "#2a0f0f",
-                  color: "#ffdada",
-                  padding: 12,
-                  borderRadius: 10,
-                  maxWidth: 420,
-                }}
-            >
-              <b>UI error</b>
-              <div style={{ marginTop: 6 }}>{state.error}</div>
-            </div>
-        )}
-
-        {!state.error && (
-            <div
-                style={{
-                  position: "absolute",
-                  left: 12,
-                  top: 12,
-                  background: "rgba(0,0,0,0.55)",
-                  color: "#ddd",
-                  padding: "10px 12px",
-                  borderRadius: 10,
-                  fontFamily: "system-ui, sans-serif",
-                  fontSize: 12,
-                  backdropFilter: "blur(6px)",
-                }}
-            >
-              <div><b>{planetId}</b></div>
-              <div>X: {point ? point.x : "—"}</div>
-              <div>Y: {point ? point.y : "—"}</div>
-              <div style={{ opacity: 0.7, marginTop: 6 }}>
-                {state.positionEvent ? `seq=${state.positionEvent.seq} ts=${state.positionEvent.tsMs}` : "waiting…"}
-              </div>
-            </div>
-        )}
       </div>
+
+      {state.error && (
+        <div className="zml-map-error">
+          <b>UI error</b>
+          <div>{state.error}</div>
+        </div>
+      )}
+    </div>
   );
 }

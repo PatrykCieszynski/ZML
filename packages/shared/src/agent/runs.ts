@@ -69,6 +69,11 @@ export type StopRunRequest = {
     runId?: number;
 };
 
+export type UpdateRunRequest = {
+    name?: string;
+    notes?: string | null;
+};
+
 export function isStartRunRequest(value: unknown): value is StartRunRequest {
     if (!isRecord(value)) return false;
     const record = value;
@@ -78,6 +83,14 @@ export function isStartRunRequest(value: unknown): value is StartRunRequest {
 export function isStopRunRequest(value: unknown): value is StopRunRequest {
     if (!isRecord(value)) return false;
     return value.runId === undefined || isFiniteNumber(value.runId);
+}
+
+export function isUpdateRunRequest(value: unknown): value is UpdateRunRequest {
+    if (!isRecord(value)) return false;
+    return (
+        (value.name === undefined || (typeof value.name === "string" && value.name.trim().length > 0)) &&
+        (value.notes === undefined || isNullableString(value.notes))
+    );
 }
 
 export function isRunWire(value: unknown): value is RunWire {
@@ -204,6 +217,13 @@ export function startRunRequestToWire(request: StartRunRequest): StartRunRequest
 export function stopRunRequestToWire(request: StopRunRequest): { run_id?: number } {
     return {
         run_id: request.runId,
+    };
+}
+
+export function updateRunRequestToWire(request: UpdateRunRequest): UpdateRunRequest {
+    return {
+        ...(request.name === undefined ? {} : { name: request.name.trim() }),
+        ...(request.notes === undefined ? {} : { notes: request.notes }),
     };
 }
 

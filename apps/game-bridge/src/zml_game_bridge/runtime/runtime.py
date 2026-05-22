@@ -15,6 +15,7 @@ from zml_game_bridge.events.in_memory_persisted_event_bus import (
 )
 from zml_game_bridge.inputs.chat.runner import start_chat_input
 from zml_game_bridge.inputs.mock.mining import start_mock_mining_input
+from zml_game_bridge.inputs.ocr.pipelines.position.engine import preload_tesserocr
 from zml_game_bridge.inputs.ocr.pipelines.position.model import OcrPosition
 from zml_game_bridge.inputs.ocr.runner import start_ocr_input
 from zml_game_bridge.persistence.event_projector import CompositeEventProjector
@@ -184,6 +185,8 @@ class AppRuntime:
         self._t_chat.start()
 
         if self._ocr_enabled:
+            preload_tesserocr()  # Needed for 'tesserocr import failed: signal only works in main thread of the main interpreter'
+
             self._t_ocr = Thread(
                 target=start_ocr_input,
                 kwargs={

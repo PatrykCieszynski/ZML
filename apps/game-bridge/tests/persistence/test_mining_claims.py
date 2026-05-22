@@ -36,6 +36,7 @@ def test_mining_claim_projector_stores_claim_read_model(tmp_path: Path) -> None:
         assert row.position == WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None)
         assert row.search_radius_m == 55.0
         assert row.resource_name == "Lysterium Stone"
+        assert row.mining_type == "ore"
         assert row.size_label == "Minimal"
         assert row.size_index == 1
         assert row.expected_expires_ts_ms == 3_602_000
@@ -110,6 +111,7 @@ def _claim_created_event(
         position=WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None),
         search_radius_m=55.0,
         resource_name="Lysterium Stone",
+        mining_type="ore",
         size_label="Minimal",
         size_index=1,
         expected_expires_ts_ms=expected_expires_ts_ms,

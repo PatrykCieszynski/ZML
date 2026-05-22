@@ -1,0 +1,88 @@
+html[data-window-type="overlay"],
+body[data-window-type="overlay"] {
+  background: transparent;
+  overflow: hidden;
+}
+
+html[data-window-type="overlay"] #root,
+body[data-window-type="overlay"] #root {
+  background: transparent;
+}
+
+.zml-stream-overlay {
+  --zml-overlay-font-size: 13px;
+
+  height: 100vh;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #f4f8ff;
+  -webkit-app-region: drag;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+.zml-overlay-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.zml-overlay-title strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--zml-overlay-font-size);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+}
+
+.zml-overlay-title span {
+  color: #54df9b;
+  font-size: calc(var(--zml-overlay-font-size) - 2px);
+  font-weight: 900;
+  text-transform: uppercase;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+}
+
+.zml-overlay-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(74px, 1fr));
+  gap: 8px;
+}
+
+.zml-overlay-metric {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.zml-overlay-metric span {
+  color: #d7e2f2;
+  font-size: calc(var(--zml-overlay-font-size) - 2px);
+  font-weight: 800;
+  text-transform: uppercase;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+}
+
+.zml-overlay-metric strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #ffffff;
+  font-family: "Cascadia Mono", "Consolas", monospace;
+  font-size: var(--zml-overlay-font-size);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+}
+
+.zml-overlay-metric .is-gain {
+  color: #46de90;
+}
+
+.zml-overlay-metric .is-loss {
+  color: #ff6872;
+}

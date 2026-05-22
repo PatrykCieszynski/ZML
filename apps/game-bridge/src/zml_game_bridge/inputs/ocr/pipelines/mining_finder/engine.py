@@ -6,11 +6,9 @@ import numpy as np
 
 
 class FinderTextEngine(Protocol):
-    def recognize_text(self, img: np.ndarray, *, psm: int = 6) -> str:
-        ...
+    def recognize_text(self, img: np.ndarray, *, psm: int = 6) -> str: ...
 
-    def close(self) -> None:
-        ...
+    def close(self) -> None: ...
 
 
 class PytesseractFinderTextEngine:

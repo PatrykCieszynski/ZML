@@ -136,13 +136,11 @@ def _validate_finder_enhancer_loadout(loadout: FinderRangeEnhancerLoadout) -> No
         raise ValueError(f"enhancer count must be non-negative, got {loadout.count}")
     if loadout.decay_bonus_per_enhancer.ppm < 0:
         raise ValueError(
-            "enhancer decay bonus must be non-negative, "
-            f"got {loadout.decay_bonus_per_enhancer}"
+            f"enhancer decay bonus must be non-negative, got {loadout.decay_bonus_per_enhancer}"
         )
     if loadout.radius_bonus_per_enhancer.ppm < 0:
         raise ValueError(
-            "enhancer radius bonus must be non-negative, "
-            f"got {loadout.radius_bonus_per_enhancer}"
+            f"enhancer radius bonus must be non-negative, got {loadout.radius_bonus_per_enhancer}"
         )
 
 

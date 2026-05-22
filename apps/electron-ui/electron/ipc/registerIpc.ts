@@ -7,6 +7,7 @@ import {
     isSetActiveMiningToolsRequest,
     isStartRunRequest,
     isStopRunRequest,
+    isUpdateRunRequest,
     type BootstrapState,
     type GetBootstrapStateReq,
 } from "@zml/shared";
@@ -17,11 +18,13 @@ import { replaceActiveRun, replaceRunSegments } from "../runs/runSegmentsState.t
 
 type RegisterIpcDeps = {
     agentRestClient: AgentClient;
+    toggleMapWindow: () => Promise<boolean>;
+    toggleOverlayWindow: () => Promise<boolean>;
 };
 
 let registered = false;
 
-export function registerIpc({ agentRestClient }: RegisterIpcDeps): void {
+export function registerIpc({ agentRestClient, toggleMapWindow, toggleOverlayWindow }: RegisterIpcDeps): void {
     if (registered) return;
     registered = true;
 
@@ -35,10 +38,14 @@ export function registerIpc({ agentRestClient }: RegisterIpcDeps): void {
             agent: runtime.agent,
             streams: runtime.streams,
             position: runtime.lastPosition,
+            mapWindowVisible: runtime.mapWindowVisible,
+            overlayWindowVisible: runtime.overlayWindowVisible,
             activeRun: runtime.activeRun,
+            runs: runtime.runs,
             runSegments: runtime.runSegments,
             miningClaims: runtime.miningClaims,
             miningDrops: runtime.miningDrops,
+            miningLoot: runtime.miningLoot,
             miningTools: runtime.miningTools,
             activeMiningTools: runtime.activeMiningTools,
         };
@@ -60,6 +67,45 @@ export function registerIpc({ agentRestClient }: RegisterIpcDeps): void {
         return activeRun;
     });
 
+    ipcMain.handle(IPC_CMD.LIST_RUNS, async () => {
+        const runs = await agentRestClient.listRuns();
+        runtime.runs = runs;
+        pushStatePatch({ runs });
+        return runs;
+    });
+
+    ipcMain.handle(IPC_CMD.RESUME_RUN, async (_evt, runId: unknown) => {
+        if (typeof runId !== "number" || !Number.isFinite(runId)) {
+            throw new Error("Invalid resume run request");
+        }
+        const activeRun = await agentRestClient.resumeRun(runId);
+        const [runs, runSegments] = await Promise.all([
+            agentRestClient.listRuns(),
+            agentRestClient.listActiveRunSegments(),
+        ]);
+        runtime.activeRun = activeRun;
+        runtime.runs = runs;
+        runtime.runSegments = runSegments;
+        pushStatePatch({ activeRun, runs, runSegments });
+        return activeRun;
+    });
+
+    ipcMain.handle(IPC_CMD.UPDATE_RUN, async (_evt, runId: unknown, req: unknown) => {
+        if (typeof runId !== "number" || !Number.isFinite(runId) || !isUpdateRunRequest(req)) {
+            throw new Error("Invalid update run request");
+        }
+        const activeRun = await agentRestClient.updateRun(runId, req);
+        const runs = await agentRestClient.listRuns();
+        runtime.runs = runs;
+        if (runtime.activeRun?.runId === runId) {
+            runtime.activeRun = activeRun;
+            pushStatePatch({ activeRun, runs });
+        } else {
+            pushStatePatch({ runs });
+        }
+        return activeRun;
+    });
+
     ipcMain.handle(IPC_CMD.LIST_ACTIVE_RUN_SEGMENTS, async () => {
         const runSegments = await agentRestClient.listActiveRunSegments();
         replaceRunSegments(runSegments);
@@ -73,14 +119,20 @@ export function registerIpc({ agentRestClient }: RegisterIpcDeps): void {
         return agentRestClient.listRunSegments(runId);
     });
 
+    ipcMain.handle(IPC_CMD.TOGGLE_MAP_WINDOW, async () => toggleMapWindow());
+
+    ipcMain.handle(IPC_CMD.TOGGLE_OVERLAY_WINDOW, async () => toggleOverlayWindow());
+
     ipcMain.handle(IPC_CMD.START_RUN, async (_evt, req: unknown) => {
         if (!isStartRunRequest(req)) {
             throw new Error("Invalid start run request");
         }
         const activeRun = await agentRestClient.startRun(req);
+        const runs = await agentRestClient.listRuns();
         runtime.activeRun = activeRun;
+        runtime.runs = runs;
         runtime.runSegments = [];
-        pushStatePatch({ activeRun, runSegments: [] });
+        pushStatePatch({ activeRun, runs, runSegments: [] });
         return activeRun;
     });
 
@@ -89,9 +141,11 @@ export function registerIpc({ agentRestClient }: RegisterIpcDeps): void {
             throw new Error("Invalid stop run request");
         }
         const stoppedRun = await agentRestClient.stopRun(req);
+        const runs = await agentRestClient.listRuns();
         runtime.activeRun = null;
+        runtime.runs = runs;
         runtime.runSegments = [];
-        pushStatePatch({ activeRun: null, runSegments: [] });
+        pushStatePatch({ activeRun: null, runs, runSegments: [] });
         return stoppedRun;
     });
 

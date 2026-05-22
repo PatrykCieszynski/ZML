@@ -1,0 +1,48 @@
+name: Package Bridge Windows
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_name:
+        description: Artifact/build name suffix
+        required: false
+        default: snapshot
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-bridge-windows
+  cancel-in-progress: false
+
+jobs:
+  package-bridge:
+    name: Package Bridge / Windows
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up bridge
+        uses: ./.github/actions/setup-bridge
+
+      - name: Verify bridge
+        working-directory: apps/game-bridge
+        run: just verify
+
+      - name: Package bridge
+        working-directory: apps/game-bridge
+        run: just package
+
+      - name: Smoke test packaged bridge config
+        working-directory: apps/game-bridge
+        run: .\dist\zml-game-bridge\zml-game-bridge.exe config
+
+      - name: Upload bridge artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zml-game-bridge-windows-${{ github.event.inputs.build_name }}
+          path: apps/game-bridge/dist/zml-game-bridge
+          retention-days: 14
+          if-no-files-found: error

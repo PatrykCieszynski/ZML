@@ -48,14 +48,13 @@ class MiningCoordinator:
         )
         self._chat = MiningChatCorrelator(
             resource_catalog=resource_catalog,
-            extraction_cost_provider=lambda: calculate_extraction_cost(
-                resolved_profile_provider()
-            ),
+            extraction_cost_provider=lambda: calculate_extraction_cost(resolved_profile_provider()),
         )
         self._claim_lifecycle = ClaimLifecycleCorrelator(
             config=resolved_config,
             id_factory=id_factory,
             position_provider=position_provider,
+            resource_catalog=resource_catalog,
         )
 
     def restore_active_claims(self, claims: Iterable[ActiveClaim]) -> None:

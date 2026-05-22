@@ -114,7 +114,9 @@ def _remove_small_components(binary: np.ndarray, min_area: int) -> np.ndarray:
     return (out * 255).astype(np.uint8)
 
 
-def preprocess_line(img: np.ndarray, variant: PreprocessVariant, cfg: PreprocessConfig) -> np.ndarray:
+def preprocess_line(
+    img: np.ndarray, variant: PreprocessVariant, cfg: PreprocessConfig
+) -> np.ndarray:
     """
     Preprocess a single-line ROI (lon or lat) for OCR.
     Returns a single-channel uint8 image (grayscale or binary).
@@ -203,7 +205,9 @@ def preprocess_line(img: np.ndarray, variant: PreprocessVariant, cfg: Preprocess
             ckx = max(1, int(ckx))
             cky = max(1, int(cky))
             ckernel = cv2.getStructuringElement(cv2.MORPH_RECT, (ckx, cky))
-            bw = cv2.morphologyEx(bw, cv2.MORPH_CLOSE, ckernel, iterations=cfg.p3_morph_close_iterations)
+            bw = cv2.morphologyEx(
+                bw, cv2.MORPH_CLOSE, ckernel, iterations=cfg.p3_morph_close_iterations
+            )
 
         if cfg.p3_remove_small_cc:
             bw = _remove_small_components(bw, cfg.p3_min_cc_area)

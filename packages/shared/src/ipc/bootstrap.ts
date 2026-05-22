@@ -2,6 +2,7 @@ import type { WindowType } from "./windowType";
 import type { OcrPositionDTO } from "../dto/ocrPosition";
 import type { MiningClaimDto } from "../dto/miningClaims";
 import type { MiningDropDto } from "../dto/miningDrops";
+import type { MiningLootItemDto } from "../dto/miningLoot";
 import type { ActiveMiningToolsDto, MiningToolProfileDto } from "../dto/miningTools";
 import type { RunDto, RunSegmentDto } from "../agent/runs";
 
@@ -35,10 +36,14 @@ export type BootstrapState = {
 
     // Last known position (if any)
     position?: OcrPositionDTO;
+    mapWindowVisible?: boolean;
+    overlayWindowVisible?: boolean;
     activeRun?: RunDto | null;
+    runs?: RunDto[];
     runSegments?: RunSegmentDto[];
     miningClaims?: MiningClaimDto[];
     miningDrops?: MiningDropDto[];
+    miningLoot?: MiningLootItemDto[];
     miningTools?: MiningToolProfileDto[];
     activeMiningTools?: ActiveMiningToolsDto;
 };

@@ -11,6 +11,7 @@ import type {
     SetActiveMiningToolsRequest,
     StartRunRequest,
     StopRunRequest,
+    UpdateRunRequest,
 } from "@zml/shared";
 
 import type {
@@ -20,8 +21,8 @@ import type {
 } from "../agent/restClient.ts";
 
 const MOCK_MINING_CLAIMS: MiningClaimDto[] = [
-    createMockMiningClaim("mock-claim-1", Date.now() - 5 * 60_000, 58913, 84653, "Lysterium Stone"),
-    createMockMiningClaim("mock-claim-2", Date.now() - 90_000, 58940, 84667, "Crude Oil"),
+    createMockMiningClaim("mock-claim-1", Date.now() - 5 * 60_000, 58913, 84653, "Lysterium Stone", "ore"),
+    createMockMiningClaim("mock-claim-2", Date.now() - 90_000, 58940, 84667, "Crude Oil", "enmatter"),
 ];
 
 const MOCK_MINING_DROPS: MiningDropDto[] = [
@@ -34,6 +35,7 @@ export class MockAgentRestClient implements AgentClient {
     private nextRunId = 1;
     private nextToolId = 4;
     private activeRun: RunDto | null = null;
+    private runs: RunDto[] = [];
     private runSegments: RunSegmentDto[] = [];
     private miningTools: MiningToolProfileDto[] = [
         createMockMiningTool("mock-finder-1", "finder", "Ziplex Z20", 0, "100", 55),
@@ -64,6 +66,7 @@ export class MockAgentRestClient implements AgentClient {
             updatedTsMs: now,
         };
         this.nextRunId += 1;
+        this.runs = [this.activeRun, ...this.runs.filter((run) => run.runId !== this.activeRun?.runId)];
         this.runSegments = [];
 
         return this.activeRun;
@@ -86,6 +89,7 @@ export class MockAgentRestClient implements AgentClient {
         };
 
         this.activeRun = null;
+        this.runs = [stoppedRun, ...this.runs.filter((item) => item.runId !== stoppedRun.runId)];
         this.runSegments = [];
 
         return stoppedRun;
@@ -93,6 +97,45 @@ export class MockAgentRestClient implements AgentClient {
 
     async getActiveRun(): Promise<RunDto | null> {
         return this.activeRun;
+    }
+
+    async listRuns(): Promise<RunDto[]> {
+        return [...this.runs];
+    }
+
+    async resumeRun(runId: number): Promise<RunDto> {
+        const now = Date.now();
+        this.activeRun = {
+            runId,
+            name: `Mock run #${runId}`,
+            status: "running",
+            notes: null,
+            createdTsMs: now,
+            updatedTsMs: now,
+        };
+        this.runs = [this.activeRun, ...this.runs.filter((run) => run.runId !== runId)];
+        this.runSegments = [];
+        return this.activeRun;
+    }
+
+    async updateRun(runId: number, request: UpdateRunRequest): Promise<RunDto> {
+        const current = this.runs.find((run) => run.runId === runId);
+        if (!current) {
+            throw new Error(`Mock run not found: ${runId}`);
+        }
+
+        const updatedRun: RunDto = {
+            ...current,
+            name: request.name?.trim() || current.name,
+            notes: request.notes === undefined ? current.notes : request.notes,
+            updatedTsMs: Date.now(),
+        };
+
+        this.runs = [updatedRun, ...this.runs.filter((run) => run.runId !== runId)];
+        if (this.activeRun?.runId === runId) {
+            this.activeRun = updatedRun;
+        }
+        return updatedRun;
     }
 
     async listActiveRunSegments(): Promise<RunSegmentDto[]> {
@@ -249,6 +292,7 @@ function createMockMiningClaim(
     x: number,
     y: number,
     resourceName: string,
+    miningType: MiningClaimDto["miningType"],
 ): MiningClaimDto {
     return {
         claimId,
@@ -264,6 +308,7 @@ function createMockMiningClaim(
         },
         searchRadiusM: 55,
         resourceName,
+        miningType,
         sizeLabel: "Minimal",
         sizeIndex: 1,
         expectedExpiresTsMs: observedTsMs + 60 * 60_000,

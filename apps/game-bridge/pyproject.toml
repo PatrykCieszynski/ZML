@@ -12,23 +12,29 @@ dependencies = [
     "pydantic>=2.12.5",
     "pydantic-settings>=2.12.0",
     "pytesseract>=0.3.13",
-    "pywin32>=311",
+    "pywin32==311; sys_platform == 'win32'",
+    "rich>=14.2.0",
+    "typer>=0.20.0",
+    "tesserocr @ https://github.com/simonflueckiger/tesserocr-windows_build/releases/download/tesserocr-v2.10.0-tesseract-5.5.2/tesserocr-2.10.0-cp313-cp313-win_amd64.whl ; sys_platform == 'win32' and platform_machine == 'AMD64'",
     "uvicorn[standard]>=0.40.0",
 ]
 
 [dependency-groups]
 dev = [
+    "pyinstaller>=6.20.0",
     "pyright>=1.1.408",
     "pytest>=9.0.2",
     "pytest-timeout>=2.4.0",
-    "rich>=14.2.0",
     "ruff>=0.14.11",
-    "typer>=0.20.0",
+    "types-pywin32>=311.0.0.20260521",
 ]
 
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
+
+[project.scripts]
+zml-game-bridge = "zml_game_bridge.dev_cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

@@ -1,4 +1,4 @@
-export const WINDOW_TYPES = ["main", "map", "hud"] as const;
+export const WINDOW_TYPES = ["main", "map", "hud", "overlay"] as const;
 
 export type WindowType = (typeof WINDOW_TYPES)[number];
 

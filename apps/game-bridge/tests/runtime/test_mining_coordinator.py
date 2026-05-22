@@ -634,7 +634,9 @@ def test_mining_coordinator_adds_extractor_cost_to_item_received_event() -> None
     coordinator = MiningCoordinator(
         profile=MiningEquipmentProfile(
             finder=MiningToolProfile(name="Finder", decay_mpec=Mpec(0)),
-            extractor=MiningToolProfile(name="Extractor", decay_mpec=Mpec(100), markup=percent("125")),
+            extractor=MiningToolProfile(
+                name="Extractor", decay_mpec=Mpec(100), markup=percent("125")
+            ),
         )
     )
     event_dt = datetime(2026, 1, 10, 12, 37, 50)

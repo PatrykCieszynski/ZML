@@ -78,6 +78,7 @@ class MiningClaimCreatedEvent(EventBase):
     position: WorldPos | None
     search_radius_m: float | None
     resource_name: str | None
+    mining_type: str | None
     size_label: str | None
     size_index: int | None
     expected_expires_ts_ms: int | None

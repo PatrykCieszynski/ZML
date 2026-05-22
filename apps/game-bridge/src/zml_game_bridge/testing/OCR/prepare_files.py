@@ -8,12 +8,13 @@ OUTPUT_TOP_DIR: Path = INPUT_DIR / "lon"
 OUTPUT_BOTTOM_DIR: Path = INPUT_DIR / "lat"
 LEFT_CROP: int = 42
 
+
 def split_and_save(
     id: int,
     image_path: Path,
     out_top: Path = OUTPUT_TOP_DIR,
     out_bottom: Path = OUTPUT_BOTTOM_DIR,
-    left_crop: int = LEFT_CROP
+    left_crop: int = LEFT_CROP,
 ) -> None:
     """
     Otwiera obraz, obcina `left_crop` px z lewej, dzieli pozostały obraz na dwie połowy (góra/dół)
@@ -59,6 +60,7 @@ def split_and_save(
     except Exception as e:
         print(f"Błąd przy przetwarzaniu {image_path.name}: {e}")
 
+
 def process_all(
     input_dir: Path = INPUT_DIR,
     out_top: Path = OUTPUT_TOP_DIR,
@@ -77,6 +79,7 @@ def process_all(
         if p.is_file() and p.suffix.lower() in {".png", ".jpg", ".jpeg", ".bmp", ".webp"}:
             split_and_save(id, p, out_top, out_bottom)
             id += 1
+
 
 if __name__ == "__main__":
     process_all()

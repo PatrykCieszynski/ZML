@@ -15,6 +15,7 @@ import type {
   SetActiveMiningToolsRequest,
   StartRunRequest,
   StopRunRequest,
+  UpdateRunRequest,
   WindowType,
 } from "@zml/shared";
 import { IPC_CMD, IPC_PUSH } from "@zml/shared";
@@ -25,8 +26,13 @@ type ZmlApi = {
   getBootstrapState: (windowType: WindowType) => Promise<BootstrapState>;
   getAgentHealth: () => Promise<AgentHealthDto>;
   getActiveRun: () => Promise<RunDto | null>;
+  listRuns: () => Promise<RunDto[]>;
+  resumeRun: (runId: number) => Promise<RunDto>;
+  updateRun: (runId: number, request: UpdateRunRequest) => Promise<RunDto>;
   listActiveRunSegments: () => Promise<RunSegmentDto[]>;
   listRunSegments: (runId: number) => Promise<RunSegmentDto[]>;
+  toggleMapWindow: () => Promise<boolean>;
+  toggleOverlayWindow: () => Promise<boolean>;
   startRun: (request: StartRunRequest) => Promise<RunDto>;
   stopRun: (request?: StopRunRequest) => Promise<RunDto>;
   listMiningTools: () => Promise<MiningToolProfileDto[]>;
@@ -52,12 +58,32 @@ const api: ZmlApi = {
     return ipcRenderer.invoke(IPC_CMD.GET_ACTIVE_RUN) as Promise<RunDto | null>;
   },
 
+  async listRuns() {
+    return ipcRenderer.invoke(IPC_CMD.LIST_RUNS) as Promise<RunDto[]>;
+  },
+
+  async resumeRun(runId) {
+    return ipcRenderer.invoke(IPC_CMD.RESUME_RUN, runId) as Promise<RunDto>;
+  },
+
+  async updateRun(runId, request) {
+    return ipcRenderer.invoke(IPC_CMD.UPDATE_RUN, runId, request) as Promise<RunDto>;
+  },
+
   async listActiveRunSegments() {
     return ipcRenderer.invoke(IPC_CMD.LIST_ACTIVE_RUN_SEGMENTS) as Promise<RunSegmentDto[]>;
   },
 
   async listRunSegments(runId) {
     return ipcRenderer.invoke(IPC_CMD.LIST_RUN_SEGMENTS, runId) as Promise<RunSegmentDto[]>;
+  },
+
+  async toggleMapWindow() {
+    return ipcRenderer.invoke(IPC_CMD.TOGGLE_MAP_WINDOW) as Promise<boolean>;
+  },
+
+  async toggleOverlayWindow() {
+    return ipcRenderer.invoke(IPC_CMD.TOGGLE_OVERLAY_WINDOW) as Promise<boolean>;
   },
 
   async startRun(request) {
