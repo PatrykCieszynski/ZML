@@ -5,6 +5,13 @@ import numpy as np
 from zml_game_bridge.paths import get_tessdata_dir
 
 
+def preload_tesserocr() -> None:
+    try:
+        import tesserocr  # noqa: F401
+    except Exception as exc:
+        raise RuntimeError(f"tesserocr preload failed: {exc}") from exc
+
+
 class TesserDigitsEngine:
     def __init__(self, *, tessdata_dir: str | None = None) -> None:
         try:

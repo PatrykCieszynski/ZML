@@ -5,11 +5,20 @@ import sys
 from pathlib import Path
 
 
-def get_bridge_base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve().parent
-
+def get_bridge_project_root() -> Path:
     return Path(__file__).resolve().parents[2]
+
+
+def get_frozen_base_candidates() -> list[Path]:
+    candidates: list[Path] = []
+
+    pyinstaller_bundle_dir = getattr(sys, "_MEIPASS", None)
+    if pyinstaller_bundle_dir:
+        candidates.append(Path(pyinstaller_bundle_dir).resolve())
+
+    candidates.append(Path(sys.executable).resolve().parent)
+
+    return candidates
 
 
 def get_tessdata_dir(explicit_path: str | None = None) -> Path:
@@ -22,13 +31,24 @@ def get_tessdata_dir(explicit_path: str | None = None) -> Path:
     if env_path:
         candidates.append(Path(env_path))
 
-    base_dir = get_bridge_base_dir()
-    candidates.extend(
-        [
-            base_dir / "tessdata",
-            base_dir / "resources" / "tessdata",
-        ]
-    )
+    if getattr(sys, "frozen", False):
+        for base_dir in get_frozen_base_candidates():
+            candidates.extend(
+                [
+                    base_dir / "tessdata",
+                    base_dir / "resources" / "tessdata",
+                    base_dir / "_internal" / "tessdata",
+                    base_dir / "_internal" / "resources" / "tessdata",
+                ]
+            )
+    else:
+        project_root = get_bridge_project_root()
+        candidates.extend(
+            [
+                project_root / "resources" / "tessdata",
+                project_root / "tessdata",
+            ]
+        )
 
     for candidate in candidates:
         if (candidate / "eng.traineddata").exists():
