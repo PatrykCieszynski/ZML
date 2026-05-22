@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 
-class ChannelType(str, Enum):
+class ChannelType(StrEnum):
     SYSTEM = "System"
     GLOBALS = "Globals"
     PUBLIC = "Public"

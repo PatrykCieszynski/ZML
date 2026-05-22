@@ -24,6 +24,7 @@ dev = [
     "rich>=14.2.0",
     "ruff>=0.14.11",
     "typer>=0.20.0",
+    "types-pywin32>=311.0.0.20260521",
 ]
 
 [build-system]

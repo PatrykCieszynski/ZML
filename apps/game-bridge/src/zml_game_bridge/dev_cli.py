@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
 
@@ -18,7 +18,7 @@ app = typer.Typer(
 console = Console()
 
 
-class InputMode(str, Enum):
+class InputMode(StrEnum):
     ENV = "env"
     LIVE = "live"
     MOCK = "mock"
