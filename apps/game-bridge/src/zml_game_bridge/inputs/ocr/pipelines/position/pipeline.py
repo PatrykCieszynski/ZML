@@ -84,4 +84,3 @@ class PositionPipeline:
             return None
 
         return val
-

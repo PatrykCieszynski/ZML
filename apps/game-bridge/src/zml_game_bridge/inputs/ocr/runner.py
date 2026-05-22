@@ -71,8 +71,8 @@ def start_ocr_input(
     # deeds_pipeline = ...     # step(deeds_roi, ts_ms) -> ...
 
     # optional: run slower pipelines less often
-    finder_every_n = 5   # 10Hz/5 = 2Hz
-    deeds_every_n = 10   # 1Hz
+    finder_every_n = 5  # 10Hz/5 = 2Hz
+    deeds_every_n = 10  # 1Hz
     tick = 0
     latest_position: OcrPosition | None = None
     finder_future: Future[list[MiningFinderSignal]] | None = None
@@ -90,7 +90,6 @@ def start_ocr_input(
                 next_t = now
             next_t += period
             tick += 1
-
 
             frame = cap.grab()
 
@@ -166,9 +165,7 @@ def _configure_finder_debug_logging() -> None:
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
     )
     logger.setLevel(logging.DEBUG)
-    logging.getLogger("zml_game_bridge.inputs.ocr.pipelines.mining_finder").setLevel(
-        logging.DEBUG
-    )
+    logging.getLogger("zml_game_bridge.inputs.ocr.pipelines.mining_finder").setLevel(logging.DEBUG)
 
 
 def _to_finder_signal(signal: MiningFinderSignal, latest_position: OcrPosition | None):

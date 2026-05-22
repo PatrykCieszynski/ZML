@@ -167,9 +167,7 @@ def test_mining_finder_pipeline_emits_no_resources_for_no_resources_status() -> 
     assert signals[0].raw_text == "No resources found. Try again\nsomewhere else-"
     assert pipeline.step(_roi(), 1_100) == []
     assert pipeline.step(_roi(), 1_200) == []
-    assert [signal.kind for signal in pipeline.step(_roi(), 1_300)] == [
-        "finder_no_resources"
-    ]
+    assert [signal.kind for signal in pipeline.step(_roi(), 1_300)] == ["finder_no_resources"]
 
 
 def test_mining_finder_pipeline_emits_hit_hint_for_found_status() -> None:
@@ -259,7 +257,9 @@ def test_mining_finder_pipeline_ignores_mode_reads_during_found_overlay() -> Non
                 hit_size_index=1,
                 resource_name="Lysterium Stone",
             ),
-            FinderFeatures(modes_mask=int(MiningMode.ORE | MiningMode.ENMATTER | MiningMode.TREASURE)),
+            FinderFeatures(
+                modes_mask=int(MiningMode.ORE | MiningMode.ENMATTER | MiningMode.TREASURE)
+            ),
             FinderFeatures(modes_mask=int(MiningMode.NONE), status_kind="sending_probe"),
         )
     )

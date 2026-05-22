@@ -17,5 +17,6 @@ def main() -> None:
         reload=s.reload,
     )
 
+
 if __name__ == "__main__":
     main()

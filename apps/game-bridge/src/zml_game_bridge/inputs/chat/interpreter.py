@@ -27,13 +27,9 @@ RE_ITEM_RECEIVED = re.compile(
     r"^You received (?P<item_name>.+?) x \((?P<qty>\d+)\) Value: (?P<value_ped>\d+(?:\.\d+)?) PED$"
 )
 
-RE_RESOURCE_CLAIMED = re.compile(
-    r"^You have claimed a resource! \((?P<resource_name>.+?)\)$"
-)
+RE_RESOURCE_CLAIMED = re.compile(r"^You have claimed a resource! \((?P<resource_name>.+?)\)$")
 
-RE_RESOURCE_DEPLETED = re.compile(
-    r"^This resource is depleted$"
-)
+RE_RESOURCE_DEPLETED = re.compile(r"^This resource is depleted$")
 
 RE_POSITION_PING = re.compile(
     r"^\[(?P<planet_name>[^,\]]+),\s*(?P<x>-?\d+),\s*(?P<y>-?\d+),\s*(?P<z>-?\d+),\s*Waypoint]$"
@@ -64,7 +60,8 @@ def _interpret_system(line: ChatLine) -> ChatSignalBase | None:
             return signal_output
     return None
 
-#TODO track user globals and hofs
+
+# TODO track user globals and hofs
 def _interpret_globals(_line: ChatLine) -> ChatSignalBase | None:
     return None
 
@@ -90,7 +87,7 @@ def _try_match_enhancer_broke(line: ChatLine) -> EnhancerBrokeSignal | None:
         raw=line.raw,
         enhancer_name=enhancer_name,
         item_name=item_name,
-        remaining=remaining
+        remaining=remaining,
     )
 
 
@@ -116,8 +113,9 @@ def _try_match_item_received(line: ChatLine) -> ItemReceivedSignal | None:
         raw=line.raw,
         item_name=item_name,
         qty=qty,
-        value_mpec=value_mpec
+        value_mpec=value_mpec,
     )
+
 
 def _try_match_resource_claimed(line: ChatLine) -> ResourceClaimedSignal | None:
     matches = RE_RESOURCE_CLAIMED.match(line.message)
@@ -131,8 +129,9 @@ def _try_match_resource_claimed(line: ChatLine) -> ResourceClaimedSignal | None:
         channel_type=line.channel_type,
         channel_token=line.channel_token,
         raw=line.raw,
-        resource_name=resource_name
+        resource_name=resource_name,
     )
+
 
 def _try_match_resource_depleted(line: ChatLine) -> ResourceDepletedSignal | None:
     matches = RE_RESOURCE_DEPLETED.match(line.message)
@@ -145,6 +144,7 @@ def _try_match_resource_depleted(line: ChatLine) -> ResourceDepletedSignal | Non
         channel_token=line.channel_token,
         raw=line.raw,
     )
+
 
 def _try_match_position_ping(line: ChatLine) -> PlayerPosWaypointSignal | None:
     matches = RE_POSITION_PING.match(line.message)
@@ -168,13 +168,9 @@ def _try_match_position_ping(line: ChatLine) -> PlayerPosWaypointSignal | None:
         channel_type=line.channel_type,
         channel_token=line.channel_token,
         raw=line.raw,
-        position=WorldPos(
-            planet_name=planet_name,
-            x=x,
-            y=y,
-            z=z
-        )
+        position=WorldPos(planet_name=planet_name, x=x, y=y, z=z),
     )
+
 
 def _try_match_skill_gained(line: ChatLine) -> SkillGainedSignal | None:
     matches = RE_SKILL_GAINED.match(line.message)
@@ -194,7 +190,7 @@ def _try_match_skill_gained(line: ChatLine) -> SkillGainedSignal | None:
         channel_token=line.channel_token,
         raw=line.raw,
         skill=skill,
-        amount=amount
+        amount=amount,
     )
 
 
@@ -210,6 +206,7 @@ def _parse_int(s: str) -> int | None:
         return int(s)
     except (ValueError, TypeError):
         return None
+
 
 def _parse_ped_to_mpec(s: str) -> Mpec | None:
     ped = _parse_decimal(s)

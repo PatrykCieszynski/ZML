@@ -48,9 +48,7 @@ class MiningCoordinator:
         )
         self._chat = MiningChatCorrelator(
             resource_catalog=resource_catalog,
-            extraction_cost_provider=lambda: calculate_extraction_cost(
-                resolved_profile_provider()
-            ),
+            extraction_cost_provider=lambda: calculate_extraction_cost(resolved_profile_provider()),
         )
         self._claim_lifecycle = ClaimLifecycleCorrelator(
             config=resolved_config,

@@ -181,9 +181,13 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         if not _column_exists(conn, "events", "segment_id"):
             conn.execute("ALTER TABLE events ADD COLUMN segment_id TEXT")
         if not _column_exists(conn, "mining_drops", "run_id"):
-            conn.execute("ALTER TABLE mining_drops ADD COLUMN run_id INTEGER REFERENCES runs(run_id) ON DELETE SET NULL")
+            conn.execute(
+                "ALTER TABLE mining_drops ADD COLUMN run_id INTEGER REFERENCES runs(run_id) ON DELETE SET NULL"
+            )
         if not _column_exists(conn, "mining_drops", "segment_id"):
-            conn.execute("ALTER TABLE mining_drops ADD COLUMN segment_id TEXT REFERENCES run_segments(segment_id) ON DELETE SET NULL")
+            conn.execute(
+                "ALTER TABLE mining_drops ADD COLUMN segment_id TEXT REFERENCES run_segments(segment_id) ON DELETE SET NULL"
+            )
     if user_version < 8 and not _column_exists(conn, "mining_claims", "mining_type"):
         conn.execute("ALTER TABLE mining_claims ADD COLUMN mining_type TEXT")
     if user_version < SCHEMA_VERSION:

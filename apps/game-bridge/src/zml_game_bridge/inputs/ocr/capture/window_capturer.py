@@ -24,7 +24,7 @@ def _find_window_by_title_contains(title_substr: str) -> int:
 
     win32gui.EnumWindows(enum_cb, 0)
     if not found:
-        raise RuntimeError(f'Window not found (title contains): {title_substr!r}')
+        raise RuntimeError(f"Window not found (title contains): {title_substr!r}")
     return found[0]
 
 
@@ -40,7 +40,9 @@ class _GdiState:
 
 
 class WindowCapturer:
-    def __init__(self, *, title_contains: str, flags: int = PW_CLIENTONLY | PW_RENDERFULLCONTENT) -> None:
+    def __init__(
+        self, *, title_contains: str, flags: int = PW_CLIENTONLY | PW_RENDERFULLCONTENT
+    ) -> None:
         self._title_contains = title_contains
         self._flags = flags
         self._state: _GdiState | None = None

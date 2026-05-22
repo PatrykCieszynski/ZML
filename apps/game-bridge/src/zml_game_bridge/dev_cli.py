@@ -115,7 +115,9 @@ def show_config(
         bool,
         typer.Option("--finder-debug", help="Enable finder OCR debug logging."),
     ] = False,
-    log_level: Annotated[str | None, typer.Option("--log-level", help="Override ZML_LOG_LEVEL.")] = None,
+    log_level: Annotated[
+        str | None, typer.Option("--log-level", help="Override ZML_LOG_LEVEL.")
+    ] = None,
     mock_interval_ms: Annotated[
         int | None,
         typer.Option("--mock-interval-ms", help="Override mock mining interval in milliseconds."),
@@ -152,7 +154,9 @@ def serve(
         bool,
         typer.Option("--finder-debug", help="Enable finder OCR debug logging."),
     ] = False,
-    log_level: Annotated[str | None, typer.Option("--log-level", help="Override ZML_LOG_LEVEL.")] = None,
+    log_level: Annotated[
+        str | None, typer.Option("--log-level", help="Override ZML_LOG_LEVEL.")
+    ] = None,
     mock_interval_ms: Annotated[
         int | None,
         typer.Option("--mock-interval-ms", help="Override mock mining interval in milliseconds."),

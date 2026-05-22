@@ -32,11 +32,9 @@ logger = logging.getLogger(__name__)
 
 
 class FinderFeatureDetector(Protocol):
-    def detect(self, finder_roi: np.ndarray) -> FinderFeatures:
-        ...
+    def detect(self, finder_roi: np.ndarray) -> FinderFeatures: ...
 
-    def close(self) -> None:
-        ...
+    def close(self) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)
