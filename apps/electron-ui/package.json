@@ -12,7 +12,7 @@
     "test": "vitest run",
 
     "build:web": "vite build",
-    "build:desktop": "tsc -p electron/tsconfig.json",
+    "build:desktop": "tsc -p tsconfig.json",
     "build": "pnpm build:web && pnpm build:desktop",
 
     "package": "pnpm build && electron-builder"

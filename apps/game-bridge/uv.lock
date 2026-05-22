@@ -742,7 +742,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pytesseract" },
-    { name = "pywin32" },
+    { name = "pywin32", marker = "sys_platform == 'win32'" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -765,7 +765,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pydantic-settings", specifier = ">=2.12.0" },
     { name = "pytesseract", specifier = ">=0.3.13" },
-    { name = "pywin32", specifier = ">=311" },
+    { name = "pywin32", marker = "sys_platform == 'win32'", specifier = "==311" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.40.0" },
 ]
 
