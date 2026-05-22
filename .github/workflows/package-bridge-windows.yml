@@ -1,0 +1,51 @@
+name: Package Bridge Windows
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-bridge-windows
+  cancel-in-progress: false
+
+jobs:
+  package-bridge:
+    name: Package Bridge / Windows
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up just
+        uses: extractions/setup-just@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install Python
+        working-directory: apps/game-bridge
+        run: uv python install
+
+      - name: Install bridge dependencies
+        working-directory: apps/game-bridge
+        run: uv sync --locked --all-extras --dev
+
+      - name: Verify bridge
+        working-directory: apps/game-bridge
+        run: just verify
+
+      - name: Package bridge
+        working-directory: apps/game-bridge
+        run: just package
+
+      - name: Upload bridge artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zml-game-bridge-windows
+          path: apps/game-bridge/dist/zml-game-bridge
+          retention-days: 14
