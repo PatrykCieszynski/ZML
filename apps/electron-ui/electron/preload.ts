@@ -15,6 +15,7 @@ import type {
   SetActiveMiningToolsRequest,
   StartRunRequest,
   StopRunRequest,
+  UpdateRunRequest,
   WindowType,
 } from "@zml/shared";
 import { IPC_CMD, IPC_PUSH } from "@zml/shared";
@@ -27,6 +28,7 @@ type ZmlApi = {
   getActiveRun: () => Promise<RunDto | null>;
   listRuns: () => Promise<RunDto[]>;
   resumeRun: (runId: number) => Promise<RunDto>;
+  updateRun: (runId: number, request: UpdateRunRequest) => Promise<RunDto>;
   listActiveRunSegments: () => Promise<RunSegmentDto[]>;
   listRunSegments: (runId: number) => Promise<RunSegmentDto[]>;
   toggleMapWindow: () => Promise<boolean>;
@@ -62,6 +64,10 @@ const api: ZmlApi = {
 
   async resumeRun(runId) {
     return ipcRenderer.invoke(IPC_CMD.RESUME_RUN, runId) as Promise<RunDto>;
+  },
+
+  async updateRun(runId, request) {
+    return ipcRenderer.invoke(IPC_CMD.UPDATE_RUN, runId, request) as Promise<RunDto>;
   },
 
   async listActiveRunSegments() {

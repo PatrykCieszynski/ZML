@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   ActiveMiningToolsDto,
   MiningClaimDto,
   MiningDropDto,
   MiningLootItemDto,
+  MiningResourceType,
   MiningToolKind,
   MiningToolProfileDto,
   RunDto,
@@ -18,12 +19,14 @@ import {
   stopRun,
   toggleMapWindow,
   toggleOverlayWindow,
+  updateRunName,
   useZmlRendererStore,
 } from "../state/zmlRendererStore";
 import { MiningToolsPanel } from "./miningToolsPanel";
+import { useOverlayPreferences, type OverlayMetricKey } from "./overlayPreferences";
 import "./mainWindow.css";
 
-type MainView = "dashboard" | "runs" | "segments" | "loot" | "claims" | "setup" | "debug";
+type MainView = "dashboard" | "runs" | "segments" | "loot" | "claims" | "setup" | "overlay" | "debug";
 
 type FeedItem = {
   id: string;
@@ -41,6 +44,7 @@ const NAV_ITEMS: Array<{ id: MainView; label: string }> = [
   { id: "loot", label: "Loot" },
   { id: "claims", label: "Claims" },
   { id: "setup", label: "Setup" },
+  { id: "overlay", label: "Overlay" },
   { id: "debug", label: "Debug" },
 ];
 
@@ -48,8 +52,21 @@ export function MainWindow() {
   const windowType: WindowType = "main";
   const state = useZmlRendererStore(windowType);
   const position = state.position?.position;
+  const activeRunId = state.activeRun?.runId ?? null;
+  const activeRunName = state.activeRun?.name;
   const [runName, setRunName] = useState("Mining run");
   const [view, setView] = useState<MainView>("dashboard");
+  const canUpdateRunName =
+    state.activeRun !== null &&
+    runName.trim().length > 0 &&
+    runName.trim() !== state.activeRun.name &&
+    !state.runCommandPending;
+
+  useEffect(() => {
+    if (activeRunName !== undefined) {
+      setRunName(activeRunName);
+    }
+  }, [activeRunId, activeRunName]);
 
   const activeSetup = useMemo(
     () => getActiveSetup(state.miningTools, state.activeMiningTools),
@@ -142,6 +159,18 @@ export function MainWindow() {
               disabled={state.runCommandPending}
             />
           </label>
+          <button
+            type="button"
+            className="zml-button"
+            onClick={() => {
+              if (state.activeRun !== null) {
+                void updateRunName(state.activeRun.runId, runName);
+              }
+            }}
+            disabled={!canUpdateRunName}
+          >
+            Update Name
+          </button>
         </div>
 
         <div className="zml-run-meta">
@@ -165,7 +194,6 @@ export function MainWindow() {
           </button>
           <span>Status: {state.activeRun?.status ?? "idle"}</span>
           <span>Segments: {state.runSegments.length}</span>
-          <span>Position: {formatPosition(position)}</span>
         </div>
       </section>
 
@@ -219,6 +247,7 @@ export function MainWindow() {
                 pending={state.toolCommandPending}
               />
             )}
+            {view === "overlay" && <OverlaySettingsView />}
             {view === "debug" && (
               <DebugView
                 stateSnapshot={state}
@@ -520,39 +549,87 @@ function LootView({ loot }: { loot: MiningLootItemDto[] }) {
   );
 }
 
+type ClaimFilter = "all" | "ore" | "enmatter" | "treasure";
+
+const CLAIM_FILTERS: Array<{ id: ClaimFilter; label: string }> = [
+  { id: "all", label: "All" },
+  { id: "ore", label: "Ore" },
+  { id: "enmatter", label: "Enmatter" },
+  { id: "treasure", label: "Treasure" },
+];
+
 function ClaimsView({ claims }: { claims: MiningClaimDto[] }) {
+  const [filter, setFilter] = useState<ClaimFilter>("all");
+  const activeClaims = useMemo(
+    () => claims.filter((claim) => claim.status === "active"),
+    [claims],
+  );
+  const rows = useMemo(
+    () => buildClaimDistribution(activeClaims, filter),
+    [activeClaims, filter],
+  );
+  const totals = useMemo(() => getClaimTypeTotals(activeClaims), [activeClaims]);
+  const visibleTotal = rows.reduce((sum, row) => sum + row.count, 0);
+
   return (
     <section className="zml-work-panel">
       <div className="zml-section-head">
         <div>
           <h2>Claims</h2>
-          <span>Active only</span>
+          <span>Active claim distribution</span>
         </div>
       </div>
-      {claims.length === 0 ? (
+      <div className="zml-tabs-inline">
+        {CLAIM_FILTERS.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={item.id === filter ? "is-active" : undefined}
+            onClick={() => setFilter(item.id)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+      <div className="zml-claim-summary-grid">
+        <ClaimSummaryCard label="Visible" value={String(visibleTotal)} />
+        <ClaimSummaryCard label="Ore" value={String(totals.ore)} />
+        <ClaimSummaryCard label="Enmatter" value={String(totals.enmatter)} />
+        <ClaimSummaryCard label="Treasure" value={String(totals.treasure)} />
+      </div>
+      {activeClaims.length === 0 ? (
         <EmptyState text="No active claims" />
+      ) : rows.length === 0 ? (
+        <EmptyState text="No claims for this filter" />
       ) : (
         <div className="zml-table-wrap">
           <table className="zml-data-table">
             <thead>
               <tr>
                 <th>Resource</th>
-                <th>Size</th>
-                <th>Position</th>
-                <th>Range</th>
-                <th>Depth</th>
-                <th>Expires</th>
+                <th>Type</th>
+                <th>Claims</th>
+                <th>Distribution</th>
+                <th>Next Expires</th>
               </tr>
             </thead>
             <tbody>
-              {claims.map((claim) => (
-                <tr key={claim.claimId}>
-                  <td>{claim.resourceName ?? "-"}</td>
-                  <td>{formatSize(claim.sizeLabel, claim.sizeIndex)}</td>
-                  <td>{formatPosition(claim.position)}</td>
-                  <td>{formatMeters(claim.rangeM)}</td>
-                  <td>{formatMeters(claim.depthM)}</td>
-                  <td>{formatExpires(claim.expectedExpiresTsMs)}</td>
+              {rows.map((row) => (
+                <tr key={`${row.miningType ?? "unknown"}:${row.resourceName}`}>
+                  <td>
+                    <strong>{row.resourceName}</strong>
+                  </td>
+                  <td>{formatMiningType(row.miningType)}</td>
+                  <td>{row.count}</td>
+                  <td>
+                    <div className="zml-distribution-cell">
+                      <div className="zml-distribution-bar" aria-hidden="true">
+                        <span style={{ width: `${row.percent * 100}%` }} />
+                      </div>
+                      <strong>{formatPercent(row.percent)}</strong>
+                    </div>
+                  </td>
+                  <td>{formatExpires(row.nextExpiresTsMs)}</td>
                 </tr>
               ))}
             </tbody>
@@ -560,6 +637,112 @@ function ClaimsView({ claims }: { claims: MiningClaimDto[] }) {
         </div>
       )}
     </section>
+  );
+}
+
+const OVERLAY_METRICS: Array<{ key: OverlayMetricKey; label: string }> = [
+  { key: "cost", label: "Cost" },
+  { key: "return", label: "Return" },
+  { key: "profit", label: "Profit" },
+  { key: "hitRate", label: "Hit Rate" },
+];
+
+function OverlaySettingsView() {
+  const [preferences, setPreferences] = useOverlayPreferences();
+
+  return (
+    <section className="zml-work-panel">
+      <div className="zml-section-head">
+        <div>
+          <h2>Overlay</h2>
+          <span>Streaming overlay display options</span>
+        </div>
+      </div>
+
+      <div className="zml-overlay-settings">
+        <div className="zml-setting-row">
+          <div>
+            <strong>Font size</strong>
+            <span>{preferences.fontSizePx}px</span>
+          </div>
+          <input
+            type="range"
+            min={10}
+            max={28}
+            value={preferences.fontSizePx}
+            onChange={(event) => {
+              setPreferences((current) => ({
+                ...current,
+                fontSizePx: Number(event.currentTarget.value),
+              }));
+            }}
+          />
+        </div>
+
+        <div className="zml-toggle-list">
+          <OverlayCheckbox
+            label="Run name"
+            checked={preferences.showRunName}
+            onChange={(checked) =>
+              setPreferences((current) => ({ ...current, showRunName: checked }))
+            }
+          />
+          <OverlayCheckbox
+            label="Live status"
+            checked={preferences.showStatus}
+            onChange={(checked) =>
+              setPreferences((current) => ({ ...current, showStatus: checked }))
+            }
+          />
+          {OVERLAY_METRICS.map((metric) => (
+            <OverlayCheckbox
+              key={metric.key}
+              label={metric.label}
+              checked={preferences.metrics[metric.key]}
+              onChange={(checked) =>
+                setPreferences((current) => ({
+                  ...current,
+                  metrics: {
+                    ...current.metrics,
+                    [metric.key]: checked,
+                  },
+                }))
+              }
+            />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function OverlayCheckbox({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="zml-overlay-checkbox">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.currentTarget.checked)}
+      />
+      <span>{label}</span>
+    </label>
+  );
+}
+
+function ClaimSummaryCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="zml-claim-summary-card">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
   );
 }
 
@@ -676,6 +859,14 @@ type RunStats = {
   profitPed: number;
 };
 
+type ClaimDistributionRow = {
+  resourceName: string;
+  miningType: MiningResourceType | null;
+  count: number;
+  percent: number;
+  nextExpiresTsMs: number | null;
+};
+
 function getActiveSetup(
   tools: MiningToolProfileDto[],
   activeTools?: ActiveMiningToolsDto,
@@ -685,6 +876,65 @@ function getActiveSetup(
     amp: findToolName(tools, "amp", activeTools?.ampId, "No amp"),
     extractor: findToolName(tools, "extractor", activeTools?.extractorId, "No extractor"),
   };
+}
+
+function buildClaimDistribution(
+  claims: MiningClaimDto[],
+  filter: ClaimFilter,
+): ClaimDistributionRow[] {
+  const filteredClaims =
+    filter === "all" ? claims : claims.filter((claim) => claim.miningType === filter);
+  const total = filteredClaims.length;
+  const rows = new Map<string, ClaimDistributionRow>();
+
+  for (const claim of filteredClaims) {
+    const resourceName = claim.resourceName ?? "Unknown resource";
+    const miningType = claim.miningType;
+    const key = `${miningType ?? "unknown"}:${resourceName}`;
+    const current = rows.get(key);
+    const nextExpiresTsMs = minNullableTs(
+      current?.nextExpiresTsMs ?? null,
+      claim.expectedExpiresTsMs,
+    );
+
+    rows.set(key, {
+      resourceName,
+      miningType,
+      count: (current?.count ?? 0) + 1,
+      percent: 0,
+      nextExpiresTsMs,
+    });
+  }
+
+  return [...rows.values()]
+    .map((row) => ({
+      ...row,
+      percent: total === 0 ? 0 : row.count / total,
+    }))
+    .sort((a, b) => b.count - a.count || a.resourceName.localeCompare(b.resourceName));
+}
+
+function getClaimTypeTotals(claims: MiningClaimDto[]): Record<ClaimFilter, number> {
+  const totals: Record<ClaimFilter, number> = {
+    all: claims.length,
+    ore: 0,
+    enmatter: 0,
+    treasure: 0,
+  };
+
+  for (const claim of claims) {
+    if (claim.miningType === "ore" || claim.miningType === "enmatter" || claim.miningType === "treasure") {
+      totals[claim.miningType] += 1;
+    }
+  }
+
+  return totals;
+}
+
+function minNullableTs(left: number | null, right: number | null): number | null {
+  if (left === null) return right;
+  if (right === null) return left;
+  return Math.min(left, right);
 }
 
 function findToolName(
@@ -820,6 +1070,14 @@ function formatPosition(position?: { x: number; y: number } | null): string {
 function formatMeters(value: number | null | undefined): string {
   if (value === null || value === undefined) return "-";
   return `${value.toFixed(1)} m`;
+}
+
+function formatMiningType(value: MiningResourceType | null): string {
+  if (value === "ore") return "Ore";
+  if (value === "enmatter") return "Enmatter";
+  if (value === "treasure") return "Treasure";
+  if (value === "other") return "Other";
+  return "Unknown";
 }
 
 function formatPedFromMpec(value: number | null | undefined): string {

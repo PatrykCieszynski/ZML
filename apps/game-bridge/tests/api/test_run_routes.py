@@ -3,8 +3,19 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from zml_game_bridge.api.routes.runs import active_run, list_runs, resume_run, start_run, stop_run
-from zml_game_bridge.api.schemas.runs import StartRunRequestDto, StopRunRequestDto
+from zml_game_bridge.api.routes.runs import (
+    active_run,
+    list_runs,
+    resume_run,
+    start_run,
+    stop_run,
+    update_run,
+)
+from zml_game_bridge.api.schemas.runs import (
+    StartRunRequestDto,
+    StopRunRequestDto,
+    UpdateRunRequestDto,
+)
 from zml_game_bridge.persistence.schema import ensure_schema
 from zml_game_bridge.persistence.sqlite import open_sqlite
 
@@ -53,5 +64,19 @@ def test_list_and_resume_run(tmp_path: Path) -> None:
         active = active_run(conn)
         assert active is not None
         assert active.run_id == first.run_id
+    finally:
+        conn.close()
+
+
+def test_update_run_name(tmp_path: Path) -> None:
+    conn = _open_test_db(tmp_path)
+    try:
+        started = start_run(StartRunRequestDto(name="Old name", notes="keep"), conn)
+
+        updated = update_run(started.run_id, UpdateRunRequestDto(name=" New name "), conn)
+
+        assert updated.run_id == started.run_id
+        assert updated.name == "New name"
+        assert updated.notes == "keep"
     finally:
         conn.close()

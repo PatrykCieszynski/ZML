@@ -119,6 +119,7 @@ class MiningClaimDto(BaseModel):
     position: MiningClaimPositionDto | None
     search_radius_m: float | None
     resource_name: str | None
+    mining_type: str | None
     size_label: str | None
     size_index: int | None
     expected_expires_ts_ms: int | None
@@ -141,6 +142,7 @@ class MiningClaimDto(BaseModel):
             position=_claim_position_dto(row.position),
             search_radius_m=row.search_radius_m,
             resource_name=row.resource_name,
+            mining_type=row.mining_type,
             size_label=row.size_label,
             size_index=row.size_index,
             expected_expires_ts_ms=row.expected_expires_ts_ms,

@@ -27,6 +27,7 @@ class MiningClaimRow:
     position: WorldPos | None
     search_radius_m: float | None
     resource_name: str | None
+    mining_type: str | None
     size_label: str | None
     size_index: int | None
     expected_expires_ts_ms: int | None
@@ -111,10 +112,10 @@ class _MiningClaimProjectionWriter:
             INSERT INTO mining_claims (
                 claim_id, created_event_id, hit_id, drop_id, observed_ts_ms,
                 planet_name, x, y, z, search_radius_m,
-                resource_name, size_label, size_index, expected_expires_ts_ms,
+                resource_name, mining_type, size_label, size_index, expected_expires_ts_ms,
                 range_m, depth_m, status
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
             ON CONFLICT(claim_id) DO UPDATE SET
                 created_event_id = excluded.created_event_id,
                 hit_id = excluded.hit_id,
@@ -126,6 +127,7 @@ class _MiningClaimProjectionWriter:
                 z = excluded.z,
                 search_radius_m = excluded.search_radius_m,
                 resource_name = excluded.resource_name,
+                mining_type = excluded.mining_type,
                 size_label = excluded.size_label,
                 size_index = excluded.size_index,
                 expected_expires_ts_ms = excluded.expected_expires_ts_ms,
@@ -152,6 +154,7 @@ class _MiningClaimProjectionWriter:
                 position.z if position is not None else None,
                 event.search_radius_m,
                 event.resource_name,
+                event.mining_type,
                 event.size_label,
                 event.size_index,
                 event.expected_expires_ts_ms,
@@ -198,6 +201,7 @@ def _row_to_mining_claim(row: sqlite3.Row) -> MiningClaimRow:
         position=_position_from_row(row, "", "planet_name"),
         search_radius_m=_optional_float(row["search_radius_m"]),
         resource_name=row["resource_name"],
+        mining_type=row["mining_type"],
         size_label=row["size_label"],
         size_index=_optional_int(row["size_index"]),
         expected_expires_ts_ms=_optional_int(row["expected_expires_ts_ms"]),

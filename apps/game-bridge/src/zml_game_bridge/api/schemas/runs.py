@@ -72,3 +72,10 @@ class StopRunRequestDto(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     run_id: int | None = None
+
+
+class UpdateRunRequestDto(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = None
+    notes: str | None = None

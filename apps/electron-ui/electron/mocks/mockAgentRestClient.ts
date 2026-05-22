@@ -11,6 +11,7 @@ import type {
     SetActiveMiningToolsRequest,
     StartRunRequest,
     StopRunRequest,
+    UpdateRunRequest,
 } from "@zml/shared";
 
 import type {
@@ -20,8 +21,8 @@ import type {
 } from "../agent/restClient.ts";
 
 const MOCK_MINING_CLAIMS: MiningClaimDto[] = [
-    createMockMiningClaim("mock-claim-1", Date.now() - 5 * 60_000, 58913, 84653, "Lysterium Stone"),
-    createMockMiningClaim("mock-claim-2", Date.now() - 90_000, 58940, 84667, "Crude Oil"),
+    createMockMiningClaim("mock-claim-1", Date.now() - 5 * 60_000, 58913, 84653, "Lysterium Stone", "ore"),
+    createMockMiningClaim("mock-claim-2", Date.now() - 90_000, 58940, 84667, "Crude Oil", "enmatter"),
 ];
 
 const MOCK_MINING_DROPS: MiningDropDto[] = [
@@ -115,6 +116,26 @@ export class MockAgentRestClient implements AgentClient {
         this.runs = [this.activeRun, ...this.runs.filter((run) => run.runId !== runId)];
         this.runSegments = [];
         return this.activeRun;
+    }
+
+    async updateRun(runId: number, request: UpdateRunRequest): Promise<RunDto> {
+        const current = this.runs.find((run) => run.runId === runId);
+        if (!current) {
+            throw new Error(`Mock run not found: ${runId}`);
+        }
+
+        const updatedRun: RunDto = {
+            ...current,
+            name: request.name?.trim() || current.name,
+            notes: request.notes === undefined ? current.notes : request.notes,
+            updatedTsMs: Date.now(),
+        };
+
+        this.runs = [updatedRun, ...this.runs.filter((run) => run.runId !== runId)];
+        if (this.activeRun?.runId === runId) {
+            this.activeRun = updatedRun;
+        }
+        return updatedRun;
     }
 
     async listActiveRunSegments(): Promise<RunSegmentDto[]> {
@@ -271,6 +292,7 @@ function createMockMiningClaim(
     x: number,
     y: number,
     resourceName: string,
+    miningType: MiningClaimDto["miningType"],
 ): MiningClaimDto {
     return {
         claimId,
@@ -286,6 +308,7 @@ function createMockMiningClaim(
         },
         searchRadiusM: 55,
         resourceName,
+        miningType,
         sizeLabel: "Minimal",
         sizeIndex: 1,
         expectedExpiresTsMs: observedTsMs + 60 * 60_000,

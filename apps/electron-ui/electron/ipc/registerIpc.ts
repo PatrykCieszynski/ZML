@@ -7,6 +7,7 @@ import {
     isSetActiveMiningToolsRequest,
     isStartRunRequest,
     isStopRunRequest,
+    isUpdateRunRequest,
     type BootstrapState,
     type GetBootstrapStateReq,
 } from "@zml/shared";
@@ -86,6 +87,22 @@ export function registerIpc({ agentRestClient, toggleMapWindow, toggleOverlayWin
         runtime.runs = runs;
         runtime.runSegments = runSegments;
         pushStatePatch({ activeRun, runs, runSegments });
+        return activeRun;
+    });
+
+    ipcMain.handle(IPC_CMD.UPDATE_RUN, async (_evt, runId: unknown, req: unknown) => {
+        if (typeof runId !== "number" || !Number.isFinite(runId) || !isUpdateRunRequest(req)) {
+            throw new Error("Invalid update run request");
+        }
+        const activeRun = await agentRestClient.updateRun(runId, req);
+        const runs = await agentRestClient.listRuns();
+        runtime.runs = runs;
+        if (runtime.activeRun?.runId === runId) {
+            runtime.activeRun = activeRun;
+            pushStatePatch({ activeRun, runs });
+        } else {
+            pushStatePatch({ runs });
+        }
         return activeRun;
     });
 

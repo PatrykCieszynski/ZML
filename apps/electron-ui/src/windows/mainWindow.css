@@ -278,6 +278,134 @@
   font-size: 15px;
 }
 
+.zml-claim-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px 0;
+}
+
+.zml-claim-summary-card {
+  min-height: 58px;
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid #252d3a;
+  border-radius: 6px;
+  background: #10151e;
+}
+
+.zml-claim-summary-card span {
+  color: #9fb0c7;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.zml-claim-summary-card strong {
+  color: #ffffff;
+  font-family: "Cascadia Mono", "Consolas", monospace;
+  font-size: 18px;
+}
+
+.zml-overlay-settings {
+  display: grid;
+  gap: 14px;
+  max-width: 720px;
+}
+
+.zml-setting-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) minmax(220px, 1fr);
+  align-items: center;
+  gap: 16px;
+  padding: 12px;
+  border: 1px solid #252d3a;
+  border-radius: 6px;
+  background: #10151e;
+}
+
+.zml-setting-row div {
+  display: grid;
+  gap: 5px;
+}
+
+.zml-setting-row strong {
+  color: #ffffff;
+  font-size: 13px;
+}
+
+.zml-setting-row span {
+  color: #9fb0c7;
+  font-family: "Cascadia Mono", "Consolas", monospace;
+  font-size: 12px;
+}
+
+.zml-setting-row input[type="range"] {
+  width: 100%;
+  min-height: 0;
+  padding: 0;
+  accent-color: #41d486;
+}
+
+.zml-toggle-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.zml-overlay-checkbox {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  border: 1px solid #252d3a;
+  border-radius: 6px;
+  background: #10151e;
+  color: #e6eefb;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.zml-overlay-checkbox input[type="checkbox"] {
+  width: 16px;
+  min-width: 16px;
+  height: 16px;
+  min-height: 16px;
+  padding: 0;
+  accent-color: #41d486;
+}
+
+.zml-distribution-cell {
+  display: grid;
+  grid-template-columns: minmax(80px, 1fr) 58px;
+  align-items: center;
+  gap: 10px;
+}
+
+.zml-distribution-cell strong {
+  color: #ffffff;
+  font-family: "Cascadia Mono", "Consolas", monospace;
+  font-size: 12px;
+  text-align: right;
+}
+
+.zml-distribution-bar {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: #202938;
+}
+
+.zml-distribution-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #4d9cff, #41d486);
+}
+
 .zml-setup-list {
   display: grid;
   gap: 10px;

@@ -25,7 +25,7 @@ const MAP_VIEW = new OrthographicView({
   controller: {
     dragRotate: false,
     doubleClickZoom: false,
-    scrollZoom: { speed: 0.01, smooth: true },
+    scrollZoom: { speed: 0.1, smooth: true },
   },
 });
 
@@ -42,12 +42,16 @@ export function MapViewport({
   miningClaims,
   miningDrops,
   playerRadiusM,
+  followPlayer,
+  onFollowPlayerChange,
 }: {
   planetId: PlanetId;
   point: EntropiaMapPoint | null;
   miningClaims: readonly MiningClaimDto[];
   miningDrops: readonly MiningDropDto[];
   playerRadiusM?: number | null;
+  followPlayer: boolean;
+  onFollowPlayerChange: (followPlayer: boolean) => void;
 }) {
   const [viewState, setViewState] = useState<OrthographicViewState>(() =>
     createInitialMapViewState(planetId),
@@ -122,6 +126,16 @@ export function MapViewport({
   }, [planetId]);
 
   useEffect(() => {
+    if (!followPlayer || marker === null) return;
+    setViewState((current) => ({
+      ...current,
+      target: marker.position,
+      minZoom: -2.5,
+      maxZoom: 6,
+    }));
+  }, [followPlayer, marker]);
+
+  useEffect(() => {
     if (!DEBUG_CLAIMS_ENABLED && !hasClaimTimers) return;
 
     const timer = window.setInterval(() => setCurrentSec(nowSec()), 1000);
@@ -177,9 +191,24 @@ export function MapViewport({
 
   const handleViewStateChange = ({
     viewState: nextViewState,
+    interactionState,
   }: ViewStateChangeParameters<OrthographicViewState>) => {
+    const zoomChanged = nextViewState.zoom !== viewState.zoom;
+    const shouldDetachFollow =
+      followPlayer &&
+      !zoomChanged &&
+      hasUserMapInteraction(interactionState);
+    if (shouldDetachFollow) {
+      onFollowPlayerChange(false);
+    }
     setViewState({
       ...nextViewState,
+      target:
+        followPlayer && !shouldDetachFollow && marker !== null
+          ? marker.position
+          : zoomChanged
+            ? viewState.target
+            : nextViewState.target,
       minZoom: -2.5,
       maxZoom: 6,
     });
@@ -203,6 +232,15 @@ export function MapViewport({
         style={{ position: "absolute", inset: "0" }}
       />
     </div>
+  );
+}
+
+function hasUserMapInteraction(
+  interactionState: ViewStateChangeParameters<OrthographicViewState>["interactionState"],
+): boolean {
+  return Boolean(
+    interactionState?.isDragging ||
+      interactionState?.isPanning,
   );
 }
 

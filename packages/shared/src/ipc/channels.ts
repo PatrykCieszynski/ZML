@@ -6,6 +6,7 @@ export const IPC_CMD = {
     GET_ACTIVE_RUN: `${IPC_NAMESPACE}:cmd:get_active_run`,
     LIST_RUNS: `${IPC_NAMESPACE}:cmd:list_runs`,
     RESUME_RUN: `${IPC_NAMESPACE}:cmd:resume_run`,
+    UPDATE_RUN: `${IPC_NAMESPACE}:cmd:update_run`,
     LIST_ACTIVE_RUN_SEGMENTS: `${IPC_NAMESPACE}:cmd:list_active_run_segments`,
     LIST_RUN_SEGMENTS: `${IPC_NAMESPACE}:cmd:list_run_segments`,
     TOGGLE_MAP_WINDOW: `${IPC_NAMESPACE}:cmd:toggle_map_window`,

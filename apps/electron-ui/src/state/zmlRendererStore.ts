@@ -416,6 +416,46 @@ export async function resumeRun(runId: number): Promise<void> {
   }
 }
 
+export async function updateRunName(runId: number, name: string): Promise<void> {
+  let api;
+  try {
+    api = getZml();
+  } catch (error) {
+    setState({
+      runCommandPending: false,
+      lastCommandError: errorToMessage(error),
+    });
+    return;
+  }
+
+  const trimmedName = name.trim();
+  if (!trimmedName) {
+    setState({ lastCommandError: "Run name is required" });
+    return;
+  }
+
+  setState({
+    runCommandPending: true,
+    lastCommandError: null,
+  });
+
+  try {
+    const updatedRun = await api.updateRun(runId, { name: trimmedName });
+    const runs = await api.listRuns();
+    setState({
+      activeRun: state.activeRun?.runId === runId ? updatedRun : state.activeRun,
+      runs,
+      runCommandPending: false,
+      lastCommandError: null,
+    });
+  } catch (error) {
+    setState({
+      runCommandPending: false,
+      lastCommandError: errorToMessage(error),
+    });
+  }
+}
+
 export async function toggleMapWindow(): Promise<void> {
   let api;
   try {

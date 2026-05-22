@@ -10,6 +10,7 @@ import {
   setActiveMiningToolsRequestToWire,
   startRunRequestToWire,
   stopRunRequestToWire,
+  updateRunRequestToWire,
   wireToActiveMiningToolsDto,
   wireToMiningClaimDto,
   wireToMiningDropDto,
@@ -27,6 +28,7 @@ import {
   type SetActiveMiningToolsRequest,
   type StartRunRequest,
   type StopRunRequest,
+  type UpdateRunRequest,
 } from "@zml/shared";
 
 type FetchLike = typeof fetch;
@@ -42,6 +44,7 @@ export type AgentClient = {
   getActiveRun: () => Promise<RunDto | null>;
   listRuns: () => Promise<RunDto[]>;
   resumeRun: (runId: number) => Promise<RunDto>;
+  updateRun: (runId: number, request: UpdateRunRequest) => Promise<RunDto>;
   listActiveRunSegments: () => Promise<RunSegmentDto[]>;
   listRunSegments: (runId: number) => Promise<RunSegmentDto[]>;
   startRun: (request: StartRunRequest) => Promise<RunDto>;
@@ -102,6 +105,17 @@ export class AgentRestClient implements AgentClient {
     const data = await this.postJson(`/api/v1/runs/${encodeURIComponent(String(runId))}/resume`, {});
     if (!isRunWire(data)) {
       throw new Error("Agent resume run returned an invalid payload");
+    }
+    return wireToRunDto(data);
+  }
+
+  async updateRun(runId: number, request: UpdateRunRequest): Promise<RunDto> {
+    const data = await this.patchJson(
+      `/api/v1/runs/${encodeURIComponent(String(runId))}`,
+      updateRunRequestToWire(request),
+    );
+    if (!isRunWire(data)) {
+      throw new Error("Agent update run returned an invalid payload");
     }
     return wireToRunDto(data);
   }
@@ -222,11 +236,15 @@ export class AgentRestClient implements AgentClient {
     return this.requestJson("PUT", pathname, body);
   }
 
+  private async patchJson(pathname: string, body: unknown): Promise<unknown> {
+    return this.requestJson("PATCH", pathname, body);
+  }
+
   private async deleteJson(pathname: string): Promise<void> {
     await this.requestJson("DELETE", pathname);
   }
 
-  private async requestJson(method: "GET" | "POST" | "PUT" | "DELETE", pathname: string, body?: unknown): Promise<unknown> {
+  private async requestJson(method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", pathname: string, body?: unknown): Promise<unknown> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
 
