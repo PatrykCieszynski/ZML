@@ -6,9 +6,16 @@
   "scripts": {
     "dev": "vite",
     "dev:mocks": "node ./scripts/dev-with-mocks.mjs",
-    "build": "tsc && vite build && electron-builder",
-    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview"
+
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+
+    "build:web": "vite build",
+    "build:desktop": "tsc -p tsconfig.json",
+    "build": "pnpm build:web && pnpm build:desktop",
+
+    "package": "pnpm build && electron-builder"
   },
   "dependencies": {
     "@deck.gl/core": "^9.3.2",

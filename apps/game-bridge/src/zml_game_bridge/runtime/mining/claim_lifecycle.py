@@ -122,7 +122,11 @@ class ClaimLifecycleCorrelator:
 
         nearest = self._nearest_active_claim(position)
         if nearest is None:
-            logger.warning("claim_depleted_without_nearby_claim position=%s event_dt=%s", position, signal.event_dt)
+            logger.warning(
+                "claim_depleted_without_nearby_claim position=%s event_dt=%s",
+                position,
+                signal.event_dt,
+            )
             return None
 
         claim, distance_m = nearest

@@ -81,8 +81,7 @@ def stop_run(request: StopRunRequestDto, conn: RunConn) -> RunDto:
 def list_runs(conn: RunConn, status: str | None = None, limit: int = 200) -> list[RunDto]:
     safe_limit = max(1, min(limit, 1000))
     return [
-        RunDto.from_row(row)
-        for row in RunStore(conn).list_runs(status=status, limit=safe_limit)
+        RunDto.from_row(row) for row in RunStore(conn).list_runs(status=status, limit=safe_limit)
     ]
 
 
@@ -165,8 +164,7 @@ def list_run_segments(run_id: int, conn: RunConn) -> list[RunSegmentDto]:
     if row is None:
         raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
     return [
-        RunSegmentDto.from_row(segment)
-        for segment in RunSegmentStore(conn).list_for_run(run_id)
+        RunSegmentDto.from_row(segment) for segment in RunSegmentStore(conn).list_for_run(run_id)
     ]
 
 

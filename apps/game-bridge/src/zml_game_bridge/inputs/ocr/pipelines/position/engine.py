@@ -19,9 +19,15 @@ class TesserDigitsEngine:
         self._tesserocr = tesserocr
 
         if tessdata_dir is None:
-            tessdata_dir = str(Path(zml_game_bridge.__file__).resolve().parent.parent.parent / "resources" / "tessdata/")
+            tessdata_dir = str(
+                Path(zml_game_bridge.__file__).resolve().parent.parent.parent
+                / "resources"
+                / "tessdata/"
+            )
         if not tessdata_dir:
-            raise RuntimeError("Missing tessdata path. Set TESSDATA_PREFIX or pass tessdata_dir explicitly.")
+            raise RuntimeError(
+                "Missing tessdata path. Set TESSDATA_PREFIX or pass tessdata_dir explicitly."
+            )
 
         self._api = tesserocr.PyTessBaseAPI(
             path=tessdata_dir,
@@ -48,7 +54,9 @@ class TesserDigitsEngine:
         Returns raw OCR output (may contain whitespace/newlines).
         """
         if img_u8.ndim != 2 or img_u8.dtype != np.uint8:
-            raise ValueError(f"Expected grayscale/binary uint8 2D image, got {img_u8.dtype} shape={img_u8.shape}")
+            raise ValueError(
+                f"Expected grayscale/binary uint8 2D image, got {img_u8.dtype} shape={img_u8.shape}"
+            )
 
         img = np.ascontiguousarray(img_u8)
         h, w = img.shape

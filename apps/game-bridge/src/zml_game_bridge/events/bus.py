@@ -8,9 +8,11 @@ from .envelope import EventEnvelope
 
 EventHandler = Callable[[EventEnvelope], None]
 
+
 @dataclass(slots=True)
 class Subscription:
     """A handle that allows unsubscribing from an PersistedEventBus."""
+
     unsubscribe: Callable[[], None]
 
     def close(self) -> None:
@@ -20,8 +22,6 @@ class Subscription:
 class PersistedEventBus(Protocol):
     """Dispatches envelopes for events after they are persisted."""
 
-    def publish(self, envelope: EventEnvelope) -> None:
-        ...
+    def publish(self, envelope: EventEnvelope) -> None: ...
 
-    def subscribe(self, handler: EventHandler) -> Subscription:
-        ...
+    def subscribe(self, handler: EventHandler) -> Subscription: ...

@@ -68,7 +68,9 @@ class FinderDropCorrelator:
 
         if isinstance(signal, FinderModeInvalidatedSignal):
             self._modes_mask = None
-            logger.debug("finder_mode_invalidated previous_modes_mask=%s", signal.previous_modes_mask)
+            logger.debug(
+                "finder_mode_invalidated previous_modes_mask=%s", signal.previous_modes_mask
+            )
             return []
 
         if isinstance(signal, FinderUnitsChangedSignal):

@@ -8,6 +8,7 @@ from pathlib import Path
 # TODO: read in fixed-size chunks (avoid unbounded read())
 # TODO: guard buffer growth if no newline appears
 
+
 def tail_lines(
     path: Path,
     *,

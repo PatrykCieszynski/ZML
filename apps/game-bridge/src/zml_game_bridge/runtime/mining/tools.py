@@ -104,7 +104,9 @@ class MiningToolService:
                 return False
             self._active = _active_without_deleted_tool(self._active, deleted)
             self._save_locked()
-        logger.info("mining_tool_deleted tool_id=%s kind=%s name=%r", tool_id, deleted.kind, deleted.name)
+        logger.info(
+            "mining_tool_deleted tool_id=%s kind=%s name=%r", tool_id, deleted.kind, deleted.name
+        )
         return True
 
     def active_tools(self) -> ActiveMiningTools:

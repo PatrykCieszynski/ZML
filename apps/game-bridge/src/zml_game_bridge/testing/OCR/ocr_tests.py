@@ -161,7 +161,9 @@ class TesserOcrBackend(OcrBackend):
             raise RuntimeError(f"tesserocr import failed: {e}") from e
 
         self._tesserocr = tesserocr
-        self._api = tesserocr.PyTessBaseAPI(psm=tesserocr.PSM.SINGLE_LINE, oem=tesserocr.OEM.LSTM_ONLY, lang="eng")
+        self._api = tesserocr.PyTessBaseAPI(
+            psm=tesserocr.PSM.SINGLE_LINE, oem=tesserocr.OEM.LSTM_ONLY, lang="eng"
+        )
         self._api.SetVariable("tessedit_char_whitelist", "0123456789")
         self._api.SetVariable("load_system_dawg", "0")
         self._api.SetVariable("load_freq_dawg", "0")
@@ -211,7 +213,7 @@ def _run_one_line(
     if predicted is None or not _sanity_int(predicted):
         predicted = None
 
-    ok = (predicted == expected)
+    ok = predicted == expected
     ms_total = (time.perf_counter() - t0) * 1000.0
 
     return LineResult(
@@ -244,12 +246,16 @@ def _summarize(lines: list[LineResult], pairs: list[PairResult]) -> str:
         return (100.0 * x / n) if n else 0.0
 
     out = []
-    out.append(f"Lon: ok={lon_ok}/{len(lines)//2} ({pct(lon_ok, len(lines)//2):.2f}%), "
-               f"none={lon_none} ({pct(lon_none, len(lines)//2):.2f}%), "
-               f"fp={lon_fp} ({pct(lon_fp, len(lines)//2):.2f}%), avg_ms={lon_ms:.2f}")
-    out.append(f"Lat: ok={lat_ok}/{len(lines)//2} ({pct(lat_ok, len(lines)//2):.2f}%), "
-               f"none={lat_none} ({pct(lat_none, len(lines)//2):.2f}%), "
-               f"fp={lat_fp} ({pct(lat_fp, len(lines)//2):.2f}%), avg_ms={lat_ms:.2f}")
+    out.append(
+        f"Lon: ok={lon_ok}/{len(lines) // 2} ({pct(lon_ok, len(lines) // 2):.2f}%), "
+        f"none={lon_none} ({pct(lon_none, len(lines) // 2):.2f}%), "
+        f"fp={lon_fp} ({pct(lon_fp, len(lines) // 2):.2f}%), avg_ms={lon_ms:.2f}"
+    )
+    out.append(
+        f"Lat: ok={lat_ok}/{len(lines) // 2} ({pct(lat_ok, len(lines) // 2):.2f}%), "
+        f"none={lat_none} ({pct(lat_none, len(lines) // 2):.2f}%), "
+        f"fp={lat_fp} ({pct(lat_fp, len(lines) // 2):.2f}%), avg_ms={lat_ms:.2f}"
+    )
     out.append(f"Pair: ok={pair_ok}/{total_pairs} ({pct(pair_ok, total_pairs):.2f}%)")
     return "\n".join(out)
 
@@ -289,8 +295,12 @@ def _write_failures_csv(path: Path, results: list[LineResult]) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--root", type=Path, required=True, help="Dataset root with 'lon/' and 'lat/' folders")
-    ap.add_argument("--out", type=Path, default=Path("out_ocr_tests"), help="Output folder for reports")
+    ap.add_argument(
+        "--root", type=Path, required=True, help="Dataset root with 'lon/' and 'lat/' folders"
+    )
+    ap.add_argument(
+        "--out", type=Path, default=Path("out_ocr_tests"), help="Output folder for reports"
+    )
     ap.add_argument(
         "--variants",
         nargs="*",
