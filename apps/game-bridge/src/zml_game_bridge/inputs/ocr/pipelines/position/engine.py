@@ -1,36 +1,29 @@
 from __future__ import annotations
 
-from pathlib import Path
+import importlib
+from types import ModuleType
 
 import numpy as np
 
-import zml_game_bridge
+from zml_game_bridge.paths import get_tessdata_dir
+
+
+def preload_tesserocr() -> ModuleType:
+    try:
+        return importlib.import_module("tesserocr")
+    except Exception as exc:
+        raise RuntimeError(f"tesserocr import failed: {exc}") from exc
 
 
 class TesserDigitsEngine:
     def __init__(self, *, tessdata_dir: str | None = None) -> None:
-        # TODO: Add tesserocr to the documented/runtime dependencies and packaging flow.
-        # This engine relies on bundled tessdata plus a locally available tesserocr binary.
-        try:
-            import tesserocr  # type: ignore
-        except Exception as e:
-            raise RuntimeError(f"tesserocr import failed: {e}") from e
+        tesserocr = preload_tesserocr()
+
+        resolved_tessdata_dir = get_tessdata_dir(tessdata_dir)
 
         self._tesserocr = tesserocr
-
-        if tessdata_dir is None:
-            tessdata_dir = str(
-                Path(zml_game_bridge.__file__).resolve().parent.parent.parent
-                / "resources"
-                / "tessdata/"
-            )
-        if not tessdata_dir:
-            raise RuntimeError(
-                "Missing tessdata path. Set TESSDATA_PREFIX or pass tessdata_dir explicitly."
-            )
-
         self._api = tesserocr.PyTessBaseAPI(
-            path=tessdata_dir,
+            path=str(resolved_tessdata_dir),
             lang="eng",
             psm=tesserocr.PSM.SINGLE_LINE,
             oem=tesserocr.OEM.LSTM_ONLY,
