@@ -7,23 +7,21 @@
     "packages/*"
   ],
   "scripts": {
-    "dev:ui": "pnpm --filter @zml/ui dev",
-    "dev:desktop": "pnpm --filter @zml/electron-ui dev",
-    "dev:desktop:mocks": "pnpm --filter @zml/electron-ui dev:mocks",
-    "dev:bridge": "npm run bridge:dev",
-    "bridge:config": "cd apps/game-bridge && uv run python -m zml_game_bridge.dev_cli config",
-    "bridge:dev": "cd apps/game-bridge && uv run python -m zml_game_bridge.dev_cli serve",
-    "bridge:ocr": "cd apps/game-bridge && uv run python -m zml_game_bridge.dev_cli serve --mode live",
-    "bridge:mock": "cd apps/game-bridge && uv run python -m zml_game_bridge.dev_cli serve --mode mock",
-    "bridge:finder-debug": "cd apps/game-bridge && uv run python -m zml_game_bridge.dev_cli serve --mode live --finder-debug",
-    "bridge:lint": "cd apps/game-bridge && uv run ruff check .",
-    "bridge:format": "cd apps/game-bridge && uv run ruff format .",
-    "bridge:typecheck": "cd apps/game-bridge && uv run pyright",
-    "bridge:test": "cd apps/game-bridge && uv run pytest --basetemp .pytest-tmp -o cache_dir=.pytest-cache-local",
-    "bridge:verify": "npm run bridge:lint && npm run bridge:typecheck && npm run bridge:test",
-    "dev": "concurrently -k \"pnpm dev:desktop\" \"pnpm dev:bridge\"",
-    "build": "pnpm -r build",
-    "lint": "pnpm -r --if-present lint"
+    "dev": "concurrently -n bridge,web -c cyan,magenta \"cd apps/game-bridge && just ocr\" \"pnpm --filter @zml/electron-ui dev\"",
+
+    "bridge:format": "cd apps/game-bridge && just format",
+    "bridge:verify": "cd apps/game-bridge && just verify",
+
+    "shared:verify": "pnpm --filter @zml/shared typecheck && pnpm --filter @zml/shared build",
+
+    "frontend:verify": "pnpm shared:verify && pnpm --filter @zml/electron-ui typecheck && pnpm --filter @zml/electron-ui lint && pnpm --filter @zml/electron-ui test && pnpm --filter @zml/electron-ui build",
+    "frontend:build": "pnpm --filter @zml/shared build && pnpm --filter @zml/electron-ui build",
+    "frontend:package": "pnpm --filter @zml/shared build && pnpm --filter @zml/electron-ui package",
+
+    "verify": "pnpm bridge:verify && pnpm frontend:verify",
+    "build": "pnpm frontend:build",
+    "package": "pnpm frontend:package",
+    "lint": "cd apps/game-bridge && just lint && pnpm --filter @zml/electron-ui lint"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

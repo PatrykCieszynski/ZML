@@ -39,28 +39,6 @@ Events are durable domain facts. They are persisted and can be streamed to the U
 
 Read models are query-friendly tables derived from events, for example active mining claims. They are written by the same single DB writer, so they do not introduce a second SQLite writer.
 
-## Running
-
-From the repository root:
-
-```bash
-npm run bridge:config
-npm run bridge:dev
-npm run bridge:ocr
-npm run bridge:mock
-npm run bridge:finder-debug
-```
-
-Directly from `apps/game-bridge`:
-
-```bash
-uv run python -m zml_game_bridge.dev_cli config
-uv run python -m zml_game_bridge.dev_cli serve
-uv run python -m zml_game_bridge.dev_cli serve --mode live
-uv run python -m zml_game_bridge.dev_cli serve --mode mock
-uv run python -m zml_game_bridge.dev_cli serve --mode live --finder-debug
-```
-
 Input modes:
 
 - `env`: use current environment variables.

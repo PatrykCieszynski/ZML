@@ -1,0 +1,84 @@
+name: Package Windows
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_name:
+        description: Build name
+        required: true
+        default: snapshot
+  push:
+    tags:
+      - snapshot-*
+      - v*
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-windows
+  cancel-in-progress: false
+
+jobs:
+  package-windows:
+    name: Package Windows
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v8
+        with:
+          enable-cache: true
+
+      - name: Install Python
+        working-directory: apps/game-bridge
+        run: uv python install
+
+      - name: Install backend dependencies
+        working-directory: apps/game-bridge
+        run: uv sync --locked --all-extras --dev
+
+      - name: Build backend executable
+        working-directory: apps/game-bridge
+        run: uv run pyinstaller --noconfirm --onedir --name zml-game-bridge src/zml_game_bridge/main.py
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared contracts
+        run: pnpm --filter ./packages/shared build
+
+      - name: Build electron-ui
+        run: pnpm --filter ./apps/electron-ui build
+
+      - name: Copy backend into Electron resources
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path apps/electron-ui/resources/backend | Out-Null
+          Copy-Item -Recurse -Force apps/game-bridge/dist/zml-game-bridge/* apps/electron-ui/resources/backend/
+
+      - name: Package Electron app
+        run: pnpm --filter ./apps/electron-ui electron:build
+
+      - name: Upload packaged app
+        uses: actions/upload-artifact@v5
+        with:
+          name: zml-windows-${{ github.event.inputs.build_name || github.ref_name }}
+          path: |
+            apps/electron-ui/dist-electron
+            apps/electron-ui/release
+            apps/electron-ui/dist
+          if-no-files-found: warn
+          retention-days: 14
