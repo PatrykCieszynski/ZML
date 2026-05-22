@@ -19,21 +19,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up just
-        uses: extractions/setup-just@v4
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          enable-cache: true
-
-      - name: Install Python
-        working-directory: apps/game-bridge
-        run: uv python install
-
-      - name: Install bridge dependencies
-        working-directory: apps/game-bridge
-        run: uv sync --locked --all-extras --dev
+      - name: Set up bridge
+        uses: ./.github/actions/setup-bridge
 
       - name: Verify bridge
         working-directory: apps/game-bridge

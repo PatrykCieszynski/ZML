@@ -2,6 +2,11 @@ name: Package Bridge Windows
 
 on:
   workflow_dispatch:
+    inputs:
+      build_name:
+        description: Artifact/build name suffix
+        required: false
+        default: snapshot
 
 permissions:
   contents: read
@@ -19,21 +24,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up just
-        uses: extractions/setup-just@v4
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          enable-cache: true
-
-      - name: Install Python
-        working-directory: apps/game-bridge
-        run: uv python install
-
-      - name: Install bridge dependencies
-        working-directory: apps/game-bridge
-        run: uv sync --locked --all-extras --dev
+      - name: Set up bridge
+        uses: ./.github/actions/setup-bridge
 
       - name: Verify bridge
         working-directory: apps/game-bridge
@@ -43,9 +35,14 @@ jobs:
         working-directory: apps/game-bridge
         run: just package
 
+      - name: Smoke test packaged bridge config
+        working-directory: apps/game-bridge
+        run: .\dist\zml-game-bridge\zml-game-bridge.exe config
+
       - name: Upload bridge artifact
         uses: actions/upload-artifact@v4
         with:
-          name: zml-game-bridge-windows
+          name: zml-game-bridge-windows-${{ github.event.inputs.build_name }}
           path: apps/game-bridge/dist/zml-game-bridge
           retention-days: 14
+          if-no-files-found: error

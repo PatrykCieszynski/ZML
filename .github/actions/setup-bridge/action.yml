@@ -1,0 +1,23 @@
+name: Setup Bridge
+description: Set up Python bridge dependencies
+
+runs:
+  using: composite
+  steps:
+    - name: Set up just
+      uses: extractions/setup-just@v4
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v6
+      with:
+        enable-cache: true
+
+    - name: Install Python
+      shell: pwsh
+      working-directory: apps/game-bridge
+      run: uv python install
+
+    - name: Install bridge dependencies
+      shell: pwsh
+      working-directory: apps/game-bridge
+      run: uv sync --locked --all-extras --dev
