@@ -40,6 +40,9 @@ where = ["src"]
 [tool.setuptools.package-data]
 "zml_game_bridge.resources" = ["*.json"]
 
+[tool.pyright]
+pythonPlatform = "Windows"
+
 [tool.ruff]
 target-version = "py313"
 line-length = 100
