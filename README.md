@@ -90,7 +90,7 @@ database writes stay predictable.
 Backend:
 
 ```bash
-npm run bridge:verify
+pnpm run bridge:verify
 ```
 
 This runs:

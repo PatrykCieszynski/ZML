@@ -1,0 +1,34 @@
+default:
+    just --list
+
+config:
+    uv run python -m zml_game_bridge.dev_cli config
+
+dev:
+    uv run python -m zml_game_bridge.dev_cli serve
+
+ocr:
+    uv run python -m zml_game_bridge.dev_cli serve --mode live
+
+mock:
+    uv run python -m zml_game_bridge.dev_cli serve --mode mock
+
+finder-debug:
+    uv run python -m zml_game_bridge.dev_cli serve --mode live --finder-debug
+
+lint:
+    uv run ruff check .
+
+format:
+    uv run ruff format .
+
+format-check:
+    uv run ruff format --check .
+
+typecheck:
+    uv run pyright
+
+test:
+    uv run pytest --basetemp .pytest-tmp -o cache_dir=.pytest-cache-local
+
+verify: lint format-check typecheck test
