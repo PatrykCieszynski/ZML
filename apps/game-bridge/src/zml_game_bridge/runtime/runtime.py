@@ -185,8 +185,7 @@ class AppRuntime:
         self._t_chat.start()
 
         if self._ocr_enabled:
-            preload_tesserocr()
-            # Needed for 'tesserocr import failed: signal only works in main thread of the main interpreter'
+            preload_tesserocr()  # Needed for 'tesserocr import failed: signal only works in main thread of the main interpreter'
 
             self._t_ocr = Thread(
                 target=start_ocr_input,
