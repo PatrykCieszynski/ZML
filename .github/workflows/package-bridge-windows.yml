@@ -40,7 +40,7 @@ jobs:
         run: .\dist\zml-game-bridge\zml-game-bridge.exe config
 
       - name: Upload bridge artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: zml-game-bridge-windows-${{ github.event.inputs.build_name }}
           path: apps/game-bridge/dist/zml-game-bridge
