@@ -3,6 +3,12 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 
+from zml_game_bridge.application.mining.segments.session import DropRunContext
+from zml_game_bridge.application.mining.settings import (
+    DEFAULT_DROP_RADIUS_M,
+    IdFactory,
+    MiningCoordinatorConfig,
+)
 from zml_game_bridge.domain.claim_size import expected_claim_expires_ts_ms
 from zml_game_bridge.domain.mining_cost import (
     MiningEquipmentProfile,
@@ -14,7 +20,7 @@ from zml_game_bridge.domain.mining_events import (
     MiningHitHintEvent,
     MiningNoResourcesEvent,
 )
-from zml_game_bridge.events.base import EventBase
+from zml_game_bridge.events.base import EventBase, SignalBase
 from zml_game_bridge.inputs.ocr.pipelines.mining_finder.signals import (
     FinderHitHintSignal,
     FinderModeInvalidatedSignal,
@@ -22,12 +28,6 @@ from zml_game_bridge.inputs.ocr.pipelines.mining_finder.signals import (
     FinderNoResourcesSignal,
     FinderUnitsChangedSignal,
     ProbeFiredSignal,
-)
-from zml_game_bridge.runtime.mining.run_session import DropRunContext
-from zml_game_bridge.runtime.mining.settings import (
-    DEFAULT_DROP_RADIUS_M,
-    IdFactory,
-    MiningCoordinatorConfig,
 )
 
 logger = logging.getLogger(__name__)
@@ -56,7 +56,7 @@ class FinderDropCorrelator:
         self._ammo_per_drop: int | None = None
         self._pending_drop: MiningDropEvent | None = None
 
-    def process(self, signal: EventBase) -> list[EventBase]:
+    def process_signal(self, signal: SignalBase) -> list[EventBase]:
         if isinstance(signal, FinderModesChangedSignal):
             self._modes_mask = signal.modes_mask
             logger.debug(

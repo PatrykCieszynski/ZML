@@ -3,9 +3,8 @@ from __future__ import annotations
 import threading
 from queue import Empty, Queue
 from typing import Any
-from warnings import deprecated
 
-from zml_game_bridge.events.base import EventBase
+from zml_game_bridge.events.base import EventBase, SignalBase
 from zml_game_bridge.runtime.event_requests import EventWriteRequest
 from zml_game_bridge.runtime.runtime_commands import RuntimeCommandRequest
 
@@ -62,13 +61,8 @@ class RuntimeChannel[T]:
         return self._q.qsize()
 
 
-class RuntimeInputChannel(RuntimeChannel[EventBase | RuntimeCommandRequest[Any]]):
+class RuntimeInputChannel(RuntimeChannel[SignalBase | RuntimeCommandRequest[Any]]):
     """Queue for input observations and API commands waiting for runtime coordination."""
-
-
-@deprecated("Use RuntimeInputChannel instead.")
-class SignalChannel(RuntimeInputChannel):
-    """Compatibility alias for input adapters that still speak in signals."""
 
 
 class EventChannel(RuntimeChannel[EventBase | EventWriteRequest]):

@@ -12,30 +12,30 @@ from zml_game_bridge.api.schemas.mining_tools import (
     SetActiveMiningToolsRequestDto,
     active_tools_dto,
 )
-from zml_game_bridge.domain.money import Mpec
-from zml_game_bridge.runtime.mining.tool_commands import (
+from zml_game_bridge.application.mining.equipment.commands import (
     CreateMiningToolProfileCommand,
     DeleteMiningToolProfileCommand,
     MiningToolCommandError,
     MiningToolNotFoundError,
     SetActiveMiningToolsCommand,
 )
-from zml_game_bridge.runtime.mining.tools import MiningToolService
+from zml_game_bridge.application.mining.equipment.service import MiningEquipmentService
+from zml_game_bridge.domain.money import Mpec
 from zml_game_bridge.runtime.runtime import AppRuntime
 from zml_game_bridge.runtime.runtime_commands import RuntimeCommand
 
 router = APIRouter(prefix="/api/v1/mining/tools", tags=["mining-tools"])
 
 
-def get_tool_service(runtime: RuntimeDep) -> MiningToolService:
-    return runtime.mining_tool_service
+def get_equipment_service(runtime: RuntimeDep) -> MiningEquipmentService:
+    return runtime.mining_equipment_service
 
 
-ToolService = Annotated[MiningToolService, Depends(get_tool_service)]
+EquipmentService = Annotated[MiningEquipmentService, Depends(get_equipment_service)]
 
 
 @router.get("", response_model=list[MiningToolProfileDto])
-def list_mining_tool_profiles(service: ToolService) -> list[MiningToolProfileDto]:
+def list_mining_tool_profiles(service: EquipmentService) -> list[MiningToolProfileDto]:
     return [MiningToolProfileDto.from_record(record) for record in service.list_profiles()]
 
 
@@ -63,7 +63,7 @@ def delete_mining_tool_profile(tool_id: str, runtime: RuntimeDep) -> None:
 
 
 @router.get("/active", response_model=ActiveMiningToolsDto)
-def get_active_mining_tools(service: ToolService) -> ActiveMiningToolsDto:
+def get_active_mining_tools(service: EquipmentService) -> ActiveMiningToolsDto:
     return active_tools_dto(
         service.active_tools(),
         equipment_profile=service.get_equipment_profile(),
@@ -86,7 +86,7 @@ def set_active_mining_tools(
     )
     return active_tools_dto(
         active,
-        equipment_profile=runtime.mining_tool_service.get_equipment_profile(),
+        equipment_profile=runtime.mining_equipment_service.get_equipment_profile(),
     )
 
 

@@ -16,15 +16,17 @@ from zml_game_bridge.api.schemas.mining_tools import (
     CreateMiningToolProfileRequestDto,
     SetActiveMiningToolsRequestDto,
 )
-from zml_game_bridge.runtime.mining.mining_setup import MiningSetupService
-from zml_game_bridge.runtime.mining.tools import MiningToolService
+from zml_game_bridge.application.mining.equipment.command_handler import (
+    MiningEquipmentCommandHandler,
+)
+from zml_game_bridge.application.mining.equipment.service import MiningEquipmentService
 from zml_game_bridge.runtime.runtime_commands import RuntimeCommand
 
 
 class _RuntimeStub:
-    def __init__(self, service: MiningToolService) -> None:
-        self.mining_tool_service = service
-        self._setup = MiningSetupService(tool_service=service)
+    def __init__(self, service: MiningEquipmentService) -> None:
+        self.mining_equipment_service = service
+        self._equipment = MiningEquipmentCommandHandler(equipment_service=service)
 
     def execute_runtime_command[T](
         self,
@@ -33,11 +35,11 @@ class _RuntimeStub:
         timeout_s: float = 5.0,
     ) -> T:
         del timeout_s
-        return self._setup.process_command(command).value
+        return self._equipment.process_command(command).value
 
 
 def test_mining_tool_routes_create_list_and_set_active_tools(tmp_path: Path) -> None:
-    service = MiningToolService(path=tmp_path / "mining_tools.json")
+    service = MiningEquipmentService(path=tmp_path / "mining_tools.json")
     runtime: Any = _RuntimeStub(service)
 
     finder = create_mining_tool_profile(
@@ -81,7 +83,7 @@ def test_mining_tool_routes_create_list_and_set_active_tools(tmp_path: Path) -> 
 
 
 def test_mining_tool_routes_delete_tool_and_clear_active_state(tmp_path: Path) -> None:
-    service = MiningToolService(path=tmp_path / "mining_tools.json")
+    service = MiningEquipmentService(path=tmp_path / "mining_tools.json")
     runtime: Any = _RuntimeStub(service)
     finder = create_mining_tool_profile(
         CreateMiningToolProfileRequestDto(
@@ -109,7 +111,7 @@ def test_mining_tool_routes_delete_tool_and_clear_active_state(tmp_path: Path) -
 
 
 def test_mining_tool_routes_delete_unknown_tool_returns_404(tmp_path: Path) -> None:
-    service = MiningToolService(path=tmp_path / "mining_tools.json")
+    service = MiningEquipmentService(path=tmp_path / "mining_tools.json")
     runtime: Any = _RuntimeStub(service)
 
     try:

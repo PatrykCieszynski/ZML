@@ -1,4 +1,3 @@
-# zml_game_bridge/runs/state.py
 from __future__ import annotations
 
 import sqlite3

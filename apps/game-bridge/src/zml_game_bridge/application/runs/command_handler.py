@@ -3,14 +3,14 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, TypeVar, cast
 
-from zml_game_bridge.persistence.runs import RunRow
-from zml_game_bridge.runtime.db_commands import DbCommand
-from zml_game_bridge.runtime.run_commands import (
+from zml_game_bridge.application.runs.commands import (
     ResumeRunCommand,
     StartRunCommand,
     StopRunCommand,
     UpdateRunCommand,
 )
+from zml_game_bridge.persistence.runs import RunRow
+from zml_game_bridge.runtime.db_commands import DbCommand
 from zml_game_bridge.runtime.runtime_commands import (
     RuntimeCommand,
     RuntimeCommandResult,
@@ -20,7 +20,7 @@ from zml_game_bridge.runtime.runtime_commands import (
 T = TypeVar("T")
 
 
-class RunLifecycle:
+class RunCommandHandler:
     """
     Runtime-facing run command handler.
 

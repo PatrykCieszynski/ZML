@@ -1,11 +1,19 @@
+"""Transitional DB-backed run commands.
+
+Run commands currently enter through the runtime queue and execute on the
+single DB writer. Do not copy this RuntimeCommand + DbCommand pattern into new
+domains; split pure runtime commands from persistence when run lifecycle moves
+to durable domain events.
+"""
+
 from __future__ import annotations
 
 import sqlite3
 import time
 from dataclasses import dataclass
 
+from zml_game_bridge.persistence.run_state import RunState
 from zml_game_bridge.persistence.runs import RunRow, RunSegmentStore, RunStore
-from zml_game_bridge.runs.state import RunState
 from zml_game_bridge.runtime.db_commands import DbCommand
 from zml_game_bridge.runtime.runtime_commands import RuntimeCommand
 

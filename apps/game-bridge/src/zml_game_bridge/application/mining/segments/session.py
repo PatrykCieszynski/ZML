@@ -9,11 +9,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from zml_game_bridge.application.mining.settings import IdFactory
 from zml_game_bridge.domain.mining_cost import MiningEquipmentProfile, MiningToolProfile
 from zml_game_bridge.domain.mining_events import RunSegmentEndedEvent, RunSegmentStartedEvent
 from zml_game_bridge.domain.money import mpec_to_int
 from zml_game_bridge.persistence.sqlite import open_read_connection
-from zml_game_bridge.runtime.mining.settings import IdFactory
 
 logger = logging.getLogger(__name__)
 
@@ -155,10 +155,14 @@ class RunSessionService:
 
 
 def equipment_profile_snapshot(profile: MiningEquipmentProfile) -> dict[str, object]:
+    """Snapshot fields that define mining drop segment boundaries.
+
+    Extractor is intentionally excluded: it affects extraction cost, but should
+    not split a drop segment.
+    """
     return {
         "finder": _tool_snapshot(profile.finder),
         "amp": _tool_snapshot(profile.amp),
-        "extractor": _tool_snapshot(profile.extractor),
         "finder_range_enhancers": {
             "count": profile.finder_range_enhancers.count,
             "decay_bonus_per_enhancer_ppm": profile.finder_range_enhancers.decay_bonus_per_enhancer.ppm,

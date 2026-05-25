@@ -10,6 +10,12 @@ from typing import Any
 
 from zml_game_bridge.api.channels.position_hub import OcrPositionHub
 from zml_game_bridge.api.channels.sse_hub import SseHub
+from zml_game_bridge.application.mining import MiningCoordinator
+from zml_game_bridge.application.mining.claims.lifecycle import ActiveClaim
+from zml_game_bridge.application.mining.equipment.service import MiningEquipmentService
+from zml_game_bridge.application.mining.segments.session import RunSessionService
+from zml_game_bridge.application.mining.settings import default_id_factory
+from zml_game_bridge.application.position.latest_position import LatestPositionState
 from zml_game_bridge.domain.mining_cost import MiningEquipmentProfile
 from zml_game_bridge.domain.position import WorldPos
 from zml_game_bridge.events.in_memory_persisted_event_bus import (
@@ -31,12 +37,6 @@ from zml_game_bridge.runtime.channels import EventChannel, RuntimeInputChannel
 from zml_game_bridge.runtime.db_commands import DbCommand, DbCommandChannel
 from zml_game_bridge.runtime.db_writer import DbWriterWorker
 from zml_game_bridge.runtime.input_coordinator import InputCoordinator
-from zml_game_bridge.runtime.mining import MiningCoordinator
-from zml_game_bridge.runtime.mining.claim_lifecycle import ActiveClaim
-from zml_game_bridge.runtime.mining.run_session import RunSessionService
-from zml_game_bridge.runtime.mining.settings import default_id_factory
-from zml_game_bridge.runtime.mining.tools import MiningToolService
-from zml_game_bridge.runtime.position_state import LatestPositionState
 from zml_game_bridge.runtime.runtime_commands import RuntimeCommand, RuntimeCommandRequest
 from zml_game_bridge.runtime.worker_health import WorkerHealthRegistry
 
@@ -74,23 +74,23 @@ class AppRuntime:
         self._persisted_events = InMemoryPersistedEventBus()
         self._latest_position = LatestPositionState()
         self._resource_catalog = MiningResourceCatalog(user_path=self._mining_resource_catalog_path)
-        self._mining_tool_service = MiningToolService(path=self._mining_tools_path)
+        self._mining_equipment_service = MiningEquipmentService(path=self._mining_tools_path)
         self._run_session_service = RunSessionService(
             db_path=self._db_path,
             id_factory=default_id_factory,
         )
         self._mining_coordinator = MiningCoordinator(
-            profile_provider=self._mining_tool_service.get_equipment_profile,
+            profile_provider=self._mining_equipment_service.get_equipment_profile,
             position_provider=self._current_position,
             resource_catalog=self._resource_catalog,
             run_context_provider=self._run_context_for_drop,
             db_command_executor=self.execute_db_command,
-            mining_tool_service=self._mining_tool_service,
+            mining_equipment_service=self._mining_equipment_service,
         )
         self._input_coordinator = InputCoordinator(
-            pending_signals=self._pending_inputs,
+            pending_inputs=self._pending_inputs,
             pending_events=self._pending_events,
-            signal_processor=self._mining_coordinator,
+            input_processor=self._mining_coordinator,
         )
         self._db_writer_worker = DbWriterWorker(
             db_path=self._db_path,
@@ -137,8 +137,8 @@ class AppRuntime:
         return self._latest_position
 
     @property
-    def mining_tool_service(self) -> MiningToolService:
-        return self._mining_tool_service
+    def mining_equipment_service(self) -> MiningEquipmentService:
+        return self._mining_equipment_service
 
     @property
     def run_session_service(self) -> RunSessionService:

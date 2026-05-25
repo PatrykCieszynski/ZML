@@ -7,8 +7,8 @@ from typing import Any
 from zml_game_bridge.events.base import EventBase, should_persist_event
 from zml_game_bridge.runtime.channels import ChannelClosed, EventChannel, RuntimeInputChannel
 from zml_game_bridge.runtime.event_requests import EventWriteRequest
+from zml_game_bridge.runtime.input_processor import InputProcessor, NoOpInputProcessor
 from zml_game_bridge.runtime.runtime_commands import RuntimeCommandRequest
-from zml_game_bridge.runtime.signal_processor import NoOpSignalProcessor, SignalProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ class InputCoordinator:
     Sequential boundary between input threads and durable event persistence.
 
     Input threads and API routes emit normalized inputs into RuntimeInputChannel.
-    Signal processors, such as MiningCoordinator, may derive durable domain
+    Input processors, such as MiningCoordinator, may derive durable domain
     events or synchronous command responses. Only durable events are forwarded
     to EventChannel for the DB writer.
     """
@@ -26,14 +26,14 @@ class InputCoordinator:
     def __init__(
         self,
         *,
-        pending_signals: RuntimeInputChannel,
+        pending_inputs: RuntimeInputChannel,
         pending_events: EventChannel,
-        signal_processor: SignalProcessor | None = None,
+        input_processor: InputProcessor | None = None,
         command_persist_timeout_s: float = 5.0,
     ) -> None:
-        self.pending_signals = pending_signals
+        self.pending_inputs = pending_inputs
         self.pending_events = pending_events
-        self.signal_processor = signal_processor or NoOpSignalProcessor()
+        self.input_processor = input_processor or NoOpInputProcessor()
         self.command_persist_timeout_s = command_persist_timeout_s
 
     def run(self, *, stop_event: threading.Event) -> None:
@@ -41,7 +41,7 @@ class InputCoordinator:
         _ = stop_event
         processed_inputs = 0
         while True:
-            item = self.pending_signals.take(timeout_s=0.1)
+            item = self.pending_inputs.take(timeout_s=0.1)
             if isinstance(item, ChannelClosed):
                 break
             if item is None:
@@ -53,7 +53,7 @@ class InputCoordinator:
 
             signal = item
             logger.debug("signal_received signal_type=%s", type(signal).__name__)
-            derived_events = list(self.signal_processor.process(signal))
+            derived_events = list(self.input_processor.process_signal(signal))
             if not derived_events:
                 logger.debug("signal_ignored signal_type=%s", type(signal).__name__)
                 continue
@@ -72,7 +72,7 @@ class InputCoordinator:
         command_type = type(request.command).__name__
         try:
             logger.debug("runtime_command_received command_type=%s", command_type)
-            result = self.signal_processor.process_command(request.command)
+            result = self.input_processor.process_command(request.command)
             for event in result.events:
                 self._route_durable_event(event, wait=True)
         except Exception as exc:

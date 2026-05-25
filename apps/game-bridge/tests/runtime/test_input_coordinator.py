@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import cast
 
 from zml_game_bridge.events.base import EventBase, SignalBase
-from zml_game_bridge.runtime.channels import EventChannel, SignalChannel
+from zml_game_bridge.runtime.channels import EventChannel, RuntimeInputChannel
 from zml_game_bridge.runtime.input_coordinator import InputCoordinator
 from zml_game_bridge.runtime.runtime_commands import (
     RuntimeCommand,
@@ -30,8 +30,8 @@ class DummyCommand(RuntimeCommand[int]):
     x: int
 
 
-class FakeSignalProcessor:
-    def process(self, signal: EventBase) -> list[EventBase]:
+class FakeInputProcessor:
+    def process_signal(self, signal: SignalBase) -> list[EventBase]:
         if isinstance(signal, TransientDummySignal):
             return [DurableDummyEvent(signal.x + 1)]
         return []
@@ -43,12 +43,12 @@ class FakeSignalProcessor:
 
 
 def test_input_coordinator_routes_derived_event_to_writer_queue_without_publishing_signal() -> None:
-    incoming = SignalChannel(maxsize=10)
+    incoming = RuntimeInputChannel(maxsize=10)
     pending_events = EventChannel(maxsize=10)
     worker = InputCoordinator(
-        pending_signals=incoming,
+        pending_inputs=incoming,
         pending_events=pending_events,
-        signal_processor=FakeSignalProcessor(),
+        input_processor=FakeInputProcessor(),
     )
 
     stop = threading.Event()
@@ -67,10 +67,10 @@ def test_input_coordinator_routes_derived_event_to_writer_queue_without_publishi
 
 
 def test_input_coordinator_drops_internal_signal_when_no_event_is_derived() -> None:
-    incoming = SignalChannel(maxsize=10)
+    incoming = RuntimeInputChannel(maxsize=10)
     pending_events = EventChannel(maxsize=10)
     worker = InputCoordinator(
-        pending_signals=incoming,
+        pending_inputs=incoming,
         pending_events=pending_events,
     )
 
@@ -89,12 +89,12 @@ def test_input_coordinator_drops_internal_signal_when_no_event_is_derived() -> N
 
 
 def test_input_coordinator_processes_runtime_command_response() -> None:
-    incoming = SignalChannel(maxsize=10)
+    incoming = RuntimeInputChannel(maxsize=10)
     pending_events = EventChannel(maxsize=10)
     worker = InputCoordinator(
-        pending_signals=incoming,
+        pending_inputs=incoming,
         pending_events=pending_events,
-        signal_processor=FakeSignalProcessor(),
+        input_processor=FakeInputProcessor(),
     )
 
     stop = threading.Event()
