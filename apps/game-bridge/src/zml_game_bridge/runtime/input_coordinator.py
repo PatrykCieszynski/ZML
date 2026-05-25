@@ -5,7 +5,7 @@ import threading
 from typing import Any
 
 from zml_game_bridge.events.base import EventBase, should_persist_event
-from zml_game_bridge.runtime.channels import EventChannel, RuntimeInputChannel
+from zml_game_bridge.runtime.channels import ChannelClosed, EventChannel, RuntimeInputChannel
 from zml_game_bridge.runtime.event_requests import EventWriteRequest
 from zml_game_bridge.runtime.runtime_commands import RuntimeCommandRequest
 from zml_game_bridge.runtime.signal_processor import NoOpSignalProcessor, SignalProcessor
@@ -37,10 +37,16 @@ class InputCoordinator:
         self.command_persist_timeout_s = command_persist_timeout_s
 
     def run(self, *, stop_event: threading.Event) -> None:
-        while not stop_event.is_set() or self.pending_signals.size() > 0:
+        # Producers observe stop_event; this worker exits only after the input channel is closed.
+        _ = stop_event
+        processed_inputs = 0
+        while True:
             item = self.pending_signals.take(timeout_s=0.1)
+            if isinstance(item, ChannelClosed):
+                break
             if item is None:
                 continue
+            processed_inputs += 1
             if isinstance(item, RuntimeCommandRequest):
                 self._process_command(item)
                 continue
@@ -60,6 +66,7 @@ class InputCoordinator:
 
             for event in derived_events:
                 self._route_durable_event(event)
+        logger.info("input_coordinator_stopped processed_inputs=%s", processed_inputs)
 
     def _process_command(self, request: RuntimeCommandRequest[Any]) -> None:
         command_type = type(request.command).__name__

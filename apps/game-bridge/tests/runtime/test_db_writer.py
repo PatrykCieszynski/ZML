@@ -77,6 +77,7 @@ def test_db_writer_persists_and_publishes(monkeypatch, tmp_path: Path) -> None:
 
     assert got.wait(timeout=1.0), "DbWriterWorker didn't publish anything"
     stop.set()
+    channel.close()
     thread.join(timeout=1.0)
 
     assert len(out) == 1
@@ -112,6 +113,7 @@ def test_db_writer_no_event_no_publish(monkeypatch, tmp_path: Path) -> None:
     time.sleep(0.2)
 
     stop.set()
+    channel.close()
     thread.join(timeout=1.0)
 
     assert out == []
@@ -148,6 +150,8 @@ def test_db_writer_executes_commands_on_writer_connection(monkeypatch, tmp_path:
         result = command_channel.execute(DummyCommand(21), timeout_s=1.0)
     finally:
         stop.set()
+        command_channel.close()
+        event_channel.close()
         thread.join(timeout=1.0)
         sub.close()
 
@@ -188,6 +192,7 @@ def test_db_writer_acknowledges_event_write_request(monkeypatch, tmp_path: Path)
         envelope = request.result(timeout_s=1.0)
     finally:
         stop.set()
+        channel.close()
         thread.join(timeout=1.0)
         sub.close()
 
