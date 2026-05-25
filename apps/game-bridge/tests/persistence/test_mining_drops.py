@@ -13,6 +13,7 @@ from zml_game_bridge.domain.money import Mpec
 from zml_game_bridge.domain.position import WorldPos
 from zml_game_bridge.persistence.event_writer import EventWriter
 from zml_game_bridge.persistence.mining_drops import MiningDropProjector, MiningDropReader
+from zml_game_bridge.persistence.runs import RunStore
 from zml_game_bridge.persistence.schema import ensure_schema
 from zml_game_bridge.persistence.sqlite import open_sqlite
 
@@ -125,10 +126,40 @@ def test_mining_drop_projector_ignores_unlinked_result(tmp_path: Path) -> None:
         conn.close()
 
 
-def _drop_event(*, drop_id: str) -> MiningDropEvent:
+def test_mining_drop_reader_lists_full_run_history(tmp_path: Path) -> None:
+    conn = _open_test_db(tmp_path)
+    try:
+        writer = EventWriter(conn, projector=MiningDropProjector())
+        run_store = RunStore(conn)
+        active_run_id = run_store.create_run(name="Active run", notes=None, ts_ms=1_000)
+        other_run_id = run_store.create_run(name="Other run", notes=None, ts_ms=1_000)
+
+        writer.write(
+            _drop_event(drop_id="old-active-run-drop", run_id=active_run_id, observed_ts_ms=1_000)
+        )
+        writer.write(
+            _drop_event(drop_id="new-active-run-drop", run_id=active_run_id, observed_ts_ms=2_000)
+        )
+        writer.write(
+            _drop_event(drop_id="other-run-drop", run_id=other_run_id, observed_ts_ms=3_000)
+        )
+
+        rows = MiningDropReader(conn).list_for_run(run_id=active_run_id)
+
+        assert [row.drop_id for row in rows] == ["new-active-run-drop", "old-active-run-drop"]
+    finally:
+        conn.close()
+
+
+def _drop_event(
+    *,
+    drop_id: str,
+    run_id: int | None = None,
+    observed_ts_ms: int = 1_000,
+) -> MiningDropEvent:
     return MiningDropEvent(
         drop_id=drop_id,
-        observed_ts_ms=1_000,
+        observed_ts_ms=observed_ts_ms,
         position=WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None),
         modes_mask=1,
         probes_per_drop=None,
@@ -141,4 +172,5 @@ def _drop_event(*, drop_id: str) -> MiningDropEvent:
             total_mpec=Mpec(10_100),
         ),
         drop_radius_m=54.0,
+        run_id=run_id,
     )

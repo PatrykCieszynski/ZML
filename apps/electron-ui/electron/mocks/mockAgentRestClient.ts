@@ -182,7 +182,11 @@ export class MockAgentRestClient implements AgentClient {
     }
 
     async listMiningDrops(request: ListMiningDropsRequest = {}): Promise<MiningDropDto[]> {
-        const windowMs = (request.windowMinutes ?? 30) * 60_000;
+        if (request.activeRun || request.runId !== undefined || request.windowMinutes === undefined) {
+            return [...MOCK_MINING_DROPS];
+        }
+
+        const windowMs = request.windowMinutes * 60_000;
         const cutoff = Date.now() - windowMs;
         return MOCK_MINING_DROPS.filter((drop) => drop.observedTsMs >= cutoff);
     }
