@@ -134,9 +134,15 @@ def test_mining_drop_reader_lists_full_run_history(tmp_path: Path) -> None:
         active_run_id = run_store.create_run(name="Active run", notes=None, ts_ms=1_000)
         other_run_id = run_store.create_run(name="Other run", notes=None, ts_ms=1_000)
 
-        writer.write(_drop_event(drop_id="old-active-run-drop", run_id=active_run_id, observed_ts_ms=1_000))
-        writer.write(_drop_event(drop_id="new-active-run-drop", run_id=active_run_id, observed_ts_ms=2_000))
-        writer.write(_drop_event(drop_id="other-run-drop", run_id=other_run_id, observed_ts_ms=3_000))
+        writer.write(
+            _drop_event(drop_id="old-active-run-drop", run_id=active_run_id, observed_ts_ms=1_000)
+        )
+        writer.write(
+            _drop_event(drop_id="new-active-run-drop", run_id=active_run_id, observed_ts_ms=2_000)
+        )
+        writer.write(
+            _drop_event(drop_id="other-run-drop", run_id=other_run_id, observed_ts_ms=3_000)
+        )
 
         rows = MiningDropReader(conn).list_for_run(run_id=active_run_id)
 

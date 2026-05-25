@@ -27,7 +27,9 @@ def list_mining_drops(
     if active_run:
         active_run_id = RunState(conn).try_get_active_run_id()
         rows = [] if active_run_id is None else reader.list_for_run(run_id=active_run_id)
-        logger.debug("api_request_read_drops active_run=true run_id=%s rows=%s", active_run_id, len(rows))
+        logger.debug(
+            "api_request_read_drops active_run=true run_id=%s rows=%s", active_run_id, len(rows)
+        )
     elif run_id is not None:
         rows = reader.list_for_run(run_id=run_id)
         logger.debug("api_request_read_drops run_id=%s rows=%s", run_id, len(rows))
