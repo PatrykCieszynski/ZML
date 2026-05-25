@@ -5,6 +5,7 @@ import math
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
+from zml_game_bridge.application.mining.settings import IdFactory, MiningCoordinatorConfig
 from zml_game_bridge.domain.mining_events import (
     MiningClaimCreatedEvent,
     MiningClaimDepletedEvent,
@@ -15,7 +16,6 @@ from zml_game_bridge.domain.position import WorldPos
 from zml_game_bridge.events.base import EventBase
 from zml_game_bridge.inputs.chat.signals import ResourceDepletedSignal
 from zml_game_bridge.resources.mining_resources import MiningResourceCatalog
-from zml_game_bridge.runtime.mining.settings import IdFactory, MiningCoordinatorConfig
 
 PositionProvider = Callable[[], WorldPos | None]
 logger = logging.getLogger(__name__)

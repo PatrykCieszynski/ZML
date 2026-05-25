@@ -2,17 +2,17 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
+from zml_game_bridge.application.mining.setup.tools import (
+    ActiveMiningTools,
+    MiningToolKind,
+    MiningToolProfileRecord,
+)
 from zml_game_bridge.domain.mining_cost import (
     MiningEquipmentProfile,
     calculate_extraction_cost,
     effective_finder_radius_m,
 )
 from zml_game_bridge.domain.money import mpec_to_int
-from zml_game_bridge.runtime.mining.tools import (
-    ActiveMiningTools,
-    MiningToolKind,
-    MiningToolProfileRecord,
-)
 
 
 class MiningToolProfileDto(BaseModel):

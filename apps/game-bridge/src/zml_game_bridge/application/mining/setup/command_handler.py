@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from typing import TypeVar, cast
 
-from zml_game_bridge.runtime.mining.tool_commands import (
+from zml_game_bridge.application.mining.setup.commands import (
     CreateMiningToolProfileCommand,
     DeleteMiningToolProfileCommand,
     MiningToolNotFoundError,
     SetActiveMiningToolsCommand,
 )
-from zml_game_bridge.runtime.mining.tools import (
+from zml_game_bridge.application.mining.setup.tools import (
     ActiveMiningTools,
     MiningToolProfileRecord,
     MiningToolService,
@@ -22,7 +22,7 @@ from zml_game_bridge.runtime.runtime_commands import (
 T = TypeVar("T")
 
 
-class MiningSetupService:
+class MiningSetupCommandHandler:
     """Runtime command handler for mutable mining setup/tool configuration."""
 
     def __init__(self, *, tool_service: MiningToolService) -> None:

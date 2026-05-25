@@ -12,15 +12,15 @@ from zml_game_bridge.api.schemas.mining_tools import (
     SetActiveMiningToolsRequestDto,
     active_tools_dto,
 )
-from zml_game_bridge.domain.money import Mpec
-from zml_game_bridge.runtime.mining.tool_commands import (
+from zml_game_bridge.application.mining.setup.commands import (
     CreateMiningToolProfileCommand,
     DeleteMiningToolProfileCommand,
     MiningToolCommandError,
     MiningToolNotFoundError,
     SetActiveMiningToolsCommand,
 )
-from zml_game_bridge.runtime.mining.tools import MiningToolService
+from zml_game_bridge.application.mining.setup.tools import MiningToolService
+from zml_game_bridge.domain.money import Mpec
 from zml_game_bridge.runtime.runtime import AppRuntime
 from zml_game_bridge.runtime.runtime_commands import RuntimeCommand
 

@@ -10,6 +10,12 @@ from typing import Any
 
 from zml_game_bridge.api.channels.position_hub import OcrPositionHub
 from zml_game_bridge.api.channels.sse_hub import SseHub
+from zml_game_bridge.application.mining import MiningCoordinator
+from zml_game_bridge.application.mining.claims.lifecycle import ActiveClaim
+from zml_game_bridge.application.mining.segments.session import RunSessionService
+from zml_game_bridge.application.mining.settings import default_id_factory
+from zml_game_bridge.application.mining.setup.tools import MiningToolService
+from zml_game_bridge.application.position.latest_position import LatestPositionState
 from zml_game_bridge.domain.mining_cost import MiningEquipmentProfile
 from zml_game_bridge.domain.position import WorldPos
 from zml_game_bridge.events.in_memory_persisted_event_bus import (
@@ -31,12 +37,6 @@ from zml_game_bridge.runtime.channels import EventChannel, RuntimeInputChannel
 from zml_game_bridge.runtime.db_commands import DbCommand, DbCommandChannel
 from zml_game_bridge.runtime.db_writer import DbWriterWorker
 from zml_game_bridge.runtime.input_coordinator import InputCoordinator
-from zml_game_bridge.runtime.mining import MiningCoordinator
-from zml_game_bridge.runtime.mining.claim_lifecycle import ActiveClaim
-from zml_game_bridge.runtime.mining.run_session import RunSessionService
-from zml_game_bridge.runtime.mining.settings import default_id_factory
-from zml_game_bridge.runtime.mining.tools import MiningToolService
-from zml_game_bridge.runtime.position_state import LatestPositionState
 from zml_game_bridge.runtime.runtime_commands import RuntimeCommand, RuntimeCommandRequest
 from zml_game_bridge.runtime.worker_health import WorkerHealthRegistry
 
@@ -88,9 +88,9 @@ class AppRuntime:
             mining_tool_service=self._mining_tool_service,
         )
         self._input_coordinator = InputCoordinator(
-            pending_signals=self._pending_inputs,
+            pending_inputs=self._pending_inputs,
             pending_events=self._pending_events,
-            signal_processor=self._mining_coordinator,
+            input_processor=self._mining_coordinator,
         )
         self._db_writer_worker = DbWriterWorker(
             db_path=self._db_path,

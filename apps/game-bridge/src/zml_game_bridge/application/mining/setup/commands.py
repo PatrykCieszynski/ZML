@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from zml_game_bridge.domain.money import Mpec
-from zml_game_bridge.runtime.mining.tools import (
+from zml_game_bridge.application.mining.setup.tools import (
     ActiveMiningTools,
     MiningToolKind,
     MiningToolProfileRecord,
 )
+from zml_game_bridge.domain.money import Mpec
 from zml_game_bridge.runtime.runtime_commands import RuntimeCommand
 
 

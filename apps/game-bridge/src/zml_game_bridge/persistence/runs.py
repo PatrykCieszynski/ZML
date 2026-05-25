@@ -41,7 +41,7 @@ class RunSegmentRow:
 class RunStore:
     """
     SQLite access for runs.
-    - No active-run selection logic here; that belongs to runs.state.
+    - No active-run selection logic here; that belongs to persistence.run_state.
     - Keep writes low-volume and wrapped by callers when multiple mutations belong together.
     """
 

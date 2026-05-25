@@ -10,7 +10,7 @@ from zml_game_bridge.api.dependencies import ReadConn
 from zml_game_bridge.api.schemas.mining import MiningClaimDto, MiningDropDto
 from zml_game_bridge.persistence.mining_claims import MiningClaimReader
 from zml_game_bridge.persistence.mining_drops import MiningDropReader
-from zml_game_bridge.runs.state import RunState
+from zml_game_bridge.persistence.run_state import RunState
 
 router = APIRouter(prefix="/api/v1/mining", tags=["mining"])
 logger = logging.getLogger(__name__)

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Literal, cast
 from uuid import uuid4
 
+from zml_game_bridge.application.mining.settings import default_mining_equipment_profile
 from zml_game_bridge.domain.mining_cost import (
     FinderRangeEnhancerLoadout,
     MiningEquipmentProfile,
@@ -15,7 +16,6 @@ from zml_game_bridge.domain.mining_cost import (
 )
 from zml_game_bridge.domain.money import Mpec, mpec_to_int
 from zml_game_bridge.domain.rate import percent
-from zml_game_bridge.runtime.mining.settings import default_mining_equipment_profile
 
 logger = logging.getLogger(__name__)
 

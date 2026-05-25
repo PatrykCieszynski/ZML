@@ -3,6 +3,12 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 
+from zml_game_bridge.application.mining.segments.session import DropRunContext
+from zml_game_bridge.application.mining.settings import (
+    DEFAULT_DROP_RADIUS_M,
+    IdFactory,
+    MiningCoordinatorConfig,
+)
 from zml_game_bridge.domain.claim_size import expected_claim_expires_ts_ms
 from zml_game_bridge.domain.mining_cost import (
     MiningEquipmentProfile,
@@ -22,12 +28,6 @@ from zml_game_bridge.inputs.ocr.pipelines.mining_finder.signals import (
     FinderNoResourcesSignal,
     FinderUnitsChangedSignal,
     ProbeFiredSignal,
-)
-from zml_game_bridge.runtime.mining.run_session import DropRunContext
-from zml_game_bridge.runtime.mining.settings import (
-    DEFAULT_DROP_RADIUS_M,
-    IdFactory,
-    MiningCoordinatorConfig,
 )
 
 logger = logging.getLogger(__name__)

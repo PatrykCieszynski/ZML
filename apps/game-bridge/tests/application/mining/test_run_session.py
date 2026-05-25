@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from zml_game_bridge.application.mining.segments.session import RunSessionService
 from zml_game_bridge.domain.mining_cost import MiningEquipmentProfile, MiningToolProfile
 from zml_game_bridge.domain.mining_events import RunSegmentEndedEvent, RunSegmentStartedEvent
 from zml_game_bridge.domain.money import Mpec
+from zml_game_bridge.persistence.run_state import RunState
 from zml_game_bridge.persistence.schema import ensure_schema
 from zml_game_bridge.persistence.sqlite import open_sqlite
-from zml_game_bridge.runs.state import RunState
-from zml_game_bridge.runtime.mining.run_session import RunSessionService
 
 
 def test_run_session_starts_segment_on_first_drop(tmp_path: Path) -> None:

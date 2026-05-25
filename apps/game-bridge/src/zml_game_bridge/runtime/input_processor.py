@@ -11,7 +11,7 @@ from zml_game_bridge.runtime.runtime_commands import (
 )
 
 
-class SignalProcessor(Protocol):
+class InputProcessor(Protocol):
     def process(self, signal: EventBase) -> Iterable[EventBase]:
         """Return durable domain events derived from a received input signal."""
         ...
@@ -21,7 +21,7 @@ class SignalProcessor(Protocol):
         ...
 
 
-class NoOpSignalProcessor:
+class NoOpInputProcessor:
     def process(self, _signal: EventBase) -> tuple[EventBase, ...]:
         return ()
 
@@ -29,8 +29,8 @@ class NoOpSignalProcessor:
         raise UnsupportedRuntimeCommandError(type(command).__name__)
 
 
-class CompositeSignalProcessor:
-    def __init__(self, processors: Sequence[SignalProcessor]) -> None:
+class CompositeInputProcessor:
+    def __init__(self, processors: Sequence[InputProcessor]) -> None:
         self._processors = tuple(processors)
 
     def process(self, signal: EventBase) -> list[EventBase]:

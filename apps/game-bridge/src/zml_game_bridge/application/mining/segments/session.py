@@ -9,11 +9,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from zml_game_bridge.application.mining.settings import IdFactory
 from zml_game_bridge.domain.mining_cost import MiningEquipmentProfile, MiningToolProfile
 from zml_game_bridge.domain.mining_events import RunSegmentEndedEvent, RunSegmentStartedEvent
 from zml_game_bridge.domain.money import mpec_to_int
 from zml_game_bridge.persistence.sqlite import open_read_connection
-from zml_game_bridge.runtime.mining.settings import IdFactory
 
 logger = logging.getLogger(__name__)
 

@@ -1,5 +1,5 @@
-from zml_game_bridge.runtime.mining.coordinator import MiningCoordinator
-from zml_game_bridge.runtime.mining.settings import (
+from zml_game_bridge.application.mining.coordinator import MiningCoordinator
+from zml_game_bridge.application.mining.settings import (
     DEFAULT_DROP_RADIUS_M,
     IdFactory,
     MiningCoordinatorConfig,

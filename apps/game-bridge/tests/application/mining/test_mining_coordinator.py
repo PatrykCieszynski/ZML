@@ -3,6 +3,12 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
+from zml_game_bridge.application.mining import (
+    MiningCoordinator,
+    MiningCoordinatorConfig,
+)
+from zml_game_bridge.application.mining.claims.lifecycle import ActiveClaim
+from zml_game_bridge.application.mining.segments.session import DropRunContext
 from zml_game_bridge.domain.mining import MiningMode
 from zml_game_bridge.domain.mining_cost import (
     FinderRangeEnhancerLoadout,
@@ -38,12 +44,6 @@ from zml_game_bridge.inputs.ocr.pipelines.mining_finder.signals import (
     ProbeFiredSignal,
 )
 from zml_game_bridge.resources.mining_resources import MiningResourceCatalog
-from zml_game_bridge.runtime.mining import (
-    MiningCoordinator,
-    MiningCoordinatorConfig,
-)
-from zml_game_bridge.runtime.mining.claim_lifecycle import ActiveClaim
-from zml_game_bridge.runtime.mining.run_session import DropRunContext
 
 
 def test_mining_coordinator_records_probe_drop_with_current_units() -> None:

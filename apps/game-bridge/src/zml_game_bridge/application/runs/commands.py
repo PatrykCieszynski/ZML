@@ -4,8 +4,8 @@ import sqlite3
 import time
 from dataclasses import dataclass
 
+from zml_game_bridge.persistence.run_state import RunState
 from zml_game_bridge.persistence.runs import RunRow, RunSegmentStore, RunStore
-from zml_game_bridge.runs.state import RunState
 from zml_game_bridge.runtime.db_commands import DbCommand
 from zml_game_bridge.runtime.runtime_commands import RuntimeCommand
 

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from zml_game_bridge.application.mining.setup.tools import MiningToolService
 from zml_game_bridge.domain.mining_cost import calculate_drop_cost, calculate_extraction_cost
 from zml_game_bridge.domain.money import Mpec, mpec_to_int
-from zml_game_bridge.runtime.mining.tools import MiningToolService
 
 
 def test_mining_tool_service_creates_active_loadout_and_persists_it(tmp_path: Path) -> None:

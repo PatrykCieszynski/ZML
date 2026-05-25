@@ -16,15 +16,15 @@ from zml_game_bridge.api.schemas.mining_tools import (
     CreateMiningToolProfileRequestDto,
     SetActiveMiningToolsRequestDto,
 )
-from zml_game_bridge.runtime.mining.mining_setup import MiningSetupService
-from zml_game_bridge.runtime.mining.tools import MiningToolService
+from zml_game_bridge.application.mining.setup.command_handler import MiningSetupCommandHandler
+from zml_game_bridge.application.mining.setup.tools import MiningToolService
 from zml_game_bridge.runtime.runtime_commands import RuntimeCommand
 
 
 class _RuntimeStub:
     def __init__(self, service: MiningToolService) -> None:
         self.mining_tool_service = service
-        self._setup = MiningSetupService(tool_service=service)
+        self._setup = MiningSetupCommandHandler(tool_service=service)
 
     def execute_runtime_command[T](
         self,
