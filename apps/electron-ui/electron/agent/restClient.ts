@@ -3,6 +3,7 @@ import {
   isRunWireOrNull,
   isRunWire,
   createMiningToolProfileRequestToWire,
+  isAgentHealthWire,
   isActiveMiningToolsWire,
   isMiningClaimWire,
   isMiningDropWire,
@@ -11,6 +12,7 @@ import {
   startRunRequestToWire,
   stopRunRequestToWire,
   updateRunRequestToWire,
+  wireToAgentHealthDto,
   wireToActiveMiningToolsDto,
   wireToMiningClaimDto,
   wireToMiningDropDto,
@@ -79,10 +81,10 @@ export class AgentRestClient implements AgentClient {
 
   async getHealth(): Promise<AgentHealthDto> {
     const data = await this.getJson("/health");
-    if (!isAgentHealthDto(data)) {
+    if (!isAgentHealthWire(data)) {
       throw new Error("Agent /health returned an invalid payload");
     }
-    return data;
+    return wireToAgentHealthDto(data);
   }
 
   async getActiveRun(): Promise<RunDto | null> {
@@ -284,8 +286,3 @@ function normalizeBaseUrl(baseUrl: string): string {
   return `http://${baseUrl}`;
 }
 
-function isAgentHealthDto(value: unknown): value is AgentHealthDto {
-  if (typeof value !== "object" || value === null) return false;
-  const record = value as Record<string, unknown>;
-  return typeof record.status === "string";
-}

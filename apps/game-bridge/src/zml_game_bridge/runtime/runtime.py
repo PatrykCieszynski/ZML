@@ -3,8 +3,10 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
 from threading import Thread
+from typing import Any
 
 from zml_game_bridge.api.channels.position_hub import OcrPositionHub
 from zml_game_bridge.api.channels.sse_hub import SseHub
@@ -36,6 +38,7 @@ from zml_game_bridge.runtime.mining.settings import default_id_factory
 from zml_game_bridge.runtime.mining.tools import MiningToolService
 from zml_game_bridge.runtime.position_state import LatestPositionState
 from zml_game_bridge.runtime.runtime_commands import RuntimeCommand, RuntimeCommandRequest
+from zml_game_bridge.runtime.worker_health import WorkerHealthRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +66,8 @@ class AppRuntime:
         self._mock_mining_interval_ms = mock_mining_interval_ms
 
         self._stop_event = threading.Event()
+        self._worker_health = WorkerHealthRegistry()
+        self._register_worker_health()
         self._pending_inputs = RuntimeInputChannel()
         self._pending_events = EventChannel()
         self._pending_db_commands = DbCommandChannel()
@@ -142,6 +147,9 @@ class AppRuntime:
     def execute_db_command[T](self, command: DbCommand[T], *, timeout_s: float = 5.0) -> T:
         return self._pending_db_commands.execute(command, timeout_s=timeout_s)
 
+    def health(self) -> dict[str, object]:
+        return self._worker_health.as_dict()
+
     def execute_runtime_command[T](
         self,
         command: RuntimeCommand[T],
@@ -181,55 +189,59 @@ class AppRuntime:
             self._mock_inputs_enabled,
         )
 
-        self._t_db = Thread(
+        self._t_db = self._create_worker_thread(
+            name="db_writer",
             target=self._db_writer_worker.run,
-            kwargs={"stop_event": self._stop_event},
-            daemon=True,
+            worker_kwargs={"stop_event": self._stop_event},
         )
         self._t_db.start()
 
-        self._t_input = Thread(
+        self._t_input = self._create_worker_thread(
+            name="input_coordinator",
             target=self._input_coordinator.run,
-            kwargs={"stop_event": self._stop_event},
-            daemon=True,
+            worker_kwargs={"stop_event": self._stop_event},
         )
         self._t_input.start()
 
-        self._t_chat = Thread(
+        self._t_chat = self._create_worker_thread(
+            name="chat_tail",
             target=start_chat_input,
-            kwargs={
+            worker_kwargs={
                 "path": self._chat_log_path,
                 "signal_sink": self._pending_inputs.emit,
                 "stop_event": self._stop_event,
                 "start_at_end": self._chat_start_at_end,
             },
-            daemon=True,
         )
         self._t_chat.start()
 
         if self._ocr_enabled:
-            preload_tesserocr()  # Needed for 'tesserocr import failed: signal only works in main thread of the main interpreter'
+            try:
+                preload_tesserocr()  # Needed for 'tesserocr import failed: signal only works in main thread of the main interpreter'
+            except Exception as exc:
+                self._worker_health.mark_crashed("ocr_worker", exc)
+                raise
 
-            self._t_ocr = Thread(
+            self._t_ocr = self._create_worker_thread(
+                name="ocr_worker",
                 target=start_ocr_input,
-                kwargs={
+                worker_kwargs={
                     "position_sink": self._on_position,
                     "signal_sink": self._pending_inputs.emit,
                     "stop_event": self._stop_event,
                 },
-                daemon=True,
             )
             self._t_ocr.start()
 
         if self._mock_inputs_enabled:
-            self._t_mock = Thread(
+            self._t_mock = self._create_worker_thread(
+                name="mock_mining_input",
                 target=start_mock_mining_input,
-                kwargs={
+                worker_kwargs={
                     "signal_sink": self._pending_inputs.emit,
                     "stop_event": self._stop_event,
                     "interval_ms": self._mock_mining_interval_ms,
                 },
-                daemon=True,
             )
             self._t_mock.start()
 
@@ -285,9 +297,9 @@ class AppRuntime:
             self._sub_sse.close()
             self._sub_sse = None
 
-        self._join_thread(self._t_chat, "chat_input")
-        self._join_thread(self._t_ocr, "ocr_input")
-        self._join_thread(self._t_mock, "mock_input")
+        self._join_thread(self._t_chat, "chat_tail")
+        self._join_thread(self._t_ocr, "ocr_worker")
+        self._join_thread(self._t_mock, "mock_mining_input")
 
         self._pending_inputs.close()
         self._join_thread(self._t_input, "input_coordinator")
@@ -298,12 +310,51 @@ class AppRuntime:
         self._started = False
         logger.info("app_stopped")
 
+    def _register_worker_health(self) -> None:
+        self._worker_health.register("db_writer", enabled=True)
+        self._worker_health.register("input_coordinator", enabled=True)
+        self._worker_health.register("chat_tail", enabled=True)
+        self._worker_health.register("ocr_worker", enabled=self._ocr_enabled)
+        self._worker_health.register("mock_mining_input", enabled=self._mock_inputs_enabled)
+
+    def _create_worker_thread(
+        self,
+        *,
+        name: str,
+        target: Callable[..., None],
+        worker_kwargs: dict[str, Any],
+    ) -> Thread:
+        return Thread(
+            target=self._run_worker,
+            kwargs={"name": name, "target": target, "worker_kwargs": worker_kwargs},
+            daemon=True,
+        )
+
+    def _run_worker(
+        self,
+        *,
+        name: str,
+        target: Callable[..., None],
+        worker_kwargs: dict[str, Any],
+    ) -> None:
+        self._worker_health.mark_running(name)
+        try:
+            target(**worker_kwargs)
+        except Exception as exc:
+            self._worker_health.mark_crashed(name, exc)
+            raise
+        if self._stop_event.is_set():
+            self._worker_health.mark_stopped(name)
+        else:
+            self._worker_health.mark_degraded(name, "worker returned before runtime shutdown")
+
     def _join_thread(self, thread: Thread | None, name: str) -> bool:
         if thread is None:
             return True
         thread.join(timeout=5.0)
         if thread.is_alive():
             logger.warning("runtime_thread_did_not_stop thread=%s", name)
+            self._worker_health.mark_degraded(name, "worker did not stop within 5s")
             return False
         return True
 

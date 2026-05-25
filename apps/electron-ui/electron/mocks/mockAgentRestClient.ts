@@ -52,7 +52,36 @@ export class MockAgentRestClient implements AgentClient {
     };
 
     async getHealth(): Promise<AgentHealthDto> {
-        return { status: "mock" };
+        const now = Date.now();
+        return {
+            status: "running",
+            workers: {
+                db_writer: {
+                    state: "running",
+                    enabled: true,
+                    lastError: null,
+                    lastSeenTsMs: now,
+                },
+                input_coordinator: {
+                    state: "running",
+                    enabled: true,
+                    lastError: null,
+                    lastSeenTsMs: now,
+                },
+                ocr_worker: {
+                    state: "running",
+                    enabled: true,
+                    lastError: null,
+                    lastSeenTsMs: now,
+                },
+                chat_tail: {
+                    state: "running",
+                    enabled: true,
+                    lastError: null,
+                    lastSeenTsMs: now,
+                },
+            },
+        };
     }
 
     async startRun(request: StartRunRequest): Promise<RunDto> {
