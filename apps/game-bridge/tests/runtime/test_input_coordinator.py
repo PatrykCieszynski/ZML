@@ -31,7 +31,7 @@ class DummyCommand(RuntimeCommand[int]):
 
 
 class FakeInputProcessor:
-    def process(self, signal: EventBase) -> list[EventBase]:
+    def process_signal(self, signal: SignalBase) -> list[EventBase]:
         if isinstance(signal, TransientDummySignal):
             return [DurableDummyEvent(signal.x + 1)]
         return []

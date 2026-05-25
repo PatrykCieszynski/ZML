@@ -20,7 +20,7 @@ from zml_game_bridge.domain.mining_events import (
     MiningHitHintEvent,
     MiningNoResourcesEvent,
 )
-from zml_game_bridge.events.base import EventBase
+from zml_game_bridge.events.base import EventBase, SignalBase
 from zml_game_bridge.inputs.ocr.pipelines.mining_finder.signals import (
     FinderHitHintSignal,
     FinderModeInvalidatedSignal,
@@ -56,7 +56,7 @@ class FinderDropCorrelator:
         self._ammo_per_drop: int | None = None
         self._pending_drop: MiningDropEvent | None = None
 
-    def process(self, signal: EventBase) -> list[EventBase]:
+    def process_signal(self, signal: SignalBase) -> list[EventBase]:
         if isinstance(signal, FinderModesChangedSignal):
             self._modes_mask = signal.modes_mask
             logger.debug(

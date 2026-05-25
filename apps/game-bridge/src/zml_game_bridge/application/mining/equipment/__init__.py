@@ -1,27 +1,29 @@
-from zml_game_bridge.application.mining.setup.command_handler import MiningSetupCommandHandler
-from zml_game_bridge.application.mining.setup.commands import (
+from zml_game_bridge.application.mining.equipment.command_handler import (
+    MiningEquipmentCommandHandler,
+)
+from zml_game_bridge.application.mining.equipment.commands import (
     CreateMiningToolProfileCommand,
     DeleteMiningToolProfileCommand,
     MiningToolCommandError,
     MiningToolNotFoundError,
     SetActiveMiningToolsCommand,
 )
-from zml_game_bridge.application.mining.setup.tools import (
+from zml_game_bridge.application.mining.equipment.service import (
     ActiveMiningTools,
+    MiningEquipmentService,
     MiningToolKind,
     MiningToolProfileRecord,
-    MiningToolService,
 )
 
 __all__ = [
     "ActiveMiningTools",
     "CreateMiningToolProfileCommand",
     "DeleteMiningToolProfileCommand",
-    "MiningSetupCommandHandler",
+    "MiningEquipmentCommandHandler",
+    "MiningEquipmentService",
     "MiningToolCommandError",
     "MiningToolKind",
     "MiningToolNotFoundError",
     "MiningToolProfileRecord",
-    "MiningToolService",
     "SetActiveMiningToolsCommand",
 ]

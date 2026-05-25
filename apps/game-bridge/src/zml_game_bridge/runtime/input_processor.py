@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from typing import Protocol
 
-from zml_game_bridge.events.base import EventBase
+from zml_game_bridge.events.base import EventBase, SignalBase
 from zml_game_bridge.runtime.runtime_commands import (
     RuntimeCommand,
     RuntimeCommandResult,
@@ -12,7 +12,7 @@ from zml_game_bridge.runtime.runtime_commands import (
 
 
 class InputProcessor(Protocol):
-    def process(self, signal: EventBase) -> Iterable[EventBase]:
+    def process_signal(self, signal: SignalBase) -> Iterable[EventBase]:
         """Return durable domain events derived from a received input signal."""
         ...
 
@@ -22,7 +22,7 @@ class InputProcessor(Protocol):
 
 
 class NoOpInputProcessor:
-    def process(self, _signal: EventBase) -> tuple[EventBase, ...]:
+    def process_signal(self, _signal: SignalBase) -> tuple[EventBase, ...]:
         return ()
 
     def process_command[T](self, command: RuntimeCommand[T]) -> RuntimeCommandResult[T]:
@@ -33,10 +33,10 @@ class CompositeInputProcessor:
     def __init__(self, processors: Sequence[InputProcessor]) -> None:
         self._processors = tuple(processors)
 
-    def process(self, signal: EventBase) -> list[EventBase]:
+    def process_signal(self, signal: SignalBase) -> list[EventBase]:
         derived: list[EventBase] = []
         for processor in self._processors:
-            derived.extend(processor.process(signal))
+            derived.extend(processor.process_signal(signal))
         return derived
 
     def process_command[T](self, command: RuntimeCommand[T]) -> RuntimeCommandResult[T]:

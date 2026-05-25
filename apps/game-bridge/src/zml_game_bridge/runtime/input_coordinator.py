@@ -53,7 +53,7 @@ class InputCoordinator:
 
             signal = item
             logger.debug("signal_received signal_type=%s", type(signal).__name__)
-            derived_events = list(self.input_processor.process(signal))
+            derived_events = list(self.input_processor.process_signal(signal))
             if not derived_events:
                 logger.debug("signal_ignored signal_type=%s", type(signal).__name__)
                 continue

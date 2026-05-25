@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from zml_game_bridge.application.mining.setup.tools import (
+from zml_game_bridge.application.mining.equipment.service import (
     ActiveMiningTools,
     MiningToolKind,
     MiningToolProfileRecord,

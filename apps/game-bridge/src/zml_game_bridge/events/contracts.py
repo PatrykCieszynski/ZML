@@ -1,5 +1,5 @@
 from collections.abc import Callable
 
-from zml_game_bridge.events.base import EventBase
+from zml_game_bridge.events.base import SignalBase
 
-SignalSink = Callable[[EventBase], None]
+SignalSink = Callable[[SignalBase], None]

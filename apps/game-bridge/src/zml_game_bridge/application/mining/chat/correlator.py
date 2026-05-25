@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from zml_game_bridge.domain.mining_events import (
     MiningClaimDeedReceivedEvent,
@@ -11,7 +11,7 @@ from zml_game_bridge.domain.mining_events import (
     MiningItemReceivedEvent,
 )
 from zml_game_bridge.domain.money import Mpec
-from zml_game_bridge.events.base import EventBase
+from zml_game_bridge.events.base import EventBase, SignalBase
 from zml_game_bridge.inputs.chat.signals import (
     ChatSignalBase,
     EnhancerBrokeSignal,
@@ -23,6 +23,7 @@ from zml_game_bridge.resources.mining_resources import MiningResourceCatalog
 
 logger = logging.getLogger(__name__)
 ExtractionCostProvider = Callable[[], Mpec | None]
+DEFAULT_PENDING_DEED_LINK_WINDOW_MS = 10_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,14 +42,17 @@ class MiningChatCorrelator:
         *,
         resource_catalog: MiningResourceCatalog | None = None,
         extraction_cost_provider: ExtractionCostProvider | None = None,
+        pending_deed_link_window_ms: int = DEFAULT_PENDING_DEED_LINK_WINDOW_MS,
     ) -> None:
         self._pending_deeds: list[PendingClaimDeed] = []
         self._resource_catalog = resource_catalog or MiningResourceCatalog()
         self._extraction_cost_provider = extraction_cost_provider or _missing_extraction_cost
+        self._pending_deed_link_window = timedelta(milliseconds=pending_deed_link_window_ms)
 
-    def process(self, signal: EventBase) -> list[EventBase]:
+    def process_signal(self, signal: SignalBase) -> list[EventBase]:
         if not isinstance(signal, ChatSignalBase):
             return []
+        self._drop_stale_pending_deeds(now=signal.event_dt)
 
         if isinstance(signal, ItemReceivedSignal):
             claim_deed = _to_pending_claim_deed(signal)
@@ -112,6 +116,18 @@ class MiningChatCorrelator:
             event.event_dt,
         )
         return event
+
+    def _drop_stale_pending_deeds(self, *, now: datetime) -> None:
+        cutoff = now - self._pending_deed_link_window
+        while self._pending_deeds and self._pending_deeds[0].event_dt < cutoff:
+            stale = self._pending_deeds.pop(0)
+            logger.warning(
+                "pending_claim_deed_expired item=%r mining_type=%s deed_dt=%s now=%s",
+                stale.item_name,
+                stale.mining_type,
+                stale.event_dt,
+                now,
+            )
 
     def _record_item_received(self, signal: ItemReceivedSignal) -> MiningItemReceivedEvent | None:
         resource = self._resource_catalog.get(signal.item_name)

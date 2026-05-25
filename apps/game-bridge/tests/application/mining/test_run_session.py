@@ -59,6 +59,25 @@ def test_run_session_reuses_segment_until_setup_changes(tmp_path: Path) -> None:
     assert started.segment_index == 2
 
 
+def test_run_session_does_not_split_segment_when_only_extractor_changes(tmp_path: Path) -> None:
+    db_path = tmp_path / "run-session.sqlite3"
+    _create_active_run(db_path)
+    service = RunSessionService(db_path=db_path, id_factory=_id_factory("segment-1"))
+
+    first = service.context_for_drop(
+        observed_ts_ms=1_000,
+        profile=_profile("Finder A", extractor_name="Extractor A"),
+    )
+    second = service.context_for_drop(
+        observed_ts_ms=2_000,
+        profile=_profile("Finder A", extractor_name="Extractor B"),
+    )
+
+    assert first.segment_id == "segment-1"
+    assert second.segment_id == "segment-1"
+    assert second.lifecycle_events == ()
+
+
 def test_run_session_returns_no_context_without_active_run(tmp_path: Path) -> None:
     db_path = tmp_path / "run-session.sqlite3"
     conn = open_sqlite(db_path)
@@ -85,9 +104,15 @@ def _create_active_run(db_path: Path) -> None:
         conn.close()
 
 
-def _profile(name: str) -> MiningEquipmentProfile:
+def _profile(name: str, *, extractor_name: str | None = None) -> MiningEquipmentProfile:
+    extractor = (
+        MiningToolProfile(name=extractor_name, decay_mpec=Mpec(25))
+        if extractor_name is not None
+        else None
+    )
     return MiningEquipmentProfile(
         finder=MiningToolProfile(name=name, decay_mpec=Mpec(100), radius_m=55.0),
+        extractor=extractor,
     )
 
 

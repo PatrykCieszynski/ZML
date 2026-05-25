@@ -11,9 +11,10 @@ from zml_game_bridge.domain.mining_events import (
     MiningClaimDepletedEvent,
     MiningDropEvent,
     MiningHitHintEvent,
+    MiningNoResourcesEvent,
 )
 from zml_game_bridge.domain.position import WorldPos
-from zml_game_bridge.events.base import EventBase
+from zml_game_bridge.events.base import EventBase, SignalBase
 from zml_game_bridge.inputs.chat.signals import ResourceDepletedSignal
 from zml_game_bridge.resources.mining_resources import MiningResourceCatalog
 
@@ -52,15 +53,21 @@ class ClaimLifecycleCorrelator:
 
     def process_event(self, event: EventBase) -> list[EventBase]:
         if isinstance(event, MiningDropEvent):
+            self._prune_stale_drops(event.observed_ts_ms)
             self._drops_by_id[event.drop_id] = event
             return []
 
         if isinstance(event, MiningHitHintEvent):
             return [self._create_claim(event)]
 
+        if isinstance(event, MiningNoResourcesEvent):
+            if event.drop_id is not None:
+                self._drops_by_id.pop(event.drop_id, None)
+            return []
+
         return []
 
-    def process_signal(self, signal: EventBase) -> list[EventBase]:
+    def process_signal(self, signal: SignalBase) -> list[EventBase]:
         if isinstance(signal, ResourceDepletedSignal):
             event = self._deplete_nearest_claim(signal)
             return [event] if event is not None else []
@@ -69,6 +76,11 @@ class ClaimLifecycleCorrelator:
 
     def _create_claim(self, event: MiningHitHintEvent) -> MiningClaimCreatedEvent:
         drop = self._drops_by_id.get(event.drop_id) if event.drop_id is not None else None
+        if event.drop_id is not None:
+            # TODO: Multi-mode drops can produce multiple claim deeds for one drop.
+            # Keep this cache entry for the full correlation window once deed OCR/chat
+            # claim correlation can create more than one claim from the same drop.
+            self._drops_by_id.pop(event.drop_id, None)
         claim_id = self._id_factory()
         position = event.position if event.position is not None else drop.position if drop else None
         search_radius_m = drop.drop_radius_m if drop is not None else None
@@ -104,6 +116,18 @@ class ClaimLifecycleCorrelator:
             created.resource_name,
         )
         return created
+
+    def _prune_stale_drops(self, observed_ts_ms: int) -> None:
+        stale_before_ts_ms = observed_ts_ms - self._config.result_link_window_ms
+        stale_drop_ids = [
+            drop_id
+            for drop_id, drop in self._drops_by_id.items()
+            if drop.observed_ts_ms < stale_before_ts_ms
+        ]
+        for drop_id in stale_drop_ids:
+            del self._drops_by_id[drop_id]
+        if stale_drop_ids:
+            logger.debug("claim_lifecycle_pruned_stale_drops count=%s", len(stale_drop_ids))
 
     def _resolve_mining_type(self, resource_name: str | None) -> str | None:
         if resource_name is None:

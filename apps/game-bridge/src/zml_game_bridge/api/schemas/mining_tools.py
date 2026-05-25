@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from zml_game_bridge.application.mining.setup.tools import (
+from zml_game_bridge.application.mining.equipment.service import (
     ActiveMiningTools,
     MiningToolKind,
     MiningToolProfileRecord,

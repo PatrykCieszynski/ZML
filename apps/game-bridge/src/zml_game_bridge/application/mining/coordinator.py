@@ -13,17 +13,19 @@ from zml_game_bridge.application.mining.drops.finder_correlator import (
     DropRunContextProvider,
     FinderDropCorrelator,
 )
+from zml_game_bridge.application.mining.equipment.command_handler import (
+    MiningEquipmentCommandHandler,
+)
+from zml_game_bridge.application.mining.equipment.service import MiningEquipmentService
 from zml_game_bridge.application.mining.settings import (
     IdFactory,
     MiningCoordinatorConfig,
     default_id_factory,
     default_mining_equipment_profile,
 )
-from zml_game_bridge.application.mining.setup.command_handler import MiningSetupCommandHandler
-from zml_game_bridge.application.mining.setup.tools import MiningToolService
 from zml_game_bridge.application.runs.command_handler import RunCommandHandler
 from zml_game_bridge.domain.mining_cost import MiningEquipmentProfile, calculate_extraction_cost
-from zml_game_bridge.events.base import EventBase
+from zml_game_bridge.events.base import EventBase, SignalBase
 from zml_game_bridge.resources.mining_resources import MiningResourceCatalog
 from zml_game_bridge.runtime.db_commands import DbCommand
 from zml_game_bridge.runtime.runtime_commands import (
@@ -36,7 +38,7 @@ MiningEquipmentProfileProvider = Callable[[], MiningEquipmentProfile]
 
 
 class SignalCorrelator(Protocol):
-    def process(self, signal: EventBase) -> Iterable[EventBase]:
+    def process_signal(self, signal: SignalBase) -> Iterable[EventBase]:
         """Derive durable events from one input signal."""
         ...
 
@@ -48,7 +50,7 @@ class DerivedEventHandler(Protocol):
 
 
 class SignalHandler(Protocol):
-    def process_signal(self, signal: EventBase) -> Iterable[EventBase]:
+    def process_signal(self, signal: SignalBase) -> Iterable[EventBase]:
         """React directly to an input signal without producing an upstream event first."""
         ...
 
@@ -71,7 +73,7 @@ class MiningCoordinator:
         resource_catalog: MiningResourceCatalog | None = None,
         run_context_provider: DropRunContextProvider | None = None,
         db_command_executor: Callable[[DbCommand[Any]], Any] | None = None,
-        mining_tool_service: MiningToolService | None = None,
+        mining_equipment_service: MiningEquipmentService | None = None,
     ) -> None:
         resolved_profile = profile or default_mining_equipment_profile()
         resolved_profile_provider = profile_provider or (lambda: resolved_profile)
@@ -101,23 +103,23 @@ class MiningCoordinator:
             if db_command_executor is not None
             else None
         )
-        setup_commands = (
-            MiningSetupCommandHandler(tool_service=mining_tool_service)
-            if mining_tool_service is not None
+        equipment_commands = (
+            MiningEquipmentCommandHandler(equipment_service=mining_equipment_service)
+            if mining_equipment_service is not None
             else None
         )
         self._command_handlers: tuple[CommandHandler, ...] = tuple(
-            handler for handler in (run_commands, setup_commands) if handler is not None
+            handler for handler in (run_commands, equipment_commands) if handler is not None
         )
 
     def restore_active_claims(self, claims: Iterable[ActiveClaim]) -> None:
         self._claim_lifecycle.restore_active_claims(claims)
 
-    def process(self, signal: EventBase) -> list[EventBase]:
+    def process_signal(self, signal: SignalBase) -> list[EventBase]:
         derived_events: list[EventBase] = []
         correlated_events: list[EventBase] = []
         for correlator in self._signal_correlators:
-            correlated_events.extend(correlator.process(signal))
+            correlated_events.extend(correlator.process_signal(signal))
 
         for event in correlated_events:
             derived_events.append(event)

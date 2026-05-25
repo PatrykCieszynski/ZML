@@ -48,7 +48,7 @@ class ActiveMiningTools:
     finder_range_enhancer_count: int = 0
 
 
-class MiningToolService:
+class MiningEquipmentService:
     def __init__(self, *, path: Path | None = None) -> None:
         self._path = path
         self._lock = threading.RLock()

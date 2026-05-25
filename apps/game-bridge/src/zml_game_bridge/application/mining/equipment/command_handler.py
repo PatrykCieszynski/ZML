@@ -2,16 +2,16 @@ from __future__ import annotations
 
 from typing import TypeVar, cast
 
-from zml_game_bridge.application.mining.setup.commands import (
+from zml_game_bridge.application.mining.equipment.commands import (
     CreateMiningToolProfileCommand,
     DeleteMiningToolProfileCommand,
     MiningToolNotFoundError,
     SetActiveMiningToolsCommand,
 )
-from zml_game_bridge.application.mining.setup.tools import (
+from zml_game_bridge.application.mining.equipment.service import (
     ActiveMiningTools,
+    MiningEquipmentService,
     MiningToolProfileRecord,
-    MiningToolService,
 )
 from zml_game_bridge.runtime.runtime_commands import (
     RuntimeCommand,
@@ -22,15 +22,15 @@ from zml_game_bridge.runtime.runtime_commands import (
 T = TypeVar("T")
 
 
-class MiningSetupCommandHandler:
-    """Runtime command handler for mutable mining setup/tool configuration."""
+class MiningEquipmentCommandHandler:
+    """Runtime command handler for mutable mining equipment configuration."""
 
-    def __init__(self, *, tool_service: MiningToolService) -> None:
-        self._tool_service = tool_service
+    def __init__(self, *, equipment_service: MiningEquipmentService) -> None:
+        self._equipment_service = equipment_service
 
     def process_command(self, command: RuntimeCommand[T]) -> RuntimeCommandResult[T]:
         if isinstance(command, CreateMiningToolProfileCommand):
-            record = self._tool_service.create_profile(
+            record = self._equipment_service.create_profile(
                 kind=command.kind,
                 name=command.name,
                 decay_mpec=command.decay_mpec,
@@ -43,13 +43,13 @@ class MiningSetupCommandHandler:
             )
 
         if isinstance(command, DeleteMiningToolProfileCommand):
-            deleted = self._tool_service.delete_profile(command.tool_id)
+            deleted = self._equipment_service.delete_profile(command.tool_id)
             if not deleted:
                 raise MiningToolNotFoundError(command.tool_id)
             return cast(RuntimeCommandResult[T], RuntimeCommandResult[None](value=None))
 
         if isinstance(command, SetActiveMiningToolsCommand):
-            active = self._tool_service.set_active_tools(
+            active = self._equipment_service.set_active_tools(
                 finder_id=command.finder_id,
                 amp_id=command.amp_id,
                 extractor_id=command.extractor_id,

@@ -1,3 +1,11 @@
+"""Transitional DB-backed run commands.
+
+Run commands currently enter through the runtime queue and execute on the
+single DB writer. Do not copy this RuntimeCommand + DbCommand pattern into new
+domains; split pure runtime commands from persistence when run lifecycle moves
+to durable domain events.
+"""
+
 from __future__ import annotations
 
 import sqlite3

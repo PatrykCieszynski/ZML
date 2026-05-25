@@ -155,10 +155,14 @@ class RunSessionService:
 
 
 def equipment_profile_snapshot(profile: MiningEquipmentProfile) -> dict[str, object]:
+    """Snapshot fields that define mining drop segment boundaries.
+
+    Extractor is intentionally excluded: it affects extraction cost, but should
+    not split a drop segment.
+    """
     return {
         "finder": _tool_snapshot(profile.finder),
         "amp": _tool_snapshot(profile.amp),
-        "extractor": _tool_snapshot(profile.extractor),
         "finder_range_enhancers": {
             "count": profile.finder_range_enhancers.count,
             "decay_bonus_per_enhancer_ppm": profile.finder_range_enhancers.decay_bonus_per_enhancer.ppm,
