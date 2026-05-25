@@ -12,8 +12,7 @@ from pathlib import Path
 from zml_game_bridge.domain.mining_cost import MiningEquipmentProfile, MiningToolProfile
 from zml_game_bridge.domain.mining_events import RunSegmentEndedEvent, RunSegmentStartedEvent
 from zml_game_bridge.domain.money import mpec_to_int
-from zml_game_bridge.persistence.schema import ensure_schema
-from zml_game_bridge.persistence.sqlite import open_sqlite
+from zml_game_bridge.persistence.sqlite import open_read_connection
 from zml_game_bridge.runtime.mining.settings import IdFactory
 
 logger = logging.getLogger(__name__)
@@ -128,7 +127,6 @@ class RunSessionService:
     def _load_active_run_id(self) -> int | None:
         conn = self._connect(self._db_path)
         try:
-            ensure_schema(conn)
             cur = conn.execute(
                 """
                 SELECT runs.run_id
@@ -146,7 +144,6 @@ class RunSessionService:
     def _load_next_segment_index(self, run_id: int) -> int:
         conn = self._connect(self._db_path)
         try:
-            ensure_schema(conn)
             cur = conn.execute(
                 "SELECT COALESCE(MAX(segment_index), 0) AS max_index FROM run_segments WHERE run_id = ?",
                 (run_id,),
@@ -192,4 +189,4 @@ def _setup_hash(setup_json: str) -> str:
 
 
 def _default_connect(path: Path) -> sqlite3.Connection:
-    return open_sqlite(path, check_same_thread=False)
+    return open_read_connection(path)

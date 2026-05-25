@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from typing import Annotated, cast
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 
+from zml_game_bridge.api.dependencies import RuntimeDep
 from zml_game_bridge.api.schemas.mining_tools import (
     ActiveMiningToolsDto,
     CreateMiningToolProfileRequestDto,
@@ -13,13 +14,11 @@ from zml_game_bridge.api.schemas.mining_tools import (
 )
 from zml_game_bridge.domain.money import Mpec
 from zml_game_bridge.runtime.mining.tools import MiningToolService
-from zml_game_bridge.runtime.runtime import AppRuntime
 
 router = APIRouter(prefix="/api/v1/mining/tools", tags=["mining-tools"])
 
 
-def get_tool_service(request: Request) -> MiningToolService:
-    runtime = cast(AppRuntime, request.app.state.runtime)
+def get_tool_service(runtime: RuntimeDep) -> MiningToolService:
     return runtime.mining_tool_service
 
 

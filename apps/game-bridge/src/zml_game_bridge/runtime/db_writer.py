@@ -4,13 +4,15 @@ import logging
 import sqlite3
 import threading
 from pathlib import Path
+from typing import Any
 
 from zml_game_bridge.events.bus import PersistedEventBus
 from zml_game_bridge.persistence.event_projector import EventProjector
 from zml_game_bridge.persistence.event_writer import EventWriter
 from zml_game_bridge.persistence.schema import ensure_schema
-from zml_game_bridge.persistence.sqlite import open_sqlite
+from zml_game_bridge.persistence.sqlite import open_writer_connection
 from zml_game_bridge.runtime.channels import EventChannel
+from zml_game_bridge.runtime.db_commands import DbCommandChannel, DbCommandRequest
 
 logger = logging.getLogger(__name__)
 
@@ -27,15 +29,17 @@ class DbWriterWorker:
         pending_events: EventChannel,
         persisted_events: PersistedEventBus,
         projector: EventProjector | None = None,
+        pending_commands: DbCommandChannel | None = None,
     ) -> None:
         self.db_path = db_path
         self.pending_events = pending_events
         self.persisted_events = persisted_events
         self.projector = projector
+        self.pending_commands = pending_commands
         self.conn: sqlite3.Connection | None = None
 
     def open(self) -> None:
-        self.conn = open_sqlite(self.db_path)
+        self.conn = open_writer_connection(self.db_path)
 
     def close(self) -> None:
         conn = self.conn
@@ -59,7 +63,16 @@ class DbWriterWorker:
         current_event_type: str | None = None
 
         try:
-            while not stop_event.is_set() or self.pending_events.size() > 0:
+            while (
+                not stop_event.is_set()
+                or self.pending_events.size() > 0
+                or self._pending_commands_size() > 0
+            ):
+                command = self._take_command()
+                if command is not None:
+                    self._execute_command(command)
+                    continue
+
                 event = self.pending_events.take(timeout_s=0.1)
                 if event is None:
                     continue
@@ -87,3 +100,25 @@ class DbWriterWorker:
         finally:
             logger.info("db_writer_stopped persisted_events=%s", persisted_events_count)
             self.close()
+
+    def _pending_commands_size(self) -> int:
+        return self.pending_commands.size() if self.pending_commands is not None else 0
+
+    def _take_command(self) -> DbCommandRequest[Any] | None:
+        if self.pending_commands is None:
+            return None
+        return self.pending_commands.take(timeout_s=0.0)
+
+    def _execute_command(self, request: DbCommandRequest[Any]) -> None:
+        if self.conn is None:
+            request.set_exception(RuntimeError("DB writer connection is not open"))
+            return
+        try:
+            with self.conn:
+                result = request.command.execute(self.conn)
+        except Exception as exc:
+            logger.exception("db_command_failed command_type=%s", type(request.command).__name__)
+            request.set_exception(exc)
+        else:
+            logger.debug("db_command_executed command_type=%s", type(request.command).__name__)
+            request.set_result(result)

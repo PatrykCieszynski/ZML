@@ -23,9 +23,10 @@ from zml_game_bridge.persistence.mining_claims import MiningClaimProjector, Mini
 from zml_game_bridge.persistence.mining_drops import MiningDropProjector
 from zml_game_bridge.persistence.runs import RunSegmentProjector
 from zml_game_bridge.persistence.schema import ensure_schema
-from zml_game_bridge.persistence.sqlite import open_sqlite
+from zml_game_bridge.persistence.sqlite import open_read_connection, open_writer_connection
 from zml_game_bridge.resources.mining_resources import MiningResourceCatalog
 from zml_game_bridge.runtime.channels import EventChannel, SignalChannel
+from zml_game_bridge.runtime.db_commands import DbCommand, DbCommandChannel
 from zml_game_bridge.runtime.db_writer import DbWriterWorker
 from zml_game_bridge.runtime.input_coordinator import InputCoordinator
 from zml_game_bridge.runtime.mining import MiningCoordinator
@@ -63,6 +64,7 @@ class AppRuntime:
         self._stop_event = threading.Event()
         self._pending_signals = SignalChannel()
         self._pending_events = EventChannel()
+        self._pending_db_commands = DbCommandChannel()
         self._persisted_events = InMemoryPersistedEventBus()
         self._latest_position = LatestPositionState()
         self._resource_catalog = MiningResourceCatalog(user_path=self._mining_resource_catalog_path)
@@ -85,6 +87,7 @@ class AppRuntime:
         self._db_writer_worker = DbWriterWorker(
             db_path=self._db_path,
             pending_events=self._pending_events,
+            pending_commands=self._pending_db_commands,
             persisted_events=self._persisted_events,
             projector=CompositeEventProjector(
                 [
@@ -132,6 +135,9 @@ class AppRuntime:
     @property
     def run_session_service(self) -> RunSessionService:
         return self._run_session_service
+
+    def execute_db_command[T](self, command: DbCommand[T], *, timeout_s: float = 5.0) -> T:
+        return self._pending_db_commands.execute(command, timeout_s=timeout_s)
 
     def attach_sse_hub(self, hub: SseHub) -> None:
         self._sse_hub = hub
@@ -229,9 +235,14 @@ class AppRuntime:
         )
 
     def _restore_mining_lifecycle(self) -> None:
-        conn = open_sqlite(self._db_path)
+        conn = open_writer_connection(self._db_path)
         try:
             ensure_schema(conn)
+        finally:
+            conn.close()
+
+        conn = open_read_connection(self._db_path)
+        try:
             rows = MiningClaimReader(conn).list_active(now_ts_ms=_now_ms())
         finally:
             conn.close()

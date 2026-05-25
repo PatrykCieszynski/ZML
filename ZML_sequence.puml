@@ -1,0 +1,44 @@
+@startuml
+title ZML Game Bridge — Probe Fired Flow
+
+actor "Finder OCR Adapter" as Finder
+participant "RuntimeInputQueue" as Queue
+participant "InputCoordinator" as InputCoordinator
+participant "MiningCoordinator" as MiningCoordinator
+participant "MiningSetupService" as Setup
+participant "SegmentLifecycle" as Segment
+participant "DropCorrelator" as Drop
+participant "LatestPositionService" as Position
+participant "CostTracker" as Cost
+participant "EventQueue" as EventQueue
+participant "DbWriter" as DbWriter
+database "SQLite Event Store + Projections" as DB
+participant "PersistedEventBus" as Bus
+actor "UI" as UI
+
+Finder -> Queue : ProbeFiredSignal
+Queue -> InputCoordinator : dequeue input
+InputCoordinator -> MiningCoordinator : process(signal)
+
+MiningCoordinator -> Setup : get current setup snapshot
+Setup --> MiningCoordinator : setup snapshot
+
+MiningCoordinator -> Segment : ensure active segment(setup)
+Segment --> MiningCoordinator : segment events?
+
+MiningCoordinator -> Position : get fresh position snapshot
+Position --> MiningCoordinator : position snapshot?
+
+MiningCoordinator -> Drop : record drop(signal, setup, position)
+Drop --> MiningCoordinator : MiningDropEvent
+
+MiningCoordinator -> Cost : record drop cost(signal, setup)
+Cost --> MiningCoordinator : MiningCostEvent
+
+MiningCoordinator -> EventQueue : publish collected domain events
+EventQueue -> DbWriter : dequeue events
+DbWriter -> DB : persist events + update projections
+DbWriter -> Bus : publish persisted notifications
+Bus -> UI : live update notification
+
+@enduml
