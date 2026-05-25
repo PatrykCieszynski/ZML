@@ -2,11 +2,9 @@ from __future__ import annotations
 
 import threading
 from dataclasses import dataclass, field
-from typing import Generic, TypeVar, cast
+from typing import cast
 
 from zml_game_bridge.events.base import EventBase
-
-T = TypeVar("T")
 
 
 class UnsupportedRuntimeCommandError(Exception):
@@ -15,20 +13,20 @@ class UnsupportedRuntimeCommandError(Exception):
         self.command_type = command_type
 
 
-class RuntimeCommand(Generic[T]):
+class RuntimeCommand[T]:
     """Marker base for commands that enter the runtime input queue."""
 
     __slots__ = ()
 
 
 @dataclass(frozen=True, slots=True)
-class RuntimeCommandResult(Generic[T]):
+class RuntimeCommandResult[T]:
     value: T
     events: tuple[EventBase, ...] = ()
 
 
 @dataclass(slots=True)
-class RuntimeCommandRequest(Generic[T]):
+class RuntimeCommandRequest[T]:
     command: RuntimeCommand[T]
     _done: threading.Event = field(default_factory=threading.Event, init=False)
     _result: T | None = field(default=None, init=False)
