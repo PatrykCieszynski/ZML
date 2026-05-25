@@ -94,7 +94,7 @@ async function refreshMiningSnapshot() {
   try {
     const [miningClaims, miningDrops] = await Promise.all([
       agentRestClient.listMiningClaims({ active: true }),
-      agentRestClient.listMiningDrops({ windowMinutes: 30 }),
+      agentRestClient.listMiningDrops({ activeRun: true }),
     ]);
     replaceMiningClaims(miningClaims);
     replaceMiningDrops(miningDrops);

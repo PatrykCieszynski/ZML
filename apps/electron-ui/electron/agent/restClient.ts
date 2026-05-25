@@ -66,6 +66,8 @@ export type ListMiningClaimsRequest = {
 
 export type ListMiningDropsRequest = {
   windowMinutes?: number;
+  runId?: number;
+  activeRun?: boolean;
 };
 
 export class AgentRestClient implements AgentClient {
@@ -173,6 +175,12 @@ export class AgentRestClient implements AgentClient {
     const params = new URLSearchParams();
     if (request.windowMinutes !== undefined) {
       params.set("window_minutes", String(request.windowMinutes));
+    }
+    if (request.runId !== undefined) {
+      params.set("run_id", String(request.runId));
+    }
+    if (request.activeRun !== undefined) {
+      params.set("active_run", request.activeRun ? "yes" : "no");
     }
 
     const serializedParams = params.toString();

@@ -38,6 +38,7 @@ const MAP_VIEWS = [MAP_VIEW];
 
 const DEBUG_CLAIMS_ENABLED = import.meta.env.VITE_ZML_UI_MOCKS === "1";
 const DEFAULT_PLAYER_RADIUS_M = 55;
+const DEFAULT_DROP_RADIUS_TTL_MINUTES = 30;
 const MAP_MIN_ZOOM = -2.5;
 const MAP_MAX_ZOOM = 6;
 const MAP_WHEEL_ZOOM_SPEED = 0.0016;
@@ -54,6 +55,7 @@ export function MapViewport({
   miningClaims,
   miningDrops,
   playerRadiusM,
+  dropRadiusTtlMinutes = DEFAULT_DROP_RADIUS_TTL_MINUTES,
   followPlayer,
   onFollowPlayerChange,
 }: {
@@ -62,6 +64,7 @@ export function MapViewport({
   miningClaims: readonly MiningClaimDto[];
   miningDrops: readonly MiningDropDto[];
   playerRadiusM?: number | null;
+  dropRadiusTtlMinutes?: number | null;
   followPlayer: boolean;
   onFollowPlayerChange: (followPlayer: boolean) => void;
 }) {
@@ -98,8 +101,12 @@ export function MapViewport({
   }, [marker]);
 
   const mapMiningDrops = useMemo<MapMiningDrop[]>(
-    () =>
-      miningDrops.flatMap((drop) => {
+    () => {
+      const ttlMinutes = dropRadiusTtlMinutes ?? DEFAULT_DROP_RADIUS_TTL_MINUTES;
+      const cutoffTsMs = ttlMinutes <= 0 ? null : (currentSec - ttlMinutes * 60) * 1000;
+
+      return miningDrops.flatMap((drop) => {
+        if (cutoffTsMs !== null && drop.observedTsMs < cutoffTsMs) return [];
         if (!drop.position || !isDropOnPlanet(planetId, drop)) return [];
 
         return [
@@ -116,8 +123,9 @@ export function MapViewport({
                 : null,
           },
         ];
-      }),
-    [miningDrops, planetId],
+      });
+    },
+    [currentSec, dropRadiusTtlMinutes, miningDrops, planetId],
   );
   const playerRangeRadiusM = useMemo(
     () =>
@@ -153,6 +161,9 @@ export function MapViewport({
     () => mapMiningClaims.some((claim) => claim.expiresAtSec !== null),
     [mapMiningClaims],
   );
+  const hasDropRadiusTtl =
+    miningDrops.length > 0 &&
+    (dropRadiusTtlMinutes ?? DEFAULT_DROP_RADIUS_TTL_MINUTES) > 0;
 
   useEffect(() => {
     const initialViewState = createInitialMapViewState(planetId);
@@ -259,11 +270,11 @@ export function MapViewport({
   }, [followPlayer, marker]);
 
   useEffect(() => {
-    if (!DEBUG_CLAIMS_ENABLED && !hasClaimTimers) return;
+    if (!DEBUG_CLAIMS_ENABLED && !hasClaimTimers && !hasDropRadiusTtl) return;
 
     const timer = window.setInterval(() => setCurrentSec(nowSec()), 1000);
     return () => window.clearInterval(timer);
-  }, [hasClaimTimers]);
+  }, [hasClaimTimers, hasDropRadiusTtl]);
 
   const tileLayer = useMemo(() => createMapTileLayer(planetId), [planetId]);
   const debugClaims = useMemo(

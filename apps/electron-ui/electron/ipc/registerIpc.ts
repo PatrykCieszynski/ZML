@@ -14,6 +14,7 @@ import {
 import { runtime } from "../runtime";
 import type { AgentClient } from "../agent/restClient.ts";
 import { pushStatePatch } from "./pushStatePatch.ts";
+import { replaceMiningDrops } from "../mining/miningDropsState.ts";
 import { replaceActiveRun, replaceRunSegments } from "../runs/runSegmentsState.ts";
 
 type RegisterIpcDeps = {
@@ -60,10 +61,12 @@ export function registerIpc({ agentRestClient, toggleMapWindow, toggleOverlayWin
         if (activeRun === null) {
             runtime.activeRun = null;
             runtime.runSegments = [];
+            replaceMiningDrops([]);
             pushStatePatch({ activeRun: null, runSegments: [] });
             return activeRun;
         }
         replaceActiveRun(activeRun);
+        replaceMiningDrops(await agentRestClient.listMiningDrops({ runId: activeRun.runId }));
         return activeRun;
     });
 
@@ -79,14 +82,16 @@ export function registerIpc({ agentRestClient, toggleMapWindow, toggleOverlayWin
             throw new Error("Invalid resume run request");
         }
         const activeRun = await agentRestClient.resumeRun(runId);
-        const [runs, runSegments] = await Promise.all([
+        const [runs, runSegments, miningDrops] = await Promise.all([
             agentRestClient.listRuns(),
             agentRestClient.listActiveRunSegments(),
+            agentRestClient.listMiningDrops({ runId }),
         ]);
         runtime.activeRun = activeRun;
         runtime.runs = runs;
         runtime.runSegments = runSegments;
-        pushStatePatch({ activeRun, runs, runSegments });
+        runtime.miningDrops = miningDrops;
+        pushStatePatch({ activeRun, runs, runSegments, miningDrops });
         return activeRun;
     });
 
@@ -132,7 +137,8 @@ export function registerIpc({ agentRestClient, toggleMapWindow, toggleOverlayWin
         runtime.activeRun = activeRun;
         runtime.runs = runs;
         runtime.runSegments = [];
-        pushStatePatch({ activeRun, runs, runSegments: [] });
+        runtime.miningDrops = [];
+        pushStatePatch({ activeRun, runs, runSegments: [], miningDrops: [] });
         return activeRun;
     });
 
@@ -145,7 +151,8 @@ export function registerIpc({ agentRestClient, toggleMapWindow, toggleOverlayWin
         runtime.activeRun = null;
         runtime.runs = runs;
         runtime.runSegments = [];
-        pushStatePatch({ activeRun: null, runs, runSegments: [] });
+        runtime.miningDrops = [];
+        pushStatePatch({ activeRun: null, runs, runSegments: [], miningDrops: [] });
         return stoppedRun;
     });
 

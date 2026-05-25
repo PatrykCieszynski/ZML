@@ -65,6 +65,18 @@ class MiningDropReader:
         )
         return [_row_to_mining_drop(row) for row in cur.fetchall()]
 
+    def list_for_run(self, *, run_id: int) -> list[MiningDropRow]:
+        cur = self._conn.execute(
+            """
+            SELECT *
+            FROM mining_drops
+            WHERE run_id = ?
+            ORDER BY observed_ts_ms DESC, drop_event_id DESC
+            """,
+            (run_id,),
+        )
+        return [_row_to_mining_drop(row) for row in cur.fetchall()]
+
     def get(self, drop_id: str) -> MiningDropRow | None:
         cur = self._conn.execute(
             """

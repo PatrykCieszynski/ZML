@@ -16,15 +16,13 @@ import {
 import { pushStatePatch } from "../ipc/pushStatePatch.ts";
 import { runtime } from "../runtime.ts";
 
-const MINING_DROP_WINDOW_MS = 30 * 60_000;
-
 export function replaceMiningClaims(claims: readonly MiningClaimDto[]): void {
     runtime.miningClaims = sortClaims([...claims]);
     pushStatePatch({ miningClaims: runtime.miningClaims });
 }
 
 export function replaceMiningDrops(drops: readonly MiningDropDto[]): void {
-    runtime.miningDrops = sortAndTrimDrops([...drops]);
+    runtime.miningDrops = sortDrops([...drops]);
     pushStatePatch({ miningDrops: runtime.miningDrops });
 }
 
@@ -89,7 +87,7 @@ function removeMiningClaim({
 
 function upsertMiningDrop(drop: MiningDropDto): void {
     const withoutCurrent = runtime.miningDrops.filter((item) => item.dropId !== drop.dropId);
-    runtime.miningDrops = sortAndTrimDrops([drop, ...withoutCurrent]);
+    runtime.miningDrops = sortDrops([drop, ...withoutCurrent]);
     pushStatePatch({ miningDrops: runtime.miningDrops });
 }
 
@@ -105,16 +103,13 @@ function updateMiningDrop(
     });
 
     if (changed) {
-        runtime.miningDrops = sortAndTrimDrops(runtime.miningDrops);
+        runtime.miningDrops = sortDrops(runtime.miningDrops);
         pushStatePatch({ miningDrops: runtime.miningDrops });
     }
 }
 
-function sortAndTrimDrops(drops: MiningDropDto[]): MiningDropDto[] {
-    const cutoff = Date.now() - MINING_DROP_WINDOW_MS;
-    return drops
-        .filter((drop) => drop.observedTsMs >= cutoff)
-        .sort((a, b) => b.observedTsMs - a.observedTsMs);
+function sortDrops(drops: MiningDropDto[]): MiningDropDto[] {
+    return drops.sort((a, b) => b.observedTsMs - a.observedTsMs);
 }
 
 function sortClaims(claims: MiningClaimDto[]): MiningClaimDto[] {

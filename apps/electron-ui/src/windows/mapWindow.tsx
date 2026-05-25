@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { WindowType } from "@zml/shared";
 import { MapViewport } from "../widgets/map/mapViewport.tsx";
 import { toggleMapWindow, useZmlRendererStore } from "../state/zmlRendererStore";
+import { useMapPreferences } from "./mapPreferences";
 import "./mapWindow.css";
 
 type MapPoint = { x: number; y: number };
@@ -10,6 +11,7 @@ export function MapWindow() {
   const windowType: WindowType = "map";
   const state = useZmlRendererStore(windowType);
   const [followPlayer, setFollowPlayer] = useState(true);
+  const [preferences, setPreferences] = useMapPreferences();
 
   const point: MapPoint | null = useMemo(() => {
     const pos = state.position?.position;
@@ -28,6 +30,22 @@ export function MapWindow() {
           <span>{planetId}</span>
         </div>
         <div className="zml-map-actions">
+          <label className="zml-map-setting">
+            <span>Drop circles</span>
+            <select
+              value={String(preferences.dropRadiusTtlMinutes)}
+              onChange={(event) => {
+                const value = Number(event.currentTarget.value);
+                setPreferences((current) => ({ ...current, dropRadiusTtlMinutes: value }));
+              }}
+            >
+              <option value="15">15m</option>
+              <option value="30">30m</option>
+              <option value="60">60m</option>
+              <option value="120">120m</option>
+              <option value="0">Always</option>
+            </select>
+          </label>
           <button
             type="button"
             className={followPlayer ? "is-active" : undefined}
@@ -53,6 +71,7 @@ export function MapWindow() {
           miningClaims={state.miningClaims}
           miningDrops={state.miningDrops}
           playerRadiusM={state.activeMiningTools?.effectiveFinderRadiusM}
+          dropRadiusTtlMinutes={preferences.dropRadiusTtlMinutes}
           followPlayer={followPlayer}
           onFollowPlayerChange={setFollowPlayer}
         />
