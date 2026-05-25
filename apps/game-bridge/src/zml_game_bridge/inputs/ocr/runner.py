@@ -33,7 +33,7 @@ PositionSink = Callable[[OcrPosition], None]
 logger = logging.getLogger(__name__)
 
 # MVP hardcode
-ROI_COMPASS = RoiRect(x1=2185, y1=965, x2=2551, y2=1411)
+ROI_COMPASS = RoiRect(x1=2190, y1=965, x2=2551, y2=1411)
 ROI_DEEDS = RoiRect(x1=20, y1=260, x2=700, y2=520)
 
 

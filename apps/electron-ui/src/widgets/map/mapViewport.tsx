@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import DeckGL from "@deck.gl/react";
 import {
   OrthographicView,
@@ -25,12 +31,18 @@ const MAP_VIEW = new OrthographicView({
   controller: {
     dragRotate: false,
     doubleClickZoom: false,
-    scrollZoom: { speed: 0.1, smooth: true },
+    scrollZoom: false,
   },
 });
+const MAP_VIEWS = [MAP_VIEW];
 
 const DEBUG_CLAIMS_ENABLED = import.meta.env.VITE_ZML_UI_MOCKS === "1";
 const DEFAULT_PLAYER_RADIUS_M = 55;
+const MAP_MIN_ZOOM = -2.5;
+const MAP_MAX_ZOOM = 6;
+const MAP_WHEEL_ZOOM_SPEED = 0.0016;
+const MAP_WHEEL_ZOOM_EASE = 0.22;
+const MAP_WHEEL_ZOOM_SETTLE_THRESHOLD = 0.003;
 
 function nowSec(): number {
   return Math.floor(Date.now() / 1000);
@@ -56,13 +68,34 @@ export function MapViewport({
   const [viewState, setViewState] = useState<OrthographicViewState>(() =>
     createInitialMapViewState(planetId),
   );
+  const mapRootRef = useRef<HTMLDivElement | null>(null);
+  const viewStateRef = useRef(viewState);
+  const targetZoomRef = useRef(readZoom(viewState.zoom));
+  const zoomAnimationFrameIdRef = useRef<number | null>(null);
+  const followPlayerRef = useRef(followPlayer);
+  const markerRef = useRef<DeckPoint | null>(null);
   const [currentSec, setCurrentSec] = useState(nowSec);
   const [debugClaimSeedSec] = useState(nowSec);
+
+  useEffect(() => {
+    viewStateRef.current = viewState;
+    if (zoomAnimationFrameIdRef.current === null) {
+      targetZoomRef.current = readZoom(viewState.zoom);
+    }
+  }, [viewState]);
 
   const marker = useMemo<DeckPoint | null>(() => {
     if (!point) return null;
     return { position: entropiaToDeckPosition(planetId, point) };
   }, [planetId, point]);
+
+  useEffect(() => {
+    followPlayerRef.current = followPlayer;
+  }, [followPlayer]);
+
+  useEffect(() => {
+    markerRef.current = marker;
+  }, [marker]);
 
   const mapMiningDrops = useMemo<MapMiningDrop[]>(
     () =>
@@ -122,16 +155,106 @@ export function MapViewport({
   );
 
   useEffect(() => {
-    setViewState(createInitialMapViewState(planetId));
+    const initialViewState = createInitialMapViewState(planetId);
+    targetZoomRef.current = readZoom(initialViewState.zoom);
+    setViewState(initialViewState);
   }, [planetId]);
+
+  const runZoomTick = useCallback(function runZoomTick() {
+    zoomAnimationFrameIdRef.current = null;
+
+    const current = viewStateRef.current;
+    const currentZoom = readZoom(current.zoom);
+    const targetZoom = targetZoomRef.current;
+    const zoomDelta = targetZoom - currentZoom;
+    const nextZoom =
+      Math.abs(zoomDelta) <= MAP_WHEEL_ZOOM_SETTLE_THRESHOLD
+        ? targetZoom
+        : currentZoom + zoomDelta * MAP_WHEEL_ZOOM_EASE;
+    const markerSnapshot = markerRef.current;
+    const nextTarget =
+      followPlayerRef.current && markerSnapshot !== null
+        ? markerSnapshot.position
+        : current.target;
+
+    setViewState({
+      ...current,
+      zoom: nextZoom,
+      zoomX: nextZoom,
+      zoomY: nextZoom,
+      target: nextTarget,
+      minZoom: MAP_MIN_ZOOM,
+      maxZoom: MAP_MAX_ZOOM,
+    });
+
+    if (Math.abs(targetZoom - nextZoom) <= MAP_WHEEL_ZOOM_SETTLE_THRESHOLD) {
+      return;
+    }
+
+    zoomAnimationFrameIdRef.current = window.requestAnimationFrame(runZoomTick);
+  }, []);
+
+  const restartZoomAnimation = useCallback(() => {
+    if (zoomAnimationFrameIdRef.current !== null) {
+      window.cancelAnimationFrame(zoomAnimationFrameIdRef.current);
+      zoomAnimationFrameIdRef.current = null;
+    }
+    runZoomTick();
+  }, [runZoomTick]);
+
+  useEffect(() => {
+    const handleWheel = (event: WheelEvent) => {
+      const element = mapRootRef.current;
+
+      if (element === null) {
+        return;
+      }
+
+      const insideElement = isWheelInsideElement(event, element);
+      if (!insideElement) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      const deltaY = normalizeWheelDeltaY(event);
+
+      if (deltaY === 0) {
+        return;
+      }
+
+      if (zoomAnimationFrameIdRef.current === null) {
+        targetZoomRef.current = readZoom(viewStateRef.current.zoom);
+      }
+      targetZoomRef.current = clamp(
+        targetZoomRef.current - deltaY * MAP_WHEEL_ZOOM_SPEED,
+        MAP_MIN_ZOOM,
+        MAP_MAX_ZOOM,
+      );
+      restartZoomAnimation();
+    };
+
+    window.addEventListener("wheel", handleWheel, { capture: true, passive: false });
+    return () => {
+      window.removeEventListener("wheel", handleWheel, { capture: true });
+    };
+  }, [restartZoomAnimation]);
+
+  useEffect(() => {
+    return () => {
+      if (zoomAnimationFrameIdRef.current !== null) {
+        window.cancelAnimationFrame(zoomAnimationFrameIdRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!followPlayer || marker === null) return;
     setViewState((current) => ({
       ...current,
       target: marker.position,
-      minZoom: -2.5,
-      maxZoom: 6,
+      minZoom: MAP_MIN_ZOOM,
+      maxZoom: MAP_MAX_ZOOM,
     }));
   }, [followPlayer, marker]);
 
@@ -188,12 +311,16 @@ export function MapViewport({
       tileLayer,
     ],
   );
+  const deckViewState = useMemo(() => ({ map: viewState }), [viewState]);
 
   const handleViewStateChange = ({
     viewState: nextViewState,
     interactionState,
   }: ViewStateChangeParameters<OrthographicViewState>) => {
-    const zoomChanged = nextViewState.zoom !== viewState.zoom;
+    const current = viewStateRef.current;
+    const nextZoom = readZoom(nextViewState.zoom);
+    const currentZoom = readZoom(current.zoom);
+    const zoomChanged = Math.abs(nextZoom - currentZoom) > 0.0001;
     const shouldDetachFollow =
       followPlayer &&
       !zoomChanged &&
@@ -203,19 +330,23 @@ export function MapViewport({
     }
     setViewState({
       ...nextViewState,
+      zoom: nextZoom,
+      zoomX: nextZoom,
+      zoomY: nextZoom,
       target:
-        followPlayer && !shouldDetachFollow && marker !== null
-          ? marker.position
-          : zoomChanged
-            ? viewState.target
+        zoomChanged
+          ? current.target
+          : followPlayer && !shouldDetachFollow && marker !== null
+            ? marker.position
             : nextViewState.target,
-      minZoom: -2.5,
-      maxZoom: 6,
+      minZoom: MAP_MIN_ZOOM,
+      maxZoom: MAP_MAX_ZOOM,
     });
   };
 
   return (
     <div
+      ref={mapRootRef}
       style={{
         width: "100%",
         height: "100%",
@@ -225,8 +356,8 @@ export function MapViewport({
       }}
     >
       <DeckGL
-        views={MAP_VIEW}
-        viewState={viewState}
+        views={MAP_VIEWS}
+        viewState={deckViewState}
         layers={layers}
         onViewStateChange={handleViewStateChange}
         style={{ position: "absolute", inset: "0" }}
@@ -242,6 +373,31 @@ function hasUserMapInteraction(
     interactionState?.isDragging ||
       interactionState?.isPanning,
   );
+}
+
+function readZoom(value: OrthographicViewState["zoom"]): number {
+  if (Array.isArray(value)) return value[0] ?? 0;
+  return typeof value === "number" ? value : 0;
+}
+
+function normalizeWheelDeltaY(event: WheelEvent): number {
+  if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) return event.deltaY * 16;
+  if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) return event.deltaY * window.innerHeight;
+  return event.deltaY;
+}
+
+function isWheelInsideElement(event: WheelEvent, element: HTMLElement): boolean {
+  const rect = element.getBoundingClientRect();
+  return (
+    event.clientX >= rect.left &&
+    event.clientX <= rect.right &&
+    event.clientY >= rect.top &&
+    event.clientY <= rect.bottom
+  );
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
 
 function isDropOnPlanet(planetId: PlanetId, drop: MiningDropDto): boolean {
