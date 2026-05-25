@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 from queue import Empty, Queue
+from typing import Any
+from warnings import deprecated
 
 from zml_game_bridge.events.base import EventBase
+from zml_game_bridge.runtime.event_requests import EventWriteRequest
+from zml_game_bridge.runtime.runtime_commands import RuntimeCommandRequest
 
 
 class RuntimeChannel[T]:
@@ -32,9 +36,14 @@ class RuntimeChannel[T]:
         return self._q.qsize()
 
 
-class SignalChannel(RuntimeChannel[EventBase]):
-    """Queue for input observations waiting for runtime coordination."""
+class RuntimeInputChannel(RuntimeChannel[EventBase | RuntimeCommandRequest[Any]]):
+    """Queue for input observations and API commands waiting for runtime coordination."""
 
 
-class EventChannel(RuntimeChannel[EventBase]):
+@deprecated("Use RuntimeInputChannel instead.")
+class SignalChannel(RuntimeInputChannel):
+    """Compatibility alias for input adapters that still speak in signals."""
+
+
+class EventChannel(RuntimeChannel[EventBase | EventWriteRequest]):
     """Queue for durable domain events waiting for the DB writer."""

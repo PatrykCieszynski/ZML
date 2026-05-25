@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from zml_game_bridge.persistence.runs import RunRow, RunSegmentStore, RunStore
 from zml_game_bridge.runs.state import RunState
 from zml_game_bridge.runtime.db_commands import DbCommand
+from zml_game_bridge.runtime.runtime_commands import RuntimeCommand
 
 
 class RunCommandError(Exception):
@@ -29,7 +30,7 @@ class NoActiveRunError(RunCommandError):
 
 
 @dataclass(frozen=True, slots=True)
-class StartRunCommand(DbCommand[RunRow]):
+class StartRunCommand(RuntimeCommand[RunRow], DbCommand[RunRow]):
     name: str
     notes: str | None = None
 
@@ -47,7 +48,7 @@ class StartRunCommand(DbCommand[RunRow]):
 
 
 @dataclass(frozen=True, slots=True)
-class StopRunCommand(DbCommand[RunRow]):
+class StopRunCommand(RuntimeCommand[RunRow], DbCommand[RunRow]):
     run_id: int | None = None
 
     def execute(self, conn: sqlite3.Connection) -> RunRow:
@@ -74,7 +75,7 @@ class StopRunCommand(DbCommand[RunRow]):
 
 
 @dataclass(frozen=True, slots=True)
-class ResumeRunCommand(DbCommand[RunRow]):
+class ResumeRunCommand(RuntimeCommand[RunRow], DbCommand[RunRow]):
     run_id: int
 
     def execute(self, conn: sqlite3.Connection) -> RunRow:
@@ -105,7 +106,7 @@ class ResumeRunCommand(DbCommand[RunRow]):
 
 
 @dataclass(frozen=True, slots=True)
-class UpdateRunCommand(DbCommand[RunRow]):
+class UpdateRunCommand(RuntimeCommand[RunRow], DbCommand[RunRow]):
     run_id: int
     name: str | None = None
     notes: str | None = None

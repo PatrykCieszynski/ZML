@@ -12,7 +12,6 @@ from zml_game_bridge.api.schemas.runs import (
 )
 from zml_game_bridge.persistence.runs import RunRow, RunSegmentStore, RunStore
 from zml_game_bridge.runs.state import RunState
-from zml_game_bridge.runtime.db_commands import DbCommand
 from zml_game_bridge.runtime.run_commands import (
     InvalidRunCommandError,
     NoActiveRunError,
@@ -24,6 +23,7 @@ from zml_game_bridge.runtime.run_commands import (
     UpdateRunCommand,
 )
 from zml_game_bridge.runtime.runtime import AppRuntime
+from zml_game_bridge.runtime.runtime_commands import RuntimeCommand
 
 router = APIRouter(prefix="/api/v1/runs", tags=["runs"])
 
@@ -98,9 +98,9 @@ def list_run_segments(run_id: int, conn: ReadConn) -> list[RunSegmentDto]:
     ]
 
 
-def _execute_run_command(runtime: AppRuntime, command: DbCommand[RunRow]) -> RunRow:
+def _execute_run_command(runtime: AppRuntime, command: RuntimeCommand[RunRow]) -> RunRow:
     try:
-        return runtime.execute_db_command(command)
+        return runtime.execute_runtime_command(command)
     except InvalidRunCommandError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except (NoActiveRunError, RunNotFoundError) as exc:

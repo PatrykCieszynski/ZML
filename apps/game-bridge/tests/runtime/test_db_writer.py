@@ -13,6 +13,7 @@ from zml_game_bridge.events.envelope import EventEnvelope
 from zml_game_bridge.events.in_memory_persisted_event_bus import InMemoryPersistedEventBus
 from zml_game_bridge.runtime.channels import EventChannel
 from zml_game_bridge.runtime.db_commands import DbCommandChannel
+from zml_game_bridge.runtime.event_requests import EventWriteRequest
 
 
 @dataclass(frozen=True, slots=True)
@@ -160,3 +161,35 @@ def test_db_writer_executes_commands_on_writer_connection(monkeypatch, tmp_path:
         conn.close()
 
     assert row == (21,)
+
+
+def test_db_writer_acknowledges_event_write_request(monkeypatch, tmp_path: Path) -> None:
+    FakeEventWriter.last_instance = None
+    monkeypatch.setattr(db_writer_worker_mod, "EventWriter", FakeEventWriter)
+
+    bus = InMemoryPersistedEventBus()
+    channel = EventChannel(maxsize=10)
+    writer = db_writer_worker_mod.DbWriterWorker(
+        db_path=tmp_path / "events.sqlite3",
+        pending_events=channel,
+        persisted_events=bus,
+    )
+
+    out: list[EventEnvelope] = []
+    sub = bus.subscribe(lambda env: out.append(env))
+
+    stop = threading.Event()
+    thread = threading.Thread(target=writer.run, kwargs={"stop_event": stop}, daemon=True)
+    thread.start()
+
+    try:
+        request = EventWriteRequest(DummyEvent(42))
+        channel.emit(request)
+        envelope = request.result(timeout_s=1.0)
+    finally:
+        stop.set()
+        thread.join(timeout=1.0)
+        sub.close()
+
+    assert envelope.event_type == "DummyEvent"
+    assert [env.event_type for env in out] == ["DummyEvent"]

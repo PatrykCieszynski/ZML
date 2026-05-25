@@ -13,6 +13,7 @@ from zml_game_bridge.persistence.schema import ensure_schema
 from zml_game_bridge.persistence.sqlite import open_writer_connection
 from zml_game_bridge.runtime.channels import EventChannel
 from zml_game_bridge.runtime.db_commands import DbCommandChannel, DbCommandRequest
+from zml_game_bridge.runtime.event_requests import EventWriteRequest
 
 logger = logging.getLogger(__name__)
 
@@ -73,9 +74,10 @@ class DbWriterWorker:
                     self._execute_command(command)
                     continue
 
-                event = self.pending_events.take(timeout_s=0.1)
-                if event is None:
+                item = self.pending_events.take(timeout_s=0.1)
+                if item is None:
                     continue
+                event = item.event if isinstance(item, EventWriteRequest) else item
 
                 # TODO: Decide policy on DB failure:
                 # - retry? (how many times)
@@ -85,7 +87,12 @@ class DbWriterWorker:
 
                 # TODO batching?
                 current_event_type = type(event).__name__
-                event_envelope = event_writer.write(event)
+                try:
+                    event_envelope = event_writer.write(event)
+                except Exception as exc:
+                    if isinstance(item, EventWriteRequest):
+                        item.set_exception(exc)
+                    raise
                 persisted_events_count += 1
                 logger.debug(
                     "event_persisted event_id=%s event_type=%s",
@@ -94,6 +101,8 @@ class DbWriterWorker:
                 )
                 current_event_type = None
                 self.persisted_events.publish(event_envelope)
+                if isinstance(item, EventWriteRequest):
+                    item.set_result(event_envelope)
         except Exception:
             logger.exception("db_writer_crashed current_event_type=%s", current_event_type)
             raise

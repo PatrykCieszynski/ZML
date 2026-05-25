@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from zml_game_bridge.api.routes.runs import (
     active_run,
@@ -20,6 +20,7 @@ from zml_game_bridge.api.schemas.runs import (
 from zml_game_bridge.persistence.schema import ensure_schema
 from zml_game_bridge.persistence.sqlite import open_sqlite
 from zml_game_bridge.runtime.db_commands import DbCommand
+from zml_game_bridge.runtime.runtime_commands import RuntimeCommand
 
 
 def _open_test_db(tmp_path: Path) -> sqlite3.Connection:
@@ -32,10 +33,15 @@ class _RuntimeStub:
     def __init__(self, conn: sqlite3.Connection) -> None:
         self.conn = conn
 
-    def execute_db_command[T](self, command: DbCommand[T], *, timeout_s: float = 5.0) -> T:
+    def execute_runtime_command[T](
+        self,
+        command: RuntimeCommand[T],
+        *,
+        timeout_s: float = 5.0,
+    ) -> T:
         del timeout_s
         with self.conn:
-            return command.execute(self.conn)
+            return cast(DbCommand[T], command).execute(self.conn)
 
 
 def test_start_stop_run_roundtrip(tmp_path: Path) -> None:

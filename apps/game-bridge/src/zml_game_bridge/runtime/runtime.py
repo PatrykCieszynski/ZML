@@ -25,7 +25,7 @@ from zml_game_bridge.persistence.runs import RunSegmentProjector
 from zml_game_bridge.persistence.schema import ensure_schema
 from zml_game_bridge.persistence.sqlite import open_read_connection, open_writer_connection
 from zml_game_bridge.resources.mining_resources import MiningResourceCatalog
-from zml_game_bridge.runtime.channels import EventChannel, SignalChannel
+from zml_game_bridge.runtime.channels import EventChannel, RuntimeInputChannel
 from zml_game_bridge.runtime.db_commands import DbCommand, DbCommandChannel
 from zml_game_bridge.runtime.db_writer import DbWriterWorker
 from zml_game_bridge.runtime.input_coordinator import InputCoordinator
@@ -35,6 +35,7 @@ from zml_game_bridge.runtime.mining.run_session import RunSessionService
 from zml_game_bridge.runtime.mining.settings import default_id_factory
 from zml_game_bridge.runtime.mining.tools import MiningToolService
 from zml_game_bridge.runtime.position_state import LatestPositionState
+from zml_game_bridge.runtime.runtime_commands import RuntimeCommand, RuntimeCommandRequest
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +63,7 @@ class AppRuntime:
         self._mock_mining_interval_ms = mock_mining_interval_ms
 
         self._stop_event = threading.Event()
-        self._pending_signals = SignalChannel()
+        self._pending_inputs = RuntimeInputChannel()
         self._pending_events = EventChannel()
         self._pending_db_commands = DbCommandChannel()
         self._persisted_events = InMemoryPersistedEventBus()
@@ -78,9 +79,11 @@ class AppRuntime:
             position_provider=self._current_position,
             resource_catalog=self._resource_catalog,
             run_context_provider=self._run_context_for_drop,
+            db_command_executor=self.execute_db_command,
+            mining_tool_service=self._mining_tool_service,
         )
         self._input_coordinator = InputCoordinator(
-            pending_signals=self._pending_signals,
+            pending_signals=self._pending_inputs,
             pending_events=self._pending_events,
             signal_processor=self._mining_coordinator,
         )
@@ -139,6 +142,16 @@ class AppRuntime:
     def execute_db_command[T](self, command: DbCommand[T], *, timeout_s: float = 5.0) -> T:
         return self._pending_db_commands.execute(command, timeout_s=timeout_s)
 
+    def execute_runtime_command[T](
+        self,
+        command: RuntimeCommand[T],
+        *,
+        timeout_s: float = 5.0,
+    ) -> T:
+        request = RuntimeCommandRequest(command)
+        self._pending_inputs.emit(request)
+        return request.result(timeout_s=timeout_s)
+
     def attach_sse_hub(self, hub: SseHub) -> None:
         self._sse_hub = hub
 
@@ -182,7 +195,7 @@ class AppRuntime:
             target=start_chat_input,
             kwargs={
                 "path": self._chat_log_path,
-                "signal_sink": self._pending_signals.emit,
+                "signal_sink": self._pending_inputs.emit,
                 "stop_event": self._stop_event,
                 "start_at_end": self._chat_start_at_end,
             },
@@ -197,7 +210,7 @@ class AppRuntime:
                 target=start_ocr_input,
                 kwargs={
                     "position_sink": self._on_position,
-                    "signal_sink": self._pending_signals.emit,
+                    "signal_sink": self._pending_inputs.emit,
                     "stop_event": self._stop_event,
                 },
                 daemon=True,
@@ -208,7 +221,7 @@ class AppRuntime:
             self._t_mock = Thread(
                 target=start_mock_mining_input,
                 kwargs={
-                    "signal_sink": self._pending_signals.emit,
+                    "signal_sink": self._pending_inputs.emit,
                     "stop_event": self._stop_event,
                     "interval_ms": self._mock_mining_interval_ms,
                 },
