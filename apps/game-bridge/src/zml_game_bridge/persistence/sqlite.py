@@ -30,7 +30,9 @@ def open_read_connection(
 ) -> sqlite3.Connection:
     """Open a read-only connection for API/read-side queries."""
     path = Path(db_path).resolve()
-    conn = sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, check_same_thread=check_same_thread)
+    conn = sqlite3.connect(
+        path.as_uri() + "?mode=ro", uri=True, check_same_thread=check_same_thread
+    )
     conn.row_factory = sqlite3.Row
 
     conn.execute("PRAGMA query_only=ON")
@@ -45,8 +47,7 @@ def open_sqlite(
     *,
     check_same_thread: bool = True,
 ) -> sqlite3.Connection:
-    """Open a writer connection.
-    """
+    """Open a writer connection."""
     return open_writer_connection(db_path, check_same_thread=check_same_thread)
 
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated, TypeVar
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -25,7 +25,6 @@ from zml_game_bridge.runtime.runtime import AppRuntime
 from zml_game_bridge.runtime.runtime_commands import RuntimeCommand
 
 router = APIRouter(prefix="/api/v1/mining/tools", tags=["mining-tools"])
-T = TypeVar("T")
 
 
 def get_tool_service(runtime: RuntimeDep) -> MiningToolService:
@@ -91,7 +90,7 @@ def set_active_mining_tools(
     )
 
 
-def _execute_tool_command(runtime: AppRuntime, command: RuntimeCommand[T]) -> T:
+def _execute_tool_command[T](runtime: AppRuntime, command: RuntimeCommand[T]) -> T:
     try:
         return runtime.execute_runtime_command(command)
     except ValueError as exc:

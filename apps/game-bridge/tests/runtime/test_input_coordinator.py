@@ -60,6 +60,7 @@ def test_input_coordinator_routes_derived_event_to_writer_queue_without_publishi
     derived = pending_events.take(timeout_s=1.0)
 
     stop.set()
+    incoming.close()
     thread.join(timeout=1.0)
 
     assert derived == DurableDummyEvent(42)
@@ -81,6 +82,7 @@ def test_input_coordinator_drops_internal_signal_when_no_event_is_derived() -> N
     event = pending_events.take(timeout_s=0.2)
 
     stop.set()
+    incoming.close()
     thread.join(timeout=1.0)
 
     assert event is None
@@ -104,6 +106,7 @@ def test_input_coordinator_processes_runtime_command_response() -> None:
     result = request.result(timeout_s=1.0)
 
     stop.set()
+    incoming.close()
     thread.join(timeout=1.0)
 
     assert result == 42

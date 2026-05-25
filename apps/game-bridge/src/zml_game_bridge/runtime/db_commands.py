@@ -3,22 +3,19 @@ from __future__ import annotations
 import sqlite3
 import threading
 from dataclasses import dataclass, field
-from typing import Any, Generic, Protocol, TypeVar, cast
+from typing import Any, Protocol, cast
 
 from zml_game_bridge.runtime.channels import RuntimeChannel
 
-T = TypeVar("T")
-T_co = TypeVar("T_co", covariant=True)
 
-
-class DbCommand(Protocol[T_co]):
+class DbCommand[T_co](Protocol):
     """A synchronous DB write/read unit executed by DbWriterWorker."""
 
     def execute(self, conn: sqlite3.Connection) -> T_co: ...
 
 
 @dataclass(slots=True)
-class DbCommandRequest(Generic[T]):
+class DbCommandRequest[T]:
     command: DbCommand[T]
     _done: threading.Event = field(default_factory=threading.Event, init=False)
     _result: T | None = field(default=None, init=False)
@@ -43,7 +40,7 @@ class DbCommandRequest(Generic[T]):
 class DbCommandChannel(RuntimeChannel[DbCommandRequest[Any]]):
     """Thread-safe queue for API/runtime commands that must use the DB writer."""
 
-    def execute(self, command: DbCommand[T], *, timeout_s: float = 5.0) -> T:
+    def execute[T](self, command: DbCommand[T], *, timeout_s: float = 5.0) -> T:
         request = DbCommandRequest(command)
         self.emit(request)
         return request.result(timeout_s=timeout_s)

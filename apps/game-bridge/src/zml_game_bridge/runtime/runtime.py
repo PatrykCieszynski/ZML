@@ -148,6 +148,8 @@ class AppRuntime:
         *,
         timeout_s: float = 5.0,
     ) -> T:
+        if self._stop_event.is_set():
+            raise RuntimeError("Runtime is stopping")
         request = RuntimeCommandRequest(command)
         self._pending_inputs.emit(request)
         return request.result(timeout_s=timeout_s)
@@ -161,6 +163,11 @@ class AppRuntime:
     def start(self) -> None:
         if self._started:
             return
+        if self._pending_inputs.is_closed():
+            raise RuntimeError("Runtime cannot be restarted after shutdown")
+        if self._chat_log_path is None:
+            raise RuntimeError("Chat log path is not set; cannot start chat input")
+        self._stop_event.clear()
         self._restore_mining_lifecycle()
         self._started = True
         logger.info(
@@ -174,13 +181,6 @@ class AppRuntime:
             self._mock_inputs_enabled,
         )
 
-        self._t_input = Thread(
-            target=self._input_coordinator.run,
-            kwargs={"stop_event": self._stop_event},
-            daemon=True,
-        )
-        self._t_input.start()
-
         self._t_db = Thread(
             target=self._db_writer_worker.run,
             kwargs={"stop_event": self._stop_event},
@@ -188,8 +188,12 @@ class AppRuntime:
         )
         self._t_db.start()
 
-        if self._chat_log_path is None:
-            raise RuntimeError("Chat log path is not set; cannot start chat input")
+        self._t_input = Thread(
+            target=self._input_coordinator.run,
+            kwargs={"stop_event": self._stop_event},
+            daemon=True,
+        )
+        self._t_input.start()
 
         self._t_chat = Thread(
             target=start_chat_input,
@@ -272,6 +276,8 @@ class AppRuntime:
         )
 
     def stop(self) -> None:
+        if not self._started:
+            return
         logger.info("app_stopping")
         self._stop_event.set()
 
@@ -279,18 +285,27 @@ class AppRuntime:
             self._sub_sse.close()
             self._sub_sse = None
 
-        if self._t_chat is not None:
-            self._t_chat.join(timeout=2.0)
-        if self._t_ocr is not None:
-            self._t_ocr.join(timeout=2.0)
-        if self._t_mock is not None:
-            self._t_mock.join(timeout=2.0)
-        if self._t_input is not None:
-            self._t_input.join(timeout=2.0)
-        if self._t_db is not None:
-            self._t_db.join(timeout=2.0)
+        self._join_thread(self._t_chat, "chat_input")
+        self._join_thread(self._t_ocr, "ocr_input")
+        self._join_thread(self._t_mock, "mock_input")
+
+        self._pending_inputs.close()
+        self._join_thread(self._t_input, "input_coordinator")
+
+        self._pending_db_commands.close()
+        self._pending_events.close()
+        self._join_thread(self._t_db, "db_writer")
         self._started = False
         logger.info("app_stopped")
+
+    def _join_thread(self, thread: Thread | None, name: str) -> bool:
+        if thread is None:
+            return True
+        thread.join(timeout=5.0)
+        if thread.is_alive():
+            logger.warning("runtime_thread_did_not_stop thread=%s", name)
+            return False
+        return True
 
 
 def _now_ms() -> int:

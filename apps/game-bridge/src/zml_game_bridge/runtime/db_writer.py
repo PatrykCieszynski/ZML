@@ -11,7 +11,7 @@ from zml_game_bridge.persistence.event_projector import EventProjector
 from zml_game_bridge.persistence.event_writer import EventWriter
 from zml_game_bridge.persistence.schema import ensure_schema
 from zml_game_bridge.persistence.sqlite import open_writer_connection
-from zml_game_bridge.runtime.channels import EventChannel
+from zml_game_bridge.runtime.channels import ChannelClosed, EventChannel
 from zml_game_bridge.runtime.db_commands import DbCommandChannel, DbCommandRequest
 from zml_game_bridge.runtime.event_requests import EventWriteRequest
 
@@ -49,6 +49,8 @@ class DbWriterWorker:
             self.conn = None
 
     def run(self, *, stop_event: threading.Event) -> None:
+        # Runtime closes both DB channels when no more work can arrive.
+        _ = stop_event
         self.open()
         if self.conn is None:
             raise RuntimeError("Failed to open DB connection")
@@ -64,17 +66,24 @@ class DbWriterWorker:
         current_event_type: str | None = None
 
         try:
-            while (
-                not stop_event.is_set()
-                or self.pending_events.size() > 0
-                or self._pending_commands_size() > 0
-            ):
-                command = self._take_command()
+            events_open = True
+            commands_open = self.pending_commands is not None
+            while events_open or commands_open:
+                command = self._take_command(timeout_s=0.0 if events_open else 0.1)
+                if isinstance(command, ChannelClosed):
+                    commands_open = False
+                    continue
                 if command is not None:
                     self._execute_command(command)
                     continue
 
+                if not events_open:
+                    continue
+
                 item = self.pending_events.take(timeout_s=0.1)
+                if isinstance(item, ChannelClosed):
+                    events_open = False
+                    continue
                 if item is None:
                     continue
                 event = item.event if isinstance(item, EventWriteRequest) else item
@@ -110,13 +119,10 @@ class DbWriterWorker:
             logger.info("db_writer_stopped persisted_events=%s", persisted_events_count)
             self.close()
 
-    def _pending_commands_size(self) -> int:
-        return self.pending_commands.size() if self.pending_commands is not None else 0
-
-    def _take_command(self) -> DbCommandRequest[Any] | None:
+    def _take_command(self, *, timeout_s: float) -> DbCommandRequest[Any] | ChannelClosed | None:
         if self.pending_commands is None:
             return None
-        return self.pending_commands.take(timeout_s=0.0)
+        return self.pending_commands.take(timeout_s=timeout_s)
 
     def _execute_command(self, request: DbCommandRequest[Any]) -> None:
         if self.conn is None:
