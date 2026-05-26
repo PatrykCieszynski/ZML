@@ -8,7 +8,7 @@ from zml_game_bridge.application.mining import (
     MiningCoordinatorConfig,
 )
 from zml_game_bridge.application.mining.claims.lifecycle import ActiveClaim
-from zml_game_bridge.application.mining.segments.session import DropRunContext
+from zml_game_bridge.application.mining.segments.session import DropRunContext, MiningSegmentSetup
 from zml_game_bridge.domain.mining import MiningMode
 from zml_game_bridge.domain.mining_cost import (
     FinderRangeEnhancerLoadout,
@@ -94,7 +94,7 @@ def test_mining_coordinator_attaches_active_run_segment_to_drop() -> None:
     )
     coordinator = MiningCoordinator(
         id_factory=_id_factory("drop-1"),
-        run_context_provider=lambda _ts, _profile: DropRunContext(
+        run_context_provider=lambda _ts, _setup: DropRunContext(
             run_id=7,
             segment_id="segment-1",
             lifecycle_events=(segment_started,),
@@ -111,6 +111,38 @@ def test_mining_coordinator_attaches_active_run_segment_to_drop() -> None:
     assert drop.drop_id == "drop-1"
     assert drop.run_id == 7
     assert drop.segment_id == "segment-1"
+
+
+def test_mining_coordinator_passes_drop_setup_to_run_segment_context() -> None:
+    captured_setups: list[MiningSegmentSetup] = []
+
+    def context_provider(_observed_ts_ms: int, setup: MiningSegmentSetup) -> DropRunContext:
+        captured_setups.append(setup)
+        return DropRunContext(run_id=7, segment_id="segment-1")
+
+    coordinator = MiningCoordinator(
+        id_factory=_id_factory("drop-1"),
+        run_context_provider=context_provider,
+    )
+
+    coordinator.process_signal(
+        FinderModesChangedSignal(
+            ts_ms=900,
+            modes_mask=int(MiningMode.ORE | MiningMode.ENMATTER),
+            previous_modes_mask=None,
+        )
+    )
+    coordinator.process_signal(
+        FinderUnitsChangedSignal(ts_ms=950, probes_per_drop=None, ammo_per_drop=1_500)
+    )
+    coordinator.process_signal(
+        ProbeFiredSignal(ts_ms=1_000, position=None, modes_mask=None, ammo_per_drop=None)
+    )
+
+    assert len(captured_setups) == 1
+    assert captured_setups[0].modes_mask == int(MiningMode.ORE | MiningMode.ENMATTER)
+    assert captured_setups[0].ammo_per_drop == 1_500
+    assert captured_setups[0].probes_per_drop is None
 
 
 def test_mining_coordinator_applies_finder_range_enhancer_to_drop_cost_and_radius() -> None:

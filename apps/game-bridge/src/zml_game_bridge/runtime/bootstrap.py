@@ -4,10 +4,12 @@ from dataclasses import dataclass
 
 from zml_game_bridge.application.mining import MiningCoordinator
 from zml_game_bridge.application.mining.equipment.service import MiningEquipmentService
-from zml_game_bridge.application.mining.segments.session import RunSessionService
+from zml_game_bridge.application.mining.segments.session import (
+    MiningSegmentSetup,
+    RunSessionService,
+)
 from zml_game_bridge.application.mining.settings import default_id_factory
 from zml_game_bridge.application.position.latest_position import LatestPositionState
-from zml_game_bridge.domain.mining_cost import MiningEquipmentProfile
 from zml_game_bridge.domain.position import WorldPos
 from zml_game_bridge.events.in_memory_persisted_event_bus import InMemoryPersistedEventBus
 from zml_game_bridge.persistence.event_projector import CompositeEventProjector
@@ -56,10 +58,10 @@ def build_runtime_components(settings: Settings) -> RuntimeComponents:
         position = latest_position.get()
         return position.position if position is not None else None
 
-    def run_context_for_drop(observed_ts_ms: int, profile: MiningEquipmentProfile):
+    def run_context_for_drop(observed_ts_ms: int, setup: MiningSegmentSetup):
         return run_session_service.context_for_drop(
             observed_ts_ms=observed_ts_ms,
-            profile=profile,
+            setup=setup,
         )
 
     mining_coordinator = MiningCoordinator(

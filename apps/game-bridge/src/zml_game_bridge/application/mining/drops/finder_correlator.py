@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 
-from zml_game_bridge.application.mining.segments.session import DropRunContext
+from zml_game_bridge.application.mining.segments.session import DropRunContext, MiningSegmentSetup
 from zml_game_bridge.application.mining.settings import (
     DEFAULT_DROP_RADIUS_M,
     IdFactory,
@@ -33,7 +33,7 @@ from zml_game_bridge.inputs.ocr.pipelines.mining_finder.signals import (
 logger = logging.getLogger(__name__)
 MiningEquipmentProfileProvider = Callable[[], MiningEquipmentProfile]
 DropRunContextProvider = Callable[
-    [int, MiningEquipmentProfile],
+    [int, MiningSegmentSetup],
     DropRunContext,
 ]
 
@@ -109,8 +109,14 @@ class FinderDropCorrelator:
             self._ammo_per_drop = signal.ammo_per_drop
 
         profile = self._profile_provider()
+        segment_setup = MiningSegmentSetup(
+            profile=profile,
+            modes_mask=modes_mask,
+            ammo_per_drop=ammo_per_drop,
+            probes_per_drop=probes_per_drop,
+        )
         run_context = (
-            self._run_context_provider(signal.ts_ms, profile)
+            self._run_context_provider(signal.ts_ms, segment_setup)
             if self._run_context_provider is not None
             else DropRunContext(run_id=None, segment_id=None)
         )
