@@ -10,8 +10,8 @@ from ctypes import windll
 from pathlib import Path
 
 from zml_game_bridge.events.contracts import SignalSink
-from zml_game_bridge.inputs.ocr.config import OcrRoiProfile, load_ocr_roi_profile
 from zml_game_bridge.inputs.ocr.capture.window_capturer import WindowCapturer
+from zml_game_bridge.inputs.ocr.config import OcrRoiProfile, load_ocr_roi_profile
 from zml_game_bridge.inputs.ocr.pipelines.mining_finder.model import MiningFinderSignal
 from zml_game_bridge.inputs.ocr.pipelines.mining_finder.pipeline import (
     MiningFinderPipeline,

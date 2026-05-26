@@ -5,9 +5,9 @@ import threading
 from pathlib import Path
 
 import pytest
+from zml_game_bridge.testing.chat_writer import ChatLogWriter
 
 from zml_game_bridge.inputs.chat.tailer import tail_lines
-from zml_game_bridge.testing.chat_writer import ChatLogWriter
 
 
 def _start_tailer_thread(
