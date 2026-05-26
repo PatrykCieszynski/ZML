@@ -135,6 +135,15 @@ def _default_mining_tools_path() -> Path:
     return Path(app_data) / APP_DATA_DIR_NAME / "config" / "mining_tools.json"
 
 
+def _default_ocr_profile_path() -> Path:
+    env_path = _env_path("ZML_OCR_PROFILE_PATH")
+    if env_path is not None:
+        return env_path
+
+    app_data = os.getenv("LOCALAPPDATA") or os.getenv("APPDATA") or str(Path.home())
+    return Path(app_data) / APP_DATA_DIR_NAME / "config" / "ocr_profile.json"
+
+
 def _default_chat_log_path() -> Path | None:
     env_path = _env_path("ZML_CHAT_LOG_PATH")
     if env_path is not None:
@@ -247,6 +256,7 @@ class Settings:
         default_factory=_default_mining_resource_catalog_path
     )
     mining_tools_path: Path = field(default_factory=_default_mining_tools_path)
+    ocr_profile_path: Path = field(default_factory=_default_ocr_profile_path)
 
     chat_start_at_end: bool = field(default_factory=_default_chat_start_at_end)
     ocr_enabled: bool = field(default_factory=_default_ocr_enabled)

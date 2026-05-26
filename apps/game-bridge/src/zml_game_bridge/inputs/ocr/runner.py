@@ -7,11 +7,10 @@ import time
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from ctypes import windll
-
-import numpy as np
+from pathlib import Path
 
 from zml_game_bridge.events.contracts import SignalSink
-from zml_game_bridge.inputs.ocr.capture.model import RoiRect
+from zml_game_bridge.inputs.ocr.config import OcrRoiProfile, load_ocr_roi_profile
 from zml_game_bridge.inputs.ocr.capture.window_capturer import WindowCapturer
 from zml_game_bridge.inputs.ocr.pipelines.mining_finder.model import MiningFinderSignal
 from zml_game_bridge.inputs.ocr.pipelines.mining_finder.pipeline import (
@@ -26,15 +25,12 @@ from zml_game_bridge.inputs.ocr.pipelines.mining_finder.signals import (
     FinderUnitsChangedSignal,
     ProbeFiredSignal,
 )
-from zml_game_bridge.inputs.ocr.pipelines.position.model import OcrPosition, PositionRois
+from zml_game_bridge.inputs.ocr.pipelines.mining_finder.vision import VisionFinderFeatureDetector
+from zml_game_bridge.inputs.ocr.pipelines.position.model import OcrPosition
 from zml_game_bridge.inputs.ocr.pipelines.position.pipeline import PositionPipeline
 
 PositionSink = Callable[[OcrPosition], None]
 logger = logging.getLogger(__name__)
-
-# MVP hardcode
-ROI_COMPASS = RoiRect(x1=2190, y1=965, x2=2551, y2=1411)
-ROI_DEEDS = RoiRect(x1=20, y1=260, x2=700, y2=520)
 
 
 def start_ocr_input(
@@ -44,21 +40,25 @@ def start_ocr_input(
     stop_event: threading.Event,
     target_hz: float = 10.0,
     finder_debug_logging: bool | None = None,
+    roi_profile_path: Path | None = None,
+    roi_profile: OcrRoiProfile | None = None,
 ) -> None:
     windll.user32.SetProcessDPIAware()  # do once per process
     logger.info("ocr_worker_started target_hz=%s", target_hz)
+    roi_profile = roi_profile or load_ocr_roi_profile(roi_profile_path)
+    logger.info(
+        "ocr_roi_profile_loaded name=%s finder_roi=%s compass_roi=%s deeds_roi=%s loot_roi=%s",
+        roi_profile.name,
+        roi_profile.screen_rois.finder.name,
+        roi_profile.screen_rois.compass.name,
+        roi_profile.screen_rois.deeds.name,
+        roi_profile.screen_rois.loot.name if roi_profile.screen_rois.loot is not None else None,
+    )
     cap = WindowCapturer(title_contains="Entropia Universe Client")
     period = 1.0 / target_hz
     next_t = time.perf_counter()
 
-    lat_lon_rois = PositionRois(
-        planet=RoiRect(x1=23, x2=362, y1=0, y2=30),
-        lon=RoiRect(x1=85, x2=145, y1=350, y2=370),
-        lat=RoiRect(x1=90, x2=145, y1=375, y2=395),
-    )
-
-    # pipelines (MVP stubs)
-    position_pipeline = PositionPipeline(lat_lon_rois)
+    position_pipeline = PositionPipeline(roi_profile.position_rois.to_position_rois())
     if finder_debug_logging is None:
         finder_debug_logging = _env_bool("ZML_FINDER_DEBUG", default=False)
     if finder_debug_logging:
@@ -66,7 +66,8 @@ def start_ocr_input(
         logger.info("finder_debug_enabled")
 
     finder_pipeline = MiningFinderPipeline(
-        cfg=MiningFinderPipelineConfig(debug_logging=finder_debug_logging)
+        detector=VisionFinderFeatureDetector(layout=roi_profile.finder_panel.to_panel_layout()),
+        cfg=MiningFinderPipelineConfig(debug_logging=finder_debug_logging),
     )
     # deeds_pipeline = ...     # step(deeds_roi, ts_ms) -> ...
 
@@ -95,7 +96,7 @@ def start_ocr_input(
 
             ts_ms = time.time_ns() // 1_000_000
 
-            compass = ROI_COMPASS.crop(frame)
+            compass = roi_profile.screen_rois.compass.crop(frame)
             if compass is not None:
                 pos = position_pipeline.step(compass, ts_ms)
                 if pos is not None:
@@ -110,20 +111,26 @@ def start_ocr_input(
                 else:
                     if signal_sink is not None:
                         for signal in signals:
-                            signal_sink(_to_finder_signal(signal, finder_position))
+                            signal_sink(
+                                _to_finder_signal(
+                                    signal,
+                                    finder_position,
+                                    roi_name=roi_profile.screen_rois.finder.name,
+                                )
+                            )
                 finally:
                     finder_future = None
                     finder_position = None
 
             if tick % finder_every_n == 0 and finder_future is None:
-                finder = _finder_mvp_roi(frame).crop(frame)
+                finder = roi_profile.screen_rois.finder.crop(frame)
                 if finder is not None:
                     finder_position = latest_position
                     finder_future = finder_executor.submit(finder_pipeline.step, finder, ts_ms)
 
             if tick % deeds_every_n == 0:
                 pass
-                # deeds = ROI_DEEDS.crop(frame)
+                # deeds = roi_profile.screen_rois.deeds.crop(frame)
                 # if deeds is not None:
                 #     deeds_pipeline.step(deeds, ts_ms)
     except Exception:
@@ -136,20 +143,6 @@ def start_ocr_input(
         cap.close()
         position_pipeline.close()
         finder_pipeline.close()
-
-
-def _finder_mvp_roi(frame: np.ndarray) -> RoiRect:
-    height = int(frame.shape[0])
-    width = int(frame.shape[1])
-    margin = 3
-    roi_width = 347
-    roi_height = 239
-    return RoiRect(
-        x1=margin,
-        x2=min(width, margin + roi_width),
-        y1=max(0, height - margin - roi_height),
-        y2=max(0, height - margin),
-    )
 
 
 def _env_bool(name: str, *, default: bool) -> bool:
@@ -168,7 +161,12 @@ def _configure_finder_debug_logging() -> None:
     logging.getLogger("zml_game_bridge.inputs.ocr.pipelines.mining_finder").setLevel(logging.DEBUG)
 
 
-def _to_finder_signal(signal: MiningFinderSignal, latest_position: OcrPosition | None):
+def _to_finder_signal(
+    signal: MiningFinderSignal,
+    latest_position: OcrPosition | None,
+    *,
+    roi_name: str,
+):
     match signal.kind:
         case "probe_fired":
             return ProbeFiredSignal(
@@ -178,6 +176,7 @@ def _to_finder_signal(signal: MiningFinderSignal, latest_position: OcrPosition |
                 probes_per_drop=signal.probes_per_drop,
                 ammo_per_drop=signal.ammo_per_drop,
                 raw_status_text=signal.raw_text,
+                roi_name=roi_name,
                 debug=signal.debug,
             )
         case "finder_modes_changed":
@@ -187,12 +186,14 @@ def _to_finder_signal(signal: MiningFinderSignal, latest_position: OcrPosition |
                 ts_ms=signal.ts_ms,
                 modes_mask=signal.modes_mask,
                 previous_modes_mask=signal.previous_modes_mask,
+                roi_name=roi_name,
                 debug=signal.debug,
             )
         case "finder_mode_invalidated":
             return FinderModeInvalidatedSignal(
                 ts_ms=signal.ts_ms,
                 previous_modes_mask=signal.previous_modes_mask,
+                roi_name=roi_name,
                 debug=signal.debug,
             )
         case "finder_units_changed":
@@ -201,6 +202,7 @@ def _to_finder_signal(signal: MiningFinderSignal, latest_position: OcrPosition |
                 probes_per_drop=signal.probes_per_drop,
                 ammo_per_drop=signal.ammo_per_drop,
                 raw_text=signal.raw_text,
+                roi_name=roi_name,
             )
         case "finder_hit_hint":
             if (
@@ -218,9 +220,11 @@ def _to_finder_signal(signal: MiningFinderSignal, latest_position: OcrPosition |
                 depth_m=signal.depth_m,
                 raw_status_text=signal.raw_text,
                 raw_details_text=signal.raw_details_text,
+                roi_name=roi_name,
             )
         case "finder_no_resources":
             return FinderNoResourcesSignal(
                 ts_ms=signal.ts_ms,
                 raw_status_text=signal.raw_text,
+                roi_name=roi_name,
             )

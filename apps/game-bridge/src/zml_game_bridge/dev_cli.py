@@ -31,6 +31,7 @@ def _apply_env_overrides(
     mode: InputMode,
     db_path: Path | None,
     chat_log_path: Path | None,
+    ocr_profile_path: Path | None,
     finder_debug: bool,
     log_level: str | None,
     mock_interval_ms: int | None,
@@ -55,6 +56,8 @@ def _apply_env_overrides(
         os.environ["ZML_DB_PATH"] = str(db_path)
     if chat_log_path is not None:
         os.environ["ZML_CHAT_LOG_PATH"] = str(chat_log_path)
+    if ocr_profile_path is not None:
+        os.environ["ZML_OCR_PROFILE_PATH"] = str(ocr_profile_path)
     if finder_debug:
         os.environ["ZML_FINDER_DEBUG"] = "1"
     if log_level is not None:
@@ -76,6 +79,8 @@ def _settings_table(settings: Settings) -> Table:
     table.add_row("db_path", str(settings.db_path))
     table.add_row("chat_log_path", _format_path(settings.chat_log_path))
     table.add_row("mining_resource_catalog_path", str(settings.mining_resource_catalog_path))
+    table.add_row("mining_tools_path", str(settings.mining_tools_path))
+    table.add_row("ocr_profile_path", str(settings.ocr_profile_path))
     table.add_row(
         "chat_log_exists",
         _format_bool(settings.chat_log_path is not None and settings.chat_log_path.exists()),
@@ -111,6 +116,10 @@ def show_config(
         Path | None,
         typer.Option("--chat-log", help="Override ZML_CHAT_LOG_PATH."),
     ] = None,
+    ocr_profile_path: Annotated[
+        Path | None,
+        typer.Option("--ocr-profile", help="Override ZML_OCR_PROFILE_PATH."),
+    ] = None,
     finder_debug: Annotated[
         bool,
         typer.Option("--finder-debug", help="Enable finder OCR debug logging."),
@@ -127,6 +136,7 @@ def show_config(
         mode=mode,
         db_path=db_path,
         chat_log_path=chat_log_path,
+        ocr_profile_path=ocr_profile_path,
         finder_debug=finder_debug,
         log_level=log_level,
         mock_interval_ms=mock_interval_ms,
@@ -150,6 +160,10 @@ def serve(
         Path | None,
         typer.Option("--chat-log", help="Override ZML_CHAT_LOG_PATH."),
     ] = None,
+    ocr_profile_path: Annotated[
+        Path | None,
+        typer.Option("--ocr-profile", help="Override ZML_OCR_PROFILE_PATH."),
+    ] = None,
     finder_debug: Annotated[
         bool,
         typer.Option("--finder-debug", help="Enable finder OCR debug logging."),
@@ -166,6 +180,7 @@ def serve(
         mode=mode,
         db_path=db_path,
         chat_log_path=chat_log_path,
+        ocr_profile_path=ocr_profile_path,
         finder_debug=finder_debug,
         log_level=log_level,
         mock_interval_ms=mock_interval_ms,
