@@ -12,6 +12,9 @@ class LatestPositionState:
     Position updates are high-frequency and are not part of the durable event
     store. The cache gives future read-model projectors a thread-safe snapshot
     without turning every OCR tick into a database write.
+
+    TODO: Replace the raw OCR model with an application-level immutable
+    position snapshot carrying captured_at/received_at/confidence/sequence_id.
     """
 
     def __init__(self) -> None:

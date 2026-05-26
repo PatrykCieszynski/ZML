@@ -24,6 +24,7 @@ declare global {
       listRuns: () => Promise<RunDto[]>;
       resumeRun: (runId: number) => Promise<RunDto>;
       updateRun: (runId: number, request: UpdateRunRequest) => Promise<RunDto>;
+      deleteRun: (runId: number) => Promise<RunDto>;
       listActiveRunSegments: () => Promise<RunSegmentDto[]>;
       listRunSegments: (runId: number) => Promise<RunSegmentDto[]>;
       toggleMapWindow: () => Promise<boolean>;

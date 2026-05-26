@@ -16,7 +16,12 @@ export function OverlayWindow() {
   const state = useZmlRendererStore(windowType);
   const [preferences] = useOverlayPreferences();
   const stats = useMemo(() => {
-    const costMpec = state.miningDrops.reduce((sum, drop) => sum + drop.cost.totalMpec, 0);
+    const dropCostMpec = state.miningDrops.reduce((sum, drop) => sum + drop.cost.totalMpec, 0);
+    const extractionCostMpec = state.miningLoot.reduce(
+      (sum, item) => sum + (item.extractionCostMpec ?? 0),
+      0,
+    );
+    const costMpec = dropCostMpec + extractionCostMpec;
     const returnMpec = state.miningLoot.reduce((sum, item) => sum + item.valueMpec, 0);
     const hitCount = state.miningDrops.filter((drop) => drop.result === "hit").length;
     return {

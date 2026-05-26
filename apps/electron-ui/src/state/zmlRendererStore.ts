@@ -456,6 +456,45 @@ export async function updateRunName(runId: number, name: string): Promise<void> 
   }
 }
 
+export async function deleteRun(runId: number): Promise<void> {
+  let api;
+  try {
+    api = getZml();
+  } catch (error) {
+    setState({
+      runCommandPending: false,
+      lastCommandError: errorToMessage(error),
+    });
+    return;
+  }
+
+  setState({
+    runCommandPending: true,
+    lastCommandError: null,
+  });
+
+  try {
+    const deletingActive = state.activeRun?.runId === runId;
+    await api.deleteRun(runId);
+    const runs = await api.listRuns();
+    setState({
+      activeRun: deletingActive ? null : state.activeRun,
+      runs,
+      runSegments: deletingActive ? [] : state.runSegments,
+      miningClaims: deletingActive ? [] : state.miningClaims,
+      miningDrops: deletingActive ? [] : state.miningDrops,
+      miningLoot: deletingActive ? [] : state.miningLoot,
+      runCommandPending: false,
+      lastCommandError: null,
+    });
+  } catch (error) {
+    setState({
+      runCommandPending: false,
+      lastCommandError: errorToMessage(error),
+    });
+  }
+}
+
 export async function toggleMapWindow(): Promise<void> {
   let api;
   try {

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 import threading
 import time
 from dataclasses import dataclass
@@ -11,11 +12,23 @@ from zml_game_bridge.events.base import EventBase
 from zml_game_bridge.events.envelope import EventEnvelope
 from zml_game_bridge.events.in_memory_persisted_event_bus import InMemoryPersistedEventBus
 from zml_game_bridge.runtime.channels import EventChannel
+from zml_game_bridge.runtime.db_commands import DbCommandChannel
+from zml_game_bridge.runtime.event_requests import EventWriteRequest
 
 
 @dataclass(frozen=True, slots=True)
 class DummyEvent(EventBase):
     x: int = 1
+
+
+@dataclass(frozen=True, slots=True)
+class DummyCommand:
+    value: int
+
+    def execute(self, conn: sqlite3.Connection) -> int:
+        conn.execute("CREATE TABLE command_values (value INTEGER NOT NULL)")
+        conn.execute("INSERT INTO command_values (value) VALUES (?)", (self.value,))
+        return self.value * 2
 
 
 class FakeEventWriter:
@@ -64,6 +77,7 @@ def test_db_writer_persists_and_publishes(monkeypatch, tmp_path: Path) -> None:
 
     assert got.wait(timeout=1.0), "DbWriterWorker didn't publish anything"
     stop.set()
+    channel.close()
     thread.join(timeout=1.0)
 
     assert len(out) == 1
@@ -99,6 +113,7 @@ def test_db_writer_no_event_no_publish(monkeypatch, tmp_path: Path) -> None:
     time.sleep(0.2)
 
     stop.set()
+    channel.close()
     thread.join(timeout=1.0)
 
     assert out == []
@@ -107,3 +122,79 @@ def test_db_writer_no_event_no_publish(monkeypatch, tmp_path: Path) -> None:
     assert inst.write_calls == []
 
     sub.close()
+
+
+def test_db_writer_executes_commands_on_writer_connection(monkeypatch, tmp_path: Path) -> None:
+    FakeEventWriter.last_instance = None
+    monkeypatch.setattr(db_writer_worker_mod, "EventWriter", FakeEventWriter)
+
+    db_path = tmp_path / "commands.sqlite3"
+    bus = InMemoryPersistedEventBus()
+    event_channel = EventChannel(maxsize=10)
+    command_channel = DbCommandChannel(maxsize=10)
+    writer = db_writer_worker_mod.DbWriterWorker(
+        db_path=db_path,
+        pending_events=event_channel,
+        pending_commands=command_channel,
+        persisted_events=bus,
+    )
+
+    out: list[EventEnvelope] = []
+    sub = bus.subscribe(lambda env: out.append(env))
+
+    stop = threading.Event()
+    thread = threading.Thread(target=writer.run, kwargs={"stop_event": stop}, daemon=True)
+    thread.start()
+
+    try:
+        result = command_channel.execute(DummyCommand(21), timeout_s=1.0)
+    finally:
+        stop.set()
+        command_channel.close()
+        event_channel.close()
+        thread.join(timeout=1.0)
+        sub.close()
+
+    assert result == 42
+    assert out == []
+
+    conn = sqlite3.connect(db_path)
+    try:
+        row = conn.execute("SELECT value FROM command_values").fetchone()
+    finally:
+        conn.close()
+
+    assert row == (21,)
+
+
+def test_db_writer_acknowledges_event_write_request(monkeypatch, tmp_path: Path) -> None:
+    FakeEventWriter.last_instance = None
+    monkeypatch.setattr(db_writer_worker_mod, "EventWriter", FakeEventWriter)
+
+    bus = InMemoryPersistedEventBus()
+    channel = EventChannel(maxsize=10)
+    writer = db_writer_worker_mod.DbWriterWorker(
+        db_path=tmp_path / "events.sqlite3",
+        pending_events=channel,
+        persisted_events=bus,
+    )
+
+    out: list[EventEnvelope] = []
+    sub = bus.subscribe(lambda env: out.append(env))
+
+    stop = threading.Event()
+    thread = threading.Thread(target=writer.run, kwargs={"stop_event": stop}, daemon=True)
+    thread.start()
+
+    try:
+        request = EventWriteRequest(DummyEvent(42))
+        channel.emit(request)
+        envelope = request.result(timeout_s=1.0)
+    finally:
+        stop.set()
+        channel.close()
+        thread.join(timeout=1.0)
+        sub.close()
+
+    assert envelope.event_type == "DummyEvent"
+    assert [env.event_type for env in out] == ["DummyEvent"]

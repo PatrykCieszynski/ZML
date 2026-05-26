@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 10
 
 SCHEMA_DDL = """
 -- =========================
@@ -117,6 +117,8 @@ CREATE TABLE IF NOT EXISTS mining_claims (
 
     hit_id                  TEXT,
     drop_id                 TEXT,
+    run_id                  INTEGER REFERENCES runs(run_id) ON DELETE SET NULL,
+    segment_id              TEXT REFERENCES run_segments(segment_id) ON DELETE SET NULL,
     observed_ts_ms          INTEGER NOT NULL,
 
     planet_name             TEXT,
@@ -148,6 +150,22 @@ CREATE TABLE IF NOT EXISTS mining_claims (
 CREATE INDEX IF NOT EXISTS idx_mining_claims_status ON mining_claims(status);
 CREATE INDEX IF NOT EXISTS idx_mining_claims_observed_ts_ms ON mining_claims(observed_ts_ms);
 CREATE INDEX IF NOT EXISTS idx_mining_claims_expires ON mining_claims(expected_expires_ts_ms);
+
+CREATE TABLE IF NOT EXISTS mining_loot_items (
+    event_id                INTEGER PRIMARY KEY REFERENCES events(event_id) ON DELETE CASCADE,
+    created_ts_ms           INTEGER NOT NULL,
+    event_dt                TEXT,
+    run_id                  INTEGER REFERENCES runs(run_id) ON DELETE SET NULL,
+
+    item_name               TEXT NOT NULL,
+    qty                     INTEGER NOT NULL,
+    value_mpec              INTEGER NOT NULL,
+    extraction_cost_mpec    INTEGER,
+    raw                     TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_mining_loot_run_id ON mining_loot_items(run_id, created_ts_ms);
+CREATE INDEX IF NOT EXISTS idx_mining_loot_item_name ON mining_loot_items(item_name);
 
 -- =========================
 -- App state:
@@ -190,6 +208,21 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
             )
     if user_version < 8 and not _column_exists(conn, "mining_claims", "mining_type"):
         conn.execute("ALTER TABLE mining_claims ADD COLUMN mining_type TEXT")
+    if user_version < 9:
+        if not _column_exists(conn, "mining_claims", "run_id"):
+            conn.execute(
+                "ALTER TABLE mining_claims ADD COLUMN run_id INTEGER REFERENCES runs(run_id) ON DELETE SET NULL"
+            )
+        if not _column_exists(conn, "mining_claims", "segment_id"):
+            conn.execute(
+                "ALTER TABLE mining_claims ADD COLUMN segment_id TEXT REFERENCES run_segments(segment_id) ON DELETE SET NULL"
+            )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_mining_claims_run_id ON mining_claims(run_id, observed_ts_ms)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_mining_claims_segment_id ON mining_claims(segment_id, observed_ts_ms)"
+    )
     if user_version < SCHEMA_VERSION:
         conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
     conn.commit()

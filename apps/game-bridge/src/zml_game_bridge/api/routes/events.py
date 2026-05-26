@@ -2,34 +2,17 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import AsyncIterator, Iterator
-from typing import Annotated, cast
+from collections.abc import AsyncIterator
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Query, Request
 from starlette.responses import StreamingResponse
 
+from zml_game_bridge.api.dependencies import EventReaderDep, RuntimeDep
 from zml_game_bridge.api.schemas.events import EventEnvelopeDto
 from zml_game_bridge.events.envelope import EventEnvelope
-from zml_game_bridge.persistence.events import EventReader
-from zml_game_bridge.runtime.runtime import AppRuntime
 
 router = APIRouter(prefix="/events", tags=["events"])
-
-
-def get_event_reader(request: Request) -> Iterator[EventReader]:
-    """
-    FastAPI dependency:
-    - opens DB
-    - yields EventReader
-    - always closes
-    """
-    runtime = cast(AppRuntime, request.app.state.runtime)
-    event_reader = EventReader(db_path=runtime.db_path, check_same_thread=False)
-    event_reader.open()
-    try:
-        yield event_reader
-    finally:
-        event_reader.close()
 
 
 def _to_dto(envelope: EventEnvelope) -> EventEnvelopeDto:
@@ -42,7 +25,6 @@ def _to_dto(envelope: EventEnvelope) -> EventEnvelopeDto:
     )
 
 
-EventReaderDep = Annotated[EventReader, Depends(get_event_reader)]
 EventLimit = Annotated[int, Query(ge=1, le=2000)]
 
 
@@ -66,8 +48,7 @@ def after(
 
 
 @router.get("/stream")
-async def events_stream(request: Request) -> StreamingResponse:
-    runtime = cast(AppRuntime, request.app.state.runtime)
+async def events_stream(request: Request, runtime: RuntimeDep) -> StreamingResponse:
     hub = runtime.sse_hub
 
     if hub is None:

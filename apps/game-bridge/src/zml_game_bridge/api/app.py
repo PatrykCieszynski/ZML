@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from zml_game_bridge.api.channels.position_hub import OcrPositionHub
 from zml_game_bridge.api.channels.sse_hub import SseHub
 from zml_game_bridge.api.routes import register_routes
+from zml_game_bridge.runtime.bootstrap import build_runtime_components, build_worker_supervisor
 from zml_game_bridge.runtime.runtime import AppRuntime
 from zml_game_bridge.settings import Settings
 
@@ -27,23 +28,16 @@ def create_app() -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        runtime = AppRuntime(
-            db_path=settings.db_path,
-            chat_log_path=settings.chat_log_path,
-            mining_resource_catalog_path=settings.mining_resource_catalog_path,
-            mining_tools_path=settings.mining_tools_path,
-            chat_start_at_end=settings.chat_start_at_end,
-            ocr_enabled=settings.ocr_enabled,
-            mock_inputs_enabled=settings.mock_inputs_enabled,
-            mock_mining_interval_ms=settings.mock_mining_interval_ms,
-        )
-
         loop = asyncio.get_running_loop()
         sse_hub = SseHub(loop)
         position_hub = OcrPositionHub(loop)
-
-        runtime.attach_sse_hub(sse_hub)
-        runtime.attach_position_hub(position_hub)
+        runtime = AppRuntime(
+            settings=settings,
+            components=build_runtime_components(settings),
+            supervisor=build_worker_supervisor(settings),
+            sse_hub=sse_hub,
+            position_hub=position_hub,
+        )
 
         app.state.runtime = runtime
         runtime.start()

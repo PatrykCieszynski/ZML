@@ -3,6 +3,12 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
+from zml_game_bridge.application.mining import (
+    MiningCoordinator,
+    MiningCoordinatorConfig,
+)
+from zml_game_bridge.application.mining.claims.lifecycle import ActiveClaim
+from zml_game_bridge.application.mining.segments.session import DropRunContext, MiningSegmentSetup
 from zml_game_bridge.domain.mining import MiningMode
 from zml_game_bridge.domain.mining_cost import (
     FinderRangeEnhancerLoadout,
@@ -38,12 +44,6 @@ from zml_game_bridge.inputs.ocr.pipelines.mining_finder.signals import (
     ProbeFiredSignal,
 )
 from zml_game_bridge.resources.mining_resources import MiningResourceCatalog
-from zml_game_bridge.runtime.mining import (
-    MiningCoordinator,
-    MiningCoordinatorConfig,
-)
-from zml_game_bridge.runtime.mining.claim_lifecycle import ActiveClaim
-from zml_game_bridge.runtime.mining.run_session import DropRunContext
 
 
 def test_mining_coordinator_records_probe_drop_with_current_units() -> None:
@@ -54,10 +54,10 @@ def test_mining_coordinator_records_probe_drop_with_current_units() -> None:
         id_factory=_id_factory("drop-1"),
     )
 
-    coordinator.process(
+    coordinator.process_signal(
         FinderUnitsChangedSignal(ts_ms=900, probes_per_drop=None, ammo_per_drop=1_000)
     )
-    events = coordinator.process(
+    events = coordinator.process_signal(
         ProbeFiredSignal(
             ts_ms=1_000,
             position=WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None),
@@ -94,14 +94,14 @@ def test_mining_coordinator_attaches_active_run_segment_to_drop() -> None:
     )
     coordinator = MiningCoordinator(
         id_factory=_id_factory("drop-1"),
-        run_context_provider=lambda _ts, _profile: DropRunContext(
+        run_context_provider=lambda _ts, _setup: DropRunContext(
             run_id=7,
             segment_id="segment-1",
             lifecycle_events=(segment_started,),
         ),
     )
 
-    events = coordinator.process(
+    events = coordinator.process_signal(
         ProbeFiredSignal(ts_ms=1_000, position=None, modes_mask=1, ammo_per_drop=1_000)
     )
 
@@ -113,6 +113,66 @@ def test_mining_coordinator_attaches_active_run_segment_to_drop() -> None:
     assert drop.segment_id == "segment-1"
 
 
+def test_mining_coordinator_carries_drop_run_segment_to_claim() -> None:
+    coordinator = MiningCoordinator(
+        id_factory=_id_factory("drop-1", "hit-1", "claim-1"),
+        run_context_provider=lambda _ts, _setup: DropRunContext(
+            run_id=7,
+            segment_id="segment-1",
+        ),
+    )
+    coordinator.process_signal(
+        ProbeFiredSignal(ts_ms=1_000, position=None, modes_mask=1, ammo_per_drop=1_000)
+    )
+
+    events = coordinator.process_signal(
+        FinderHitHintSignal(
+            ts_ms=2_000,
+            size_label="Minimal",
+            size_index=1,
+            resource_name="Lysterium Stone",
+        )
+    )
+
+    claim = events[1]
+    assert isinstance(claim, MiningClaimCreatedEvent)
+    assert claim.drop_id == "drop-1"
+    assert claim.run_id == 7
+    assert claim.segment_id == "segment-1"
+
+
+def test_mining_coordinator_passes_drop_setup_to_run_segment_context() -> None:
+    captured_setups: list[MiningSegmentSetup] = []
+
+    def context_provider(_observed_ts_ms: int, setup: MiningSegmentSetup) -> DropRunContext:
+        captured_setups.append(setup)
+        return DropRunContext(run_id=7, segment_id="segment-1")
+
+    coordinator = MiningCoordinator(
+        id_factory=_id_factory("drop-1"),
+        run_context_provider=context_provider,
+    )
+
+    coordinator.process_signal(
+        FinderModesChangedSignal(
+            ts_ms=900,
+            modes_mask=int(MiningMode.ORE | MiningMode.ENMATTER),
+            previous_modes_mask=None,
+        )
+    )
+    coordinator.process_signal(
+        FinderUnitsChangedSignal(ts_ms=950, probes_per_drop=None, ammo_per_drop=1_500)
+    )
+    coordinator.process_signal(
+        ProbeFiredSignal(ts_ms=1_000, position=None, modes_mask=None, ammo_per_drop=None)
+    )
+
+    assert len(captured_setups) == 1
+    assert captured_setups[0].modes_mask == int(MiningMode.ORE | MiningMode.ENMATTER)
+    assert captured_setups[0].ammo_per_drop == 1_500
+    assert captured_setups[0].probes_per_drop is None
+
+
 def test_mining_coordinator_applies_finder_range_enhancer_to_drop_cost_and_radius() -> None:
     coordinator = MiningCoordinator(
         profile=MiningEquipmentProfile(
@@ -122,7 +182,7 @@ def test_mining_coordinator_applies_finder_range_enhancer_to_drop_cost_and_radiu
         id_factory=_id_factory("drop-1"),
     )
 
-    events = coordinator.process(
+    events = coordinator.process_signal(
         ProbeFiredSignal(ts_ms=1_000, position=None, modes_mask=1, ammo_per_drop=1_000)
     )
 
@@ -137,14 +197,14 @@ def test_mining_coordinator_applies_finder_range_enhancer_to_drop_cost_and_radiu
 def test_mining_coordinator_uses_current_modes_when_probe_signal_lacks_modes() -> None:
     coordinator = MiningCoordinator(id_factory=_id_factory("drop-1"))
 
-    coordinator.process(
+    coordinator.process_signal(
         FinderModesChangedSignal(
             ts_ms=900,
             modes_mask=int(MiningMode.ORE | MiningMode.ENMATTER),
             previous_modes_mask=None,
         )
     )
-    events = coordinator.process(
+    events = coordinator.process_signal(
         ProbeFiredSignal(ts_ms=1_000, position=None, modes_mask=None, ammo_per_drop=1_000)
     )
 
@@ -156,10 +216,10 @@ def test_mining_coordinator_uses_current_modes_when_probe_signal_lacks_modes() -
 def test_mining_coordinator_prefers_probe_signal_units_over_cached_units() -> None:
     coordinator = MiningCoordinator(id_factory=_id_factory("drop-1"))
 
-    coordinator.process(
+    coordinator.process_signal(
         FinderUnitsChangedSignal(ts_ms=900, probes_per_drop=None, ammo_per_drop=500)
     )
-    events = coordinator.process(
+    events = coordinator.process_signal(
         ProbeFiredSignal(ts_ms=1_000, position=None, modes_mask=None, ammo_per_drop=1_000)
     )
 
@@ -173,10 +233,10 @@ def test_mining_coordinator_records_hit_hint_linked_to_recent_drop() -> None:
     position = WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None)
     coordinator = MiningCoordinator(id_factory=_id_factory("drop-1", "hit-1", "claim-1"))
 
-    coordinator.process(
+    coordinator.process_signal(
         ProbeFiredSignal(ts_ms=1_000, position=position, modes_mask=1, ammo_per_drop=1_000)
     )
-    events = coordinator.process(
+    events = coordinator.process_signal(
         FinderHitHintSignal(
             ts_ms=5_000,
             size_label="Minimal",
@@ -204,6 +264,8 @@ def test_mining_coordinator_records_hit_hint_linked_to_recent_drop() -> None:
     assert claim.claim_id == "claim-1"
     assert claim.hit_id == "hit-1"
     assert claim.drop_id == "drop-1"
+    assert claim.run_id is None
+    assert claim.segment_id is None
     assert claim.position == position
     assert claim.search_radius_m == 55.0
     assert claim.resource_name == "Lysterium Stone"
@@ -213,10 +275,10 @@ def test_mining_coordinator_records_hit_hint_linked_to_recent_drop() -> None:
 def test_mining_coordinator_records_non_expiring_hit_hint() -> None:
     coordinator = MiningCoordinator(id_factory=_id_factory("drop-1", "hit-1", "claim-1"))
 
-    coordinator.process(
+    coordinator.process_signal(
         ProbeFiredSignal(ts_ms=1_000, position=None, modes_mask=1, ammo_per_drop=1_000)
     )
-    events = coordinator.process(
+    events = coordinator.process_signal(
         FinderHitHintSignal(
             ts_ms=5_000,
             size_label="Rich",
@@ -237,10 +299,10 @@ def test_mining_coordinator_records_no_resources_linked_to_recent_drop() -> None
     position = WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None)
     coordinator = MiningCoordinator(id_factory=_id_factory("drop-1"))
 
-    coordinator.process(
+    coordinator.process_signal(
         ProbeFiredSignal(ts_ms=1_000, position=position, modes_mask=1, ammo_per_drop=1_000)
     )
-    events = coordinator.process(
+    events = coordinator.process_signal(
         FinderNoResourcesSignal(
             ts_ms=5_000,
             raw_status_text="No resources found. Try again\nsomewhere else-",
@@ -258,11 +320,11 @@ def test_mining_coordinator_records_no_resources_linked_to_recent_drop() -> None
 def test_mining_coordinator_no_resources_closes_pending_drop() -> None:
     coordinator = MiningCoordinator(id_factory=_id_factory("drop-1", "hit-1", "claim-1"))
 
-    coordinator.process(
+    coordinator.process_signal(
         ProbeFiredSignal(ts_ms=1_000, position=None, modes_mask=1, ammo_per_drop=1_000)
     )
-    coordinator.process(FinderNoResourcesSignal(ts_ms=5_000))
-    events = coordinator.process(
+    coordinator.process_signal(FinderNoResourcesSignal(ts_ms=5_000))
+    events = coordinator.process_signal(
         FinderHitHintSignal(
             ts_ms=6_000,
             size_label="Minimal",
@@ -282,10 +344,10 @@ def test_mining_coordinator_does_not_link_hit_to_stale_drop() -> None:
         id_factory=_id_factory("drop-1", "hit-1", "claim-1"),
     )
 
-    coordinator.process(
+    coordinator.process_signal(
         ProbeFiredSignal(ts_ms=1_000, position=None, modes_mask=1, ammo_per_drop=1_000)
     )
-    events = coordinator.process(
+    events = coordinator.process_signal(
         FinderHitHintSignal(
             ts_ms=3_000,
             size_label="Minimal",
@@ -310,10 +372,10 @@ def test_mining_coordinator_does_not_link_no_resources_to_stale_drop() -> None:
         id_factory=_id_factory("drop-1"),
     )
 
-    coordinator.process(
+    coordinator.process_signal(
         ProbeFiredSignal(ts_ms=1_000, position=None, modes_mask=1, ammo_per_drop=1_000)
     )
-    events = coordinator.process(FinderNoResourcesSignal(ts_ms=3_000))
+    events = coordinator.process_signal(FinderNoResourcesSignal(ts_ms=3_000))
 
     no_resources = events[0]
     assert isinstance(no_resources, MiningNoResourcesEvent)
@@ -330,7 +392,7 @@ def test_mining_coordinator_records_claim_deed_received_chat_event() -> None:
     claimed_raw = "2026-01-10 12:37:50 [System] [] You have claimed a resource! (Lysterium Stone)"
 
     assert (
-        coordinator.process(
+        coordinator.process_signal(
             ItemReceivedSignal(
                 event_dt=event_dt,
                 channel_type=ChannelType.SYSTEM,
@@ -343,7 +405,7 @@ def test_mining_coordinator_records_claim_deed_received_chat_event() -> None:
         )
         == []
     )
-    events = coordinator.process(
+    events = coordinator.process_signal(
         ResourceClaimedSignal(
             event_dt=event_dt,
             channel_type=ChannelType.SYSTEM,
@@ -375,7 +437,7 @@ def test_mining_coordinator_learns_claim_deed_resource(tmp_path: Path) -> None:
     coordinator = MiningCoordinator(resource_catalog=resource_catalog)
     event_dt = datetime(2026, 1, 10, 12, 37, 50)
 
-    coordinator.process(
+    coordinator.process_signal(
         ItemReceivedSignal(
             event_dt=event_dt,
             channel_type=ChannelType.SYSTEM,
@@ -386,7 +448,7 @@ def test_mining_coordinator_learns_claim_deed_resource(tmp_path: Path) -> None:
             value_mpec=Mpec(0),
         )
     )
-    coordinator.process(
+    coordinator.process_signal(
         ResourceClaimedSignal(
             event_dt=event_dt,
             channel_type=ChannelType.SYSTEM,
@@ -407,7 +469,7 @@ def test_mining_coordinator_orders_multiple_pending_claim_deeds() -> None:
     coordinator = MiningCoordinator()
     event_dt = datetime(2026, 1, 10, 12, 37, 50)
 
-    coordinator.process(
+    coordinator.process_signal(
         ItemReceivedSignal(
             event_dt=event_dt,
             channel_type=ChannelType.SYSTEM,
@@ -418,7 +480,7 @@ def test_mining_coordinator_orders_multiple_pending_claim_deeds() -> None:
             value_mpec=Mpec(0),
         )
     )
-    coordinator.process(
+    coordinator.process_signal(
         ItemReceivedSignal(
             event_dt=event_dt,
             channel_type=ChannelType.SYSTEM,
@@ -430,7 +492,7 @@ def test_mining_coordinator_orders_multiple_pending_claim_deeds() -> None:
         )
     )
 
-    ore_events = coordinator.process(
+    ore_events = coordinator.process_signal(
         ResourceClaimedSignal(
             event_dt=event_dt,
             channel_type=ChannelType.SYSTEM,
@@ -439,7 +501,7 @@ def test_mining_coordinator_orders_multiple_pending_claim_deeds() -> None:
             resource_name="Gazzurdite Stone",
         )
     )
-    enmatter_events = coordinator.process(
+    enmatter_events = coordinator.process_signal(
         ResourceClaimedSignal(
             event_dt=event_dt,
             channel_type=ChannelType.SYSTEM,
@@ -463,7 +525,7 @@ def test_mining_coordinator_ignores_unpaired_resource_claimed_chat_signal() -> N
     coordinator = MiningCoordinator()
     event_dt = datetime(2026, 1, 10, 12, 37, 50)
 
-    events = coordinator.process(
+    events = coordinator.process_signal(
         ResourceClaimedSignal(
             event_dt=event_dt,
             channel_type=ChannelType.SYSTEM,
@@ -476,11 +538,40 @@ def test_mining_coordinator_ignores_unpaired_resource_claimed_chat_signal() -> N
     assert events == []
 
 
+def test_mining_coordinator_expires_stale_pending_claim_deed() -> None:
+    coordinator = MiningCoordinator()
+    deed_dt = datetime(2026, 1, 10, 12, 37, 50)
+    claimed_dt = datetime(2026, 1, 10, 12, 38, 5)
+
+    coordinator.process_signal(
+        ItemReceivedSignal(
+            event_dt=deed_dt,
+            channel_type=ChannelType.SYSTEM,
+            channel_token="System",
+            raw="2026-01-10 12:37:50 [System] [] You received Mineral Resource Deed x (1) Value: 0 PED",
+            item_name="Mineral Resource Deed",
+            qty=1,
+            value_mpec=Mpec(0),
+        )
+    )
+    events = coordinator.process_signal(
+        ResourceClaimedSignal(
+            event_dt=claimed_dt,
+            channel_type=ChannelType.SYSTEM,
+            channel_token="System",
+            raw="2026-01-10 12:38:05 [System] [] You have claimed a resource! (Lysterium Stone)",
+            resource_name="Lysterium Stone",
+        )
+    )
+
+    assert events == []
+
+
 def test_mining_coordinator_defers_resource_depleted_until_claim_lifecycle_can_link_claim() -> None:
     coordinator = MiningCoordinator()
     event_dt = datetime(2026, 1, 10, 12, 37, 50)
 
-    events = coordinator.process(
+    events = coordinator.process_signal(
         ResourceDepletedSignal(
             event_dt=event_dt,
             channel_type=ChannelType.SYSTEM,
@@ -500,7 +591,7 @@ def test_mining_coordinator_depletes_nearest_active_claim() -> None:
     )
     event_dt = datetime(2026, 1, 10, 12, 37, 50)
 
-    coordinator.process(
+    coordinator.process_signal(
         ProbeFiredSignal(
             ts_ms=1_000,
             position=WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None),
@@ -508,7 +599,7 @@ def test_mining_coordinator_depletes_nearest_active_claim() -> None:
             ammo_per_drop=1_000,
         )
     )
-    coordinator.process(
+    coordinator.process_signal(
         FinderHitHintSignal(
             ts_ms=5_000,
             size_label="Minimal",
@@ -516,7 +607,7 @@ def test_mining_coordinator_depletes_nearest_active_claim() -> None:
             resource_name="Lysterium Stone",
         )
     )
-    events = coordinator.process(
+    events = coordinator.process_signal(
         ResourceDepletedSignal(
             event_dt=event_dt,
             channel_type=ChannelType.SYSTEM,
@@ -543,7 +634,7 @@ def test_mining_coordinator_does_not_deplete_far_claim() -> None:
         position_provider=lambda: WorldPos(planet_name="Calypso", x=59_500, y=85_500, z=None),
     )
 
-    coordinator.process(
+    coordinator.process_signal(
         ProbeFiredSignal(
             ts_ms=1_000,
             position=WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None),
@@ -551,7 +642,7 @@ def test_mining_coordinator_does_not_deplete_far_claim() -> None:
             ammo_per_drop=1_000,
         )
     )
-    coordinator.process(
+    coordinator.process_signal(
         FinderHitHintSignal(
             ts_ms=5_000,
             size_label="Minimal",
@@ -559,7 +650,7 @@ def test_mining_coordinator_does_not_deplete_far_claim() -> None:
             resource_name="Lysterium Stone",
         )
     )
-    events = coordinator.process(
+    events = coordinator.process_signal(
         ResourceDepletedSignal(
             event_dt=datetime(2026, 1, 10, 12, 37, 50),
             channel_type=ChannelType.SYSTEM,
@@ -580,6 +671,8 @@ def test_mining_coordinator_depletes_restored_active_claim() -> None:
                 claim_id="claim-1",
                 drop_id="drop-1",
                 hit_id="hit-1",
+                run_id=7,
+                segment_id="segment-1",
                 position=WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None),
                 search_radius_m=55.0,
             )
@@ -587,7 +680,7 @@ def test_mining_coordinator_depletes_restored_active_claim() -> None:
     )
     event_dt = datetime(2026, 1, 10, 12, 37, 50)
 
-    events = coordinator.process(
+    events = coordinator.process_signal(
         ResourceDepletedSignal(
             event_dt=event_dt,
             channel_type=ChannelType.SYSTEM,
@@ -602,13 +695,15 @@ def test_mining_coordinator_depletes_restored_active_claim() -> None:
     assert event.claim_id == "claim-1"
     assert event.drop_id == "drop-1"
     assert event.hit_id == "hit-1"
+    assert event.run_id == 7
+    assert event.segment_id == "segment-1"
 
 
 def test_mining_coordinator_records_item_received_chat_event() -> None:
     coordinator = MiningCoordinator()
     event_dt = datetime(2026, 1, 10, 12, 37, 50)
 
-    events = coordinator.process(
+    events = coordinator.process_signal(
         ItemReceivedSignal(
             event_dt=event_dt,
             channel_type=ChannelType.SYSTEM,
@@ -628,6 +723,28 @@ def test_mining_coordinator_records_item_received_chat_event() -> None:
     assert event.qty == 8
     assert event.value_mpec == Mpec(16_000)
     assert event.extraction_cost_mpec is None
+    assert event.run_id is None
+
+
+def test_mining_coordinator_attaches_active_run_to_item_received_chat_event() -> None:
+    coordinator = MiningCoordinator(run_id_provider=lambda: 7)
+    event_dt = datetime(2026, 1, 10, 12, 37, 50)
+
+    events = coordinator.process_signal(
+        ItemReceivedSignal(
+            event_dt=event_dt,
+            channel_type=ChannelType.SYSTEM,
+            channel_token="System",
+            raw="2026-01-10 12:37:50 [System] [] You received Blue Crystal x (8) Value: 0.1600 PED",
+            item_name="Blue Crystal",
+            qty=8,
+            value_mpec=Mpec(16_000),
+        )
+    )
+
+    event = events[0]
+    assert isinstance(event, MiningItemReceivedEvent)
+    assert event.run_id == 7
 
 
 def test_mining_coordinator_adds_extractor_cost_to_item_received_event() -> None:
@@ -641,7 +758,7 @@ def test_mining_coordinator_adds_extractor_cost_to_item_received_event() -> None
     )
     event_dt = datetime(2026, 1, 10, 12, 37, 50)
 
-    events = coordinator.process(
+    events = coordinator.process_signal(
         ItemReceivedSignal(
             event_dt=event_dt,
             channel_type=ChannelType.SYSTEM,
@@ -666,7 +783,7 @@ def test_mining_coordinator_ignores_unknown_item_received_chat_event(tmp_path: P
     )
     event_dt = datetime(2026, 1, 10, 12, 37, 50)
 
-    events = coordinator.process(
+    events = coordinator.process_signal(
         ItemReceivedSignal(
             event_dt=event_dt,
             channel_type=ChannelType.SYSTEM,
@@ -685,7 +802,7 @@ def test_mining_coordinator_records_enhancer_broke_chat_event() -> None:
     coordinator = MiningCoordinator()
     event_dt = datetime(2026, 1, 10, 12, 37, 50)
 
-    events = coordinator.process(
+    events = coordinator.process_signal(
         EnhancerBrokeSignal(
             event_dt=event_dt,
             channel_type=ChannelType.SYSTEM,

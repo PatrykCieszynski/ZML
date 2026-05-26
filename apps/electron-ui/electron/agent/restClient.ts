@@ -3,17 +3,21 @@ import {
   isRunWireOrNull,
   isRunWire,
   createMiningToolProfileRequestToWire,
+  isAgentHealthWire,
   isActiveMiningToolsWire,
   isMiningClaimWire,
   isMiningDropWire,
+  isMiningLootItemWire,
   isMiningToolProfileWire,
   setActiveMiningToolsRequestToWire,
   startRunRequestToWire,
   stopRunRequestToWire,
   updateRunRequestToWire,
+  wireToAgentHealthDto,
   wireToActiveMiningToolsDto,
   wireToMiningClaimDto,
   wireToMiningDropDto,
+  wireToMiningLootItemDto,
   wireToMiningToolProfileDto,
   wireToRunSegmentDto,
   wireToRunDto,
@@ -22,6 +26,7 @@ import {
   type CreateMiningToolProfileRequest,
   type MiningClaimDto,
   type MiningDropDto,
+  type MiningLootItemDto,
   type MiningToolProfileDto,
   type RunDto,
   type RunSegmentDto,
@@ -45,12 +50,14 @@ export type AgentClient = {
   listRuns: () => Promise<RunDto[]>;
   resumeRun: (runId: number) => Promise<RunDto>;
   updateRun: (runId: number, request: UpdateRunRequest) => Promise<RunDto>;
+  deleteRun: (runId: number) => Promise<RunDto>;
   listActiveRunSegments: () => Promise<RunSegmentDto[]>;
   listRunSegments: (runId: number) => Promise<RunSegmentDto[]>;
   startRun: (request: StartRunRequest) => Promise<RunDto>;
   stopRun: (request: StopRunRequest) => Promise<RunDto>;
   listMiningClaims: (request?: ListMiningClaimsRequest) => Promise<MiningClaimDto[]>;
   listMiningDrops: (request?: ListMiningDropsRequest) => Promise<MiningDropDto[]>;
+  listMiningLoot: (request?: ListMiningLootRequest) => Promise<MiningLootItemDto[]>;
   listMiningTools: () => Promise<MiningToolProfileDto[]>;
   createMiningTool: (request: CreateMiningToolProfileRequest) => Promise<MiningToolProfileDto>;
   deleteMiningTool: (toolId: string) => Promise<void>;
@@ -60,10 +67,19 @@ export type AgentClient = {
 
 export type ListMiningClaimsRequest = {
   active?: boolean;
+  runId?: number;
+  activeRun?: boolean;
 };
 
 export type ListMiningDropsRequest = {
   windowMinutes?: number;
+  runId?: number;
+  activeRun?: boolean;
+};
+
+export type ListMiningLootRequest = {
+  runId?: number;
+  activeRun?: boolean;
 };
 
 export class AgentRestClient implements AgentClient {
@@ -79,10 +95,10 @@ export class AgentRestClient implements AgentClient {
 
   async getHealth(): Promise<AgentHealthDto> {
     const data = await this.getJson("/health");
-    if (!isAgentHealthDto(data)) {
+    if (!isAgentHealthWire(data)) {
       throw new Error("Agent /health returned an invalid payload");
     }
-    return data;
+    return wireToAgentHealthDto(data);
   }
 
   async getActiveRun(): Promise<RunDto | null> {
@@ -116,6 +132,14 @@ export class AgentRestClient implements AgentClient {
     );
     if (!isRunWire(data)) {
       throw new Error("Agent update run returned an invalid payload");
+    }
+    return wireToRunDto(data);
+  }
+
+  async deleteRun(runId: number): Promise<RunDto> {
+    const data = await this.requestJson("DELETE", `/api/v1/runs/${encodeURIComponent(String(runId))}`);
+    if (!isRunWire(data)) {
+      throw new Error("Agent delete run returned an invalid payload");
     }
     return wireToRunDto(data);
   }
@@ -157,6 +181,12 @@ export class AgentRestClient implements AgentClient {
     if (request.active !== undefined) {
       params.set("active", request.active ? "yes" : "no");
     }
+    if (request.runId !== undefined) {
+      params.set("run_id", String(request.runId));
+    }
+    if (request.activeRun !== undefined) {
+      params.set("active_run", request.activeRun ? "yes" : "no");
+    }
 
     const serializedParams = params.toString();
     const query = serializedParams ? `?${serializedParams}` : "";
@@ -172,6 +202,12 @@ export class AgentRestClient implements AgentClient {
     if (request.windowMinutes !== undefined) {
       params.set("window_minutes", String(request.windowMinutes));
     }
+    if (request.runId !== undefined) {
+      params.set("run_id", String(request.runId));
+    }
+    if (request.activeRun !== undefined) {
+      params.set("active_run", request.activeRun ? "yes" : "no");
+    }
 
     const serializedParams = params.toString();
     const query = serializedParams ? `?${serializedParams}` : "";
@@ -180,6 +216,24 @@ export class AgentRestClient implements AgentClient {
       throw new Error("Agent mining drops returned an invalid payload");
     }
     return data.map(wireToMiningDropDto);
+  }
+
+  async listMiningLoot(request: ListMiningLootRequest = {}): Promise<MiningLootItemDto[]> {
+    const params = new URLSearchParams();
+    if (request.runId !== undefined) {
+      params.set("run_id", String(request.runId));
+    }
+    if (request.activeRun !== undefined) {
+      params.set("active_run", request.activeRun ? "yes" : "no");
+    }
+
+    const serializedParams = params.toString();
+    const query = serializedParams ? `?${serializedParams}` : "";
+    const data = await this.getJson(`/api/v1/mining/loot${query}`);
+    if (!Array.isArray(data) || !data.every(isMiningLootItemWire)) {
+      throw new Error("Agent mining loot returned an invalid payload");
+    }
+    return data.map(wireToMiningLootItemDto);
   }
 
   async listMiningTools(): Promise<MiningToolProfileDto[]> {
@@ -284,8 +338,3 @@ function normalizeBaseUrl(baseUrl: string): string {
   return `http://${baseUrl}`;
 }
 
-function isAgentHealthDto(value: unknown): value is AgentHealthDto {
-  if (typeof value !== "object" || value === null) return false;
-  const record = value as Record<string, unknown>;
-  return typeof record.status === "string";
-}

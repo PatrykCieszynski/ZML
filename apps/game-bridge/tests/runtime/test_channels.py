@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from zml_game_bridge.runtime.channels import EventChannel
+import pytest
+
+from zml_game_bridge.runtime.channels import CHANNEL_CLOSED, ChannelClosedError, EventChannel
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,3 +27,19 @@ def test_event_channel_take_timeout_returns_none() -> None:
 
     got = channel.take(timeout_s=0.01)
     assert got is None
+
+
+def test_event_channel_close_returns_closed_sentinel() -> None:
+    channel = EventChannel(maxsize=10)
+
+    channel.close()
+
+    assert channel.take(timeout_s=0.1) is CHANNEL_CLOSED
+
+
+def test_event_channel_rejects_emit_after_close() -> None:
+    channel = EventChannel(maxsize=10)
+    channel.close()
+
+    with pytest.raises(ChannelClosedError):
+        channel.emit(DummyEvent(x=123))  # type: ignore[arg-type]

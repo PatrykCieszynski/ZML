@@ -8,7 +8,7 @@ from pathlib import Path
 from zml_game_bridge.events.base import EventBase
 from zml_game_bridge.events.envelope import EventEnvelope
 from zml_game_bridge.events.serialization import event_payload_json
-from zml_game_bridge.persistence.sqlite import open_sqlite
+from zml_game_bridge.persistence.sqlite import open_read_connection
 
 
 class EventStore:
@@ -66,7 +66,10 @@ class EventReader:
         self._conn: sqlite3.Connection | None = None
 
     def open(self) -> None:
-        self._conn = open_sqlite(self._db_path, check_same_thread=self._check_same_thread)
+        self._conn = open_read_connection(
+            self._db_path,
+            check_same_thread=self._check_same_thread,
+        )
 
     def close(self) -> None:
         if self._conn is not None:

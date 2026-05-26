@@ -1,12 +1,8 @@
 from __future__ import annotations
 
-import sqlite3
-import time
-from collections.abc import Iterator
-from typing import Annotated, cast
+from fastapi import APIRouter, HTTPException
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-
+from zml_game_bridge.api.dependencies import ReadConn, RuntimeDep
 from zml_game_bridge.api.schemas.runs import (
     RunDto,
     RunSegmentDto,
@@ -14,132 +10,83 @@ from zml_game_bridge.api.schemas.runs import (
     StopRunRequestDto,
     UpdateRunRequestDto,
 )
-from zml_game_bridge.persistence.runs import RunSegmentStore, RunStore
-from zml_game_bridge.persistence.schema import ensure_schema
-from zml_game_bridge.persistence.sqlite import open_sqlite
-from zml_game_bridge.runs.state import RunState
+from zml_game_bridge.application.runs.commands import (
+    DeleteRunCommand,
+    InvalidRunCommandError,
+    NoActiveRunError,
+    ResumeRunCommand,
+    RunCommandError,
+    RunNotFoundError,
+    StartRunCommand,
+    StopRunCommand,
+    UpdateRunCommand,
+)
+from zml_game_bridge.persistence.run_state import RunState
+from zml_game_bridge.persistence.runs import RunRow, RunSegmentStore, RunStore
 from zml_game_bridge.runtime.runtime import AppRuntime
+from zml_game_bridge.runtime.runtime_commands import RuntimeCommand
 
 router = APIRouter(prefix="/api/v1/runs", tags=["runs"])
 
 
-def get_run_conn(request: Request) -> Iterator[sqlite3.Connection]:
-    runtime = cast(AppRuntime, request.app.state.runtime)
-    conn = open_sqlite(runtime.db_path, check_same_thread=False)
-    ensure_schema(conn)
-    try:
-        yield conn
-    finally:
-        conn.close()
-
-
-RunConn = Annotated[sqlite3.Connection, Depends(get_run_conn)]
-
-
 @router.post("/start", response_model=RunDto)
-def start_run(request: StartRunRequestDto, conn: RunConn) -> RunDto:
-    name = request.name.strip()
-    if not name:
-        raise HTTPException(status_code=422, detail="Run name must not be empty")
-
-    state = RunState(conn)
-    with conn:
-        run_id = state.create_run(name=name, notes=request.notes, activate=True)
-        row = RunStore(conn).get_run(run_id)
-
-    if row is None:
-        raise HTTPException(status_code=500, detail="Run was not created")
+def start_run(request: StartRunRequestDto, runtime: RuntimeDep) -> RunDto:
+    row = _execute_run_command(runtime, StartRunCommand(name=request.name, notes=request.notes))
     return RunDto.from_row(row)
 
 
 @router.post("/stop", response_model=RunDto)
-def stop_run(request: StopRunRequestDto, conn: RunConn) -> RunDto:
-    store = RunStore(conn)
-    state = RunState(conn)
-
-    run_id = request.run_id if request.run_id is not None else state.try_get_active_run_id()
-    if run_id is None:
-        raise HTTPException(status_code=404, detail="No active run")
-
-    row = store.get_run(run_id)
-    if row is None:
-        raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
-
-    with conn:
-        ts_ms = _now_ms()
-        store.set_run_status(run_id, status="stopped", ts_ms=ts_ms)
-        RunSegmentStore(conn).end_active_for_run(run_id, ended_ts_ms=ts_ms, ts_ms=ts_ms)
-        state.clear_active_run(run_id)
-        stopped = store.get_run(run_id)
-
-    if stopped is None:
-        raise HTTPException(status_code=500, detail="Run disappeared while stopping")
-    return RunDto.from_row(stopped)
+def stop_run(request: StopRunRequestDto, runtime: RuntimeDep) -> RunDto:
+    row = _execute_run_command(runtime, StopRunCommand(run_id=request.run_id))
+    return RunDto.from_row(row)
 
 
 @router.get("", response_model=list[RunDto])
-def list_runs(conn: RunConn, status: str | None = None, limit: int = 200) -> list[RunDto]:
+def list_runs(
+    conn: ReadConn,
+    status: str | None = None,
+    include_deleted: bool = False,
+    limit: int = 200,
+) -> list[RunDto]:
     safe_limit = max(1, min(limit, 1000))
     return [
-        RunDto.from_row(row) for row in RunStore(conn).list_runs(status=status, limit=safe_limit)
+        RunDto.from_row(row)
+        for row in RunStore(conn).list_runs(
+            status=status,
+            include_deleted=include_deleted,
+            limit=safe_limit,
+        )
     ]
 
 
 @router.post("/{run_id}/resume", response_model=RunDto)
-def resume_run(run_id: int, conn: RunConn) -> RunDto:
-    store = RunStore(conn)
-    state = RunState(conn)
-
-    row = store.get_run(run_id)
-    if row is None:
-        raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
-
-    with conn:
-        ts_ms = _now_ms()
-        active_run_id = state.try_get_active_run_id()
-        if active_run_id is not None and active_run_id != run_id:
-            store.set_run_status(active_run_id, status="stopped", ts_ms=ts_ms)
-            RunSegmentStore(conn).end_active_for_run(
-                active_run_id,
-                ended_ts_ms=ts_ms,
-                ts_ms=ts_ms,
-            )
-
-        store.set_run_status(run_id, status="running", ts_ms=ts_ms)
-        state.set_active_run(run_id)
-        resumed = store.get_run(run_id)
-
-    if resumed is None:
-        raise HTTPException(status_code=500, detail="Run disappeared while resuming")
-    return RunDto.from_row(resumed)
+def resume_run(run_id: int, runtime: RuntimeDep) -> RunDto:
+    row = _execute_run_command(runtime, ResumeRunCommand(run_id=run_id))
+    return RunDto.from_row(row)
 
 
 @router.patch("/{run_id}", response_model=RunDto)
-def update_run(run_id: int, request: UpdateRunRequestDto, conn: RunConn) -> RunDto:
-    store = RunStore(conn)
-    row = store.get_run(run_id)
-    if row is None:
-        raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
+def update_run(run_id: int, request: UpdateRunRequestDto, runtime: RuntimeDep) -> RunDto:
+    row = _execute_run_command(
+        runtime,
+        UpdateRunCommand(
+            run_id=run_id,
+            name=request.name,
+            notes=request.notes,
+            notes_set="notes" in request.model_fields_set,
+        ),
+    )
+    return RunDto.from_row(row)
 
-    if request.name is None and "notes" not in request.model_fields_set:
-        raise HTTPException(status_code=422, detail="Run name or notes is required")
 
-    name = request.name.strip() if request.name is not None else None
-    if name is not None and not name:
-        raise HTTPException(status_code=422, detail="Run name must not be empty")
-
-    notes = request.notes if "notes" in request.model_fields_set else row.notes
-    with conn:
-        store.update_run_meta(run_id, name=name, notes=notes, ts_ms=_now_ms())
-        updated = store.get_run(run_id)
-
-    if updated is None:
-        raise HTTPException(status_code=500, detail="Run disappeared while updating")
-    return RunDto.from_row(updated)
+@router.delete("/{run_id}", response_model=RunDto)
+def delete_run(run_id: int, runtime: RuntimeDep) -> RunDto:
+    row = _execute_run_command(runtime, DeleteRunCommand(run_id=run_id))
+    return RunDto.from_row(row)
 
 
 @router.get("/active", response_model=RunDto | None)
-def active_run(conn: RunConn) -> RunDto | None:
+def active_run(conn: ReadConn) -> RunDto | None:
     state = RunState(conn)
     run_id = state.try_get_active_run_id()
     if run_id is None:
@@ -150,7 +97,7 @@ def active_run(conn: RunConn) -> RunDto | None:
 
 
 @router.get("/active/segments", response_model=list[RunSegmentDto])
-def active_run_segments(conn: RunConn) -> list[RunSegmentDto]:
+def active_run_segments(conn: ReadConn) -> list[RunSegmentDto]:
     state = RunState(conn)
     run_id = state.try_get_active_run_id()
     if run_id is None:
@@ -159,7 +106,7 @@ def active_run_segments(conn: RunConn) -> list[RunSegmentDto]:
 
 
 @router.get("/{run_id}/segments", response_model=list[RunSegmentDto])
-def list_run_segments(run_id: int, conn: RunConn) -> list[RunSegmentDto]:
+def list_run_segments(run_id: int, conn: ReadConn) -> list[RunSegmentDto]:
     row = RunStore(conn).get_run(run_id)
     if row is None:
         raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
@@ -168,5 +115,14 @@ def list_run_segments(run_id: int, conn: RunConn) -> list[RunSegmentDto]:
     ]
 
 
-def _now_ms() -> int:
-    return time.time_ns() // 1_000_000
+def _execute_run_command(runtime: AppRuntime, command: RuntimeCommand[RunRow]) -> RunRow:
+    try:
+        return runtime.execute_runtime_command(command)
+    except InvalidRunCommandError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except (NoActiveRunError, RunNotFoundError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except TimeoutError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except RunCommandError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

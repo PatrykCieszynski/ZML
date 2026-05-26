@@ -29,6 +29,7 @@ type ZmlApi = {
   listRuns: () => Promise<RunDto[]>;
   resumeRun: (runId: number) => Promise<RunDto>;
   updateRun: (runId: number, request: UpdateRunRequest) => Promise<RunDto>;
+  deleteRun: (runId: number) => Promise<RunDto>;
   listActiveRunSegments: () => Promise<RunSegmentDto[]>;
   listRunSegments: (runId: number) => Promise<RunSegmentDto[]>;
   toggleMapWindow: () => Promise<boolean>;
@@ -68,6 +69,10 @@ const api: ZmlApi = {
 
   async updateRun(runId, request) {
     return ipcRenderer.invoke(IPC_CMD.UPDATE_RUN, runId, request) as Promise<RunDto>;
+  },
+
+  async deleteRun(runId) {
+    return ipcRenderer.invoke(IPC_CMD.DELETE_RUN, runId) as Promise<RunDto>;
   },
 
   async listActiveRunSegments() {

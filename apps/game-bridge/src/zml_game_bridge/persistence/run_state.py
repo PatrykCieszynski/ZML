@@ -1,4 +1,3 @@
-# zml_game_bridge/runs/state.py
 from __future__ import annotations
 
 import sqlite3
@@ -123,8 +122,11 @@ class RunState:
         )
 
     def _run_exists(self, run_id: int) -> bool:
-        """SELECT 1 FROM runs WHERE run_id=?."""
-        cur = self._conn.execute("SELECT 1 FROM runs WHERE run_id = ?", (run_id,))
+        """Return true only for runs that can be selected as active."""
+        cur = self._conn.execute(
+            "SELECT 1 FROM runs WHERE run_id = ? AND status != 'deleted'",
+            (run_id,),
+        )
         return cur.fetchone() is not None
 
 

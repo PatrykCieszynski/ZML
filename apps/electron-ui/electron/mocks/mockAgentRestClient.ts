@@ -4,6 +4,7 @@ import type {
     CreateMiningToolProfileRequest,
     MiningClaimDto,
     MiningDropDto,
+    MiningLootItemDto,
     MiningToolKind,
     MiningToolProfileDto,
     RunDto,
@@ -18,17 +19,25 @@ import type {
     AgentClient,
     ListMiningClaimsRequest,
     ListMiningDropsRequest,
+    ListMiningLootRequest,
 } from "../agent/restClient.ts";
 
 const MOCK_MINING_CLAIMS: MiningClaimDto[] = [
     createMockMiningClaim("mock-claim-1", Date.now() - 5 * 60_000, 58913, 84653, "Lysterium Stone", "ore"),
     createMockMiningClaim("mock-claim-2", Date.now() - 90_000, 58940, 84667, "Crude Oil", "enmatter"),
+    createMockMiningClaim("mock-claim-3", Date.now() - 18 * 60_000, 58890, 84639, "Belkar Stone", "ore", "depleted"),
 ];
 
 const MOCK_MINING_DROPS: MiningDropDto[] = [
     createMockMiningDrop("mock-drop-1", Date.now() - 9 * 60_000, 58890, 84639, "no_resources"),
     createMockMiningDrop("mock-drop-2", Date.now() - 5 * 60_000, 58913, 84653, "hit"),
     createMockMiningDrop("mock-drop-3", Date.now() - 90_000, 58940, 84667, "pending"),
+];
+
+const MOCK_MINING_LOOT: MiningLootItemDto[] = [
+    createMockMiningLoot(1, Date.now() - 4 * 60_000, "Lysterium Stone", 8, 64_000, 170),
+    createMockMiningLoot(2, Date.now() - 3 * 60_000, "Lysterium Stone", 4, 32_000, 170),
+    createMockMiningLoot(3, Date.now() - 2 * 60_000, "Crude Oil", 12, 120_000, 170),
 ];
 
 export class MockAgentRestClient implements AgentClient {
@@ -52,7 +61,36 @@ export class MockAgentRestClient implements AgentClient {
     };
 
     async getHealth(): Promise<AgentHealthDto> {
-        return { status: "mock" };
+        const now = Date.now();
+        return {
+            status: "running",
+            workers: {
+                db_writer: {
+                    state: "running",
+                    enabled: true,
+                    lastError: null,
+                    lastSeenTsMs: now,
+                },
+                input_coordinator: {
+                    state: "running",
+                    enabled: true,
+                    lastError: null,
+                    lastSeenTsMs: now,
+                },
+                ocr_worker: {
+                    state: "running",
+                    enabled: true,
+                    lastError: null,
+                    lastSeenTsMs: now,
+                },
+                chat_tail: {
+                    state: "running",
+                    enabled: true,
+                    lastError: null,
+                    lastSeenTsMs: now,
+                },
+            },
+        };
     }
 
     async startRun(request: StartRunRequest): Promise<RunDto> {
@@ -100,17 +138,22 @@ export class MockAgentRestClient implements AgentClient {
     }
 
     async listRuns(): Promise<RunDto[]> {
-        return [...this.runs];
+        return this.runs.filter((run) => run.status !== "deleted");
     }
 
     async resumeRun(runId: number): Promise<RunDto> {
+        const current = this.runs.find((run) => run.runId === runId);
+        if (current?.status === "deleted") {
+            throw new Error(`Mock run not found: ${runId}`);
+        }
+
         const now = Date.now();
         this.activeRun = {
             runId,
-            name: `Mock run #${runId}`,
+            name: current?.name ?? `Mock run #${runId}`,
             status: "running",
-            notes: null,
-            createdTsMs: now,
+            notes: current?.notes ?? null,
+            createdTsMs: current?.createdTsMs ?? now,
             updatedTsMs: now,
         };
         this.runs = [this.activeRun, ...this.runs.filter((run) => run.runId !== runId)];
@@ -120,7 +163,7 @@ export class MockAgentRestClient implements AgentClient {
 
     async updateRun(runId: number, request: UpdateRunRequest): Promise<RunDto> {
         const current = this.runs.find((run) => run.runId === runId);
-        if (!current) {
+        if (!current || current.status === "deleted") {
             throw new Error(`Mock run not found: ${runId}`);
         }
 
@@ -138,6 +181,26 @@ export class MockAgentRestClient implements AgentClient {
         return updatedRun;
     }
 
+    async deleteRun(runId: number): Promise<RunDto> {
+        const current = this.runs.find((run) => run.runId === runId);
+        if (!current) {
+            throw new Error(`Mock run not found: ${runId}`);
+        }
+
+        const deletedRun: RunDto = {
+            ...current,
+            status: "deleted",
+            updatedTsMs: Date.now(),
+        };
+
+        this.runs = [deletedRun, ...this.runs.filter((run) => run.runId !== runId)];
+        if (this.activeRun?.runId === runId) {
+            this.activeRun = null;
+            this.runSegments = [];
+        }
+        return deletedRun;
+    }
+
     async listActiveRunSegments(): Promise<RunSegmentDto[]> {
         return this.activeRun === null ? [] : [...this.runSegments];
     }
@@ -148,14 +211,30 @@ export class MockAgentRestClient implements AgentClient {
     }
 
     async listMiningClaims(request: ListMiningClaimsRequest = {}): Promise<MiningClaimDto[]> {
-        if (request.active === false) return MOCK_MINING_CLAIMS;
-        return MOCK_MINING_CLAIMS.filter((claim) => claim.status === "active");
+        if (request.activeRun && this.activeRun === null) return [];
+        const runId = request.activeRun ? this.activeRun?.runId ?? null : request.runId ?? null;
+        const claims = runId === null
+            ? MOCK_MINING_CLAIMS
+            : MOCK_MINING_CLAIMS.filter((claim) => claim.runId === runId);
+        if (request.active === false) return claims;
+        return claims.filter((claim) => claim.status === "active");
     }
 
     async listMiningDrops(request: ListMiningDropsRequest = {}): Promise<MiningDropDto[]> {
-        const windowMs = (request.windowMinutes ?? 30) * 60_000;
+        if (request.activeRun || request.runId !== undefined || request.windowMinutes === undefined) {
+            return [...MOCK_MINING_DROPS];
+        }
+
+        const windowMs = request.windowMinutes * 60_000;
         const cutoff = Date.now() - windowMs;
         return MOCK_MINING_DROPS.filter((drop) => drop.observedTsMs >= cutoff);
+    }
+
+    async listMiningLoot(request: ListMiningLootRequest = {}): Promise<MiningLootItemDto[]> {
+        if (request.activeRun && this.activeRun === null) return [];
+        const runId = request.activeRun ? this.activeRun?.runId ?? null : request.runId ?? null;
+        if (runId === null) return [...MOCK_MINING_LOOT];
+        return MOCK_MINING_LOOT.filter((item) => item.runId === runId);
     }
 
     async listMiningTools(): Promise<MiningToolProfileDto[]> {
@@ -286,6 +365,26 @@ function createMockMiningDrop(
     };
 }
 
+function createMockMiningLoot(
+    eventId: number,
+    createdTsMs: number,
+    itemName: string,
+    qty: number,
+    valueMpec: number,
+    extractionCostMpec: number | null,
+): MiningLootItemDto {
+    return {
+        eventId,
+        createdTsMs,
+        eventDt: new Date(createdTsMs).toISOString(),
+        runId: 1,
+        itemName,
+        qty,
+        valueMpec,
+        extractionCostMpec,
+    };
+}
+
 function createMockMiningClaim(
     claimId: string,
     observedTsMs: number,
@@ -293,12 +392,15 @@ function createMockMiningClaim(
     y: number,
     resourceName: string,
     miningType: MiningClaimDto["miningType"],
+    status: MiningClaimDto["status"] = "active",
 ): MiningClaimDto {
     return {
         claimId,
         createdEventId: -1,
         hitId: `${claimId}-hit`,
         dropId: `${claimId}-drop`,
+        runId: 1,
+        segmentId: "mock-segment-1",
         observedTsMs,
         position: {
             planetName: "Calypso",
@@ -314,10 +416,17 @@ function createMockMiningClaim(
         expectedExpiresTsMs: observedTsMs + 60 * 60_000,
         rangeM: 51.14,
         depthM: 53,
-        status: "active",
-        depletedEventId: null,
-        depletedEventDt: null,
-        depletedPosition: null,
-        depletedDistanceM: null,
+        status,
+        depletedEventId: status === "depleted" ? -2 : null,
+        depletedEventDt: status === "depleted" ? new Date(observedTsMs + 8 * 60_000).toISOString() : null,
+        depletedPosition: status === "depleted"
+            ? {
+                planetName: "Calypso",
+                x: x + 4,
+                y: y + 3,
+                z: null,
+            }
+            : null,
+        depletedDistanceM: status === "depleted" ? 5 : null,
     };
 }

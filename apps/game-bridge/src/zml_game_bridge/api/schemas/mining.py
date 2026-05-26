@@ -6,6 +6,7 @@ from zml_game_bridge.domain.money import mpec_to_int
 from zml_game_bridge.domain.position import WorldPos
 from zml_game_bridge.persistence.mining_claims import MiningClaimRow
 from zml_game_bridge.persistence.mining_drops import MiningDropRow
+from zml_game_bridge.persistence.mining_loot import MiningLootItemRow
 
 
 class MiningDropPositionDto(BaseModel):
@@ -115,6 +116,8 @@ class MiningClaimDto(BaseModel):
     created_event_id: int
     hit_id: str | None
     drop_id: str | None
+    run_id: int | None
+    segment_id: str | None
     observed_ts_ms: int
     position: MiningClaimPositionDto | None
     search_radius_m: float | None
@@ -138,6 +141,8 @@ class MiningClaimDto(BaseModel):
             created_event_id=row.created_event_id,
             hit_id=row.hit_id,
             drop_id=row.drop_id,
+            run_id=row.run_id,
+            segment_id=row.segment_id,
             observed_ts_ms=row.observed_ts_ms,
             position=_claim_position_dto(row.position),
             search_radius_m=row.search_radius_m,
@@ -169,3 +174,33 @@ def _claim_position_dto(position: WorldPos | None) -> MiningClaimPositionDto | N
         if position is not None
         else None
     )
+
+
+class MiningLootItemDto(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    event_id: int
+    created_ts_ms: int
+    event_dt: str | None
+    run_id: int | None
+    item_name: str
+    qty: int
+    value_mpec: int
+    extraction_cost_mpec: int | None
+
+    @classmethod
+    def from_row(cls, row: MiningLootItemRow) -> MiningLootItemDto:
+        return cls(
+            event_id=row.event_id,
+            created_ts_ms=row.created_ts_ms,
+            event_dt=row.event_dt.isoformat() if row.event_dt is not None else None,
+            run_id=row.run_id,
+            item_name=row.item_name,
+            qty=row.qty,
+            value_mpec=mpec_to_int(row.value_mpec),
+            extraction_cost_mpec=(
+                mpec_to_int(row.extraction_cost_mpec)
+                if row.extraction_cost_mpec is not None
+                else None
+            ),
+        )

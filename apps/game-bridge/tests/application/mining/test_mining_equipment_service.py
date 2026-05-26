@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from zml_game_bridge.application.mining.equipment.service import MiningEquipmentService
 from zml_game_bridge.domain.mining_cost import calculate_drop_cost, calculate_extraction_cost
 from zml_game_bridge.domain.money import Mpec, mpec_to_int
-from zml_game_bridge.runtime.mining.tools import MiningToolService
 
 
-def test_mining_tool_service_creates_active_loadout_and_persists_it(tmp_path: Path) -> None:
+def test_mining_equipment_service_creates_active_loadout_and_persists_it(tmp_path: Path) -> None:
     path = tmp_path / "mining_tools.json"
-    service = MiningToolService(path=path)
+    service = MiningEquipmentService(path=path)
 
     finder = service.create_profile(
         kind="finder",
@@ -38,7 +38,7 @@ def test_mining_tool_service_creates_active_loadout_and_persists_it(tmp_path: Pa
         finder_range_enhancer_count=2,
     )
 
-    reloaded = MiningToolService(path=path)
+    reloaded = MiningEquipmentService(path=path)
     active = reloaded.active_tools()
     profile = reloaded.get_equipment_profile()
     drop_cost = calculate_drop_cost(
@@ -60,8 +60,8 @@ def test_mining_tool_service_creates_active_loadout_and_persists_it(tmp_path: Pa
     assert calculate_extraction_cost(profile) == Mpec(125)
 
 
-def test_mining_tool_service_rejects_wrong_kind_as_active_tool(tmp_path: Path) -> None:
-    service = MiningToolService(path=tmp_path / "mining_tools.json")
+def test_mining_equipment_service_rejects_wrong_kind_as_active_tool(tmp_path: Path) -> None:
+    service = MiningEquipmentService(path=tmp_path / "mining_tools.json")
     amp = service.create_profile(
         kind="amp",
         name="Amp",
@@ -82,9 +82,11 @@ def test_mining_tool_service_rejects_wrong_kind_as_active_tool(tmp_path: Path) -
         raise AssertionError("Expected invalid active finder")
 
 
-def test_mining_tool_service_deletes_active_tool_and_clears_active_slot(tmp_path: Path) -> None:
+def test_mining_equipment_service_deletes_active_tool_and_clears_active_slot(
+    tmp_path: Path,
+) -> None:
     path = tmp_path / "mining_tools.json"
-    service = MiningToolService(path=path)
+    service = MiningEquipmentService(path=path)
     finder = service.create_profile(
         kind="finder",
         name="Finder",
@@ -111,12 +113,12 @@ def test_mining_tool_service_deletes_active_tool_and_clears_active_slot(tmp_path
     assert active.extractor_id == extractor.tool_id
     assert active.finder_range_enhancer_count == 0
 
-    reloaded = MiningToolService(path=path)
+    reloaded = MiningEquipmentService(path=path)
     assert reloaded.get_profile(finder.tool_id) is None
     assert reloaded.active_tools().finder_id is None
 
 
-def test_mining_tool_service_delete_unknown_tool_returns_false(tmp_path: Path) -> None:
-    service = MiningToolService(path=tmp_path / "mining_tools.json")
+def test_mining_equipment_service_delete_unknown_tool_returns_false(tmp_path: Path) -> None:
+    service = MiningEquipmentService(path=tmp_path / "mining_tools.json")
 
     assert service.delete_profile("missing-tool") is False

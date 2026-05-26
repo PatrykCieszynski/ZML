@@ -12,6 +12,7 @@ import type {
   WindowType,
 } from "@zml/shared";
 import {
+  deleteRun,
   refreshAgentHealth,
   refreshRuns,
   resumeRun,
@@ -31,11 +32,22 @@ type MainView = "dashboard" | "runs" | "segments" | "loot" | "claims" | "setup" 
 type FeedItem = {
   id: string;
   tsMs: number;
-  kind: "drop" | "hit" | "miss" | "claim";
+  kind: "drop" | "hit" | "miss" | "claim" | "depleted" | "loot";
   title: string;
   detail: string;
   amount?: string;
 };
+
+type DashboardFeedFilter = "activity" | "all" | "drops" | "claims" | "loot";
+
+const DASHBOARD_FEED_FILTERS: Array<{ id: DashboardFeedFilter; label: string }> = [
+  { id: "activity", label: "Activity" },
+  { id: "all", label: "All Events" },
+  { id: "drops", label: "Drops" },
+  { id: "claims", label: "Claims" },
+  { id: "loot", label: "Loot" },
+];
+const MAX_DASHBOARD_FEED_ITEMS = 80;
 
 const NAV_ITEMS: Array<{ id: MainView; label: string }> = [
   { id: "dashboard", label: "Dashboard" },
@@ -77,8 +89,12 @@ export function MainWindow() {
     [state.miningDrops, state.miningClaims, state.miningLoot],
   );
   const feed = useMemo(
-    () => buildFeed(state.miningDrops, state.miningClaims),
-    [state.miningDrops, state.miningClaims],
+    () => buildFeed(state.miningDrops, state.miningClaims, state.miningLoot),
+    [state.miningDrops, state.miningClaims, state.miningLoot],
+  );
+  const activityFeed = useMemo(
+    () => filterFeed(feed, "activity"),
+    [feed],
   );
   const warnings = useMemo(
     () => buildWarnings({
@@ -228,6 +244,14 @@ export function MainWindow() {
                 onResume={(runId) => {
                   void resumeRun(runId);
                 }}
+                onDelete={(run) => {
+                  const confirmed = window.confirm(
+                    `Delete run "${run.name}"?\n\nIt will be hidden from the UI, but its data stays in the database.`,
+                  );
+                  if (confirmed) {
+                    void deleteRun(run.runId);
+                  }
+                }}
               />
             )}
             {view === "segments" && (
@@ -260,7 +284,7 @@ export function MainWindow() {
 
           <aside className="zml-right-panel">
             <WarningsPanel warnings={warnings} />
-            <RecentActivityPanel feed={feed} positionSeq={state.positionEvent?.seq ?? null} />
+            <RecentActivityPanel feed={activityFeed} positionSeq={state.positionEvent?.seq ?? null} />
           </aside>
         </main>
       )}
@@ -323,6 +347,9 @@ function RunSummaryPanel({
       <MetricRow label="Hits" value={String(stats.hitCount)} accent="warn" />
       <MetricRow label="Misses" value={String(stats.noResourceCount)} />
       <MetricRow label="Hit rate" value={formatPercent(stats.hitRate)} />
+      <MetricRow label="Claims" value={String(stats.totalClaimCount)} accent="warn" />
+      <MetricRow label="Extracted" value={String(stats.depletedClaimCount)} />
+      <MetricRow label="Active claims" value={String(stats.activeClaimCount)} accent="gain" />
       <MetricRow label="Cost TT" value={formatPed(stats.totalCostPed)} accent="loss" />
       <MetricRow label="Return TT" value={formatPed(stats.totalReturnPed)} accent="gain" />
       <MetricRow
@@ -330,25 +357,33 @@ function RunSummaryPanel({
         value={formatPed(stats.profitPed)}
         accent={stats.profitPed >= 0 ? "gain" : "loss"}
       />
-      <MetricRow label="Active claims" value={String(stats.activeClaimCount)} accent="gain" />
     </section>
   );
 }
 
 function DashboardFeed({ feed }: { feed: FeedItem[] }) {
+  const [filter, setFilter] = useState<DashboardFeedFilter>("activity");
+  const visibleFeed = useMemo(() => filterFeed(feed, filter), [feed, filter]);
+
   return (
     <section className="zml-work-panel">
       <div className="zml-tabs-inline">
-        <button type="button" className="is-active">All</button>
-        <button type="button">Drops</button>
-        <button type="button">Claims</button>
-        <button type="button">Warnings</button>
+        {DASHBOARD_FEED_FILTERS.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={item.id === filter ? "is-active" : undefined}
+            onClick={() => setFilter(item.id)}
+          >
+            {item.label}
+          </button>
+        ))}
       </div>
-      {feed.length === 0 ? (
+      {visibleFeed.length === 0 ? (
         <EmptyState text="No mining events yet" />
       ) : (
         <div className="zml-feed">
-          {feed.map((item) => (
+          {visibleFeed.map((item) => (
             <div key={item.id} className={`zml-feed-row is-${item.kind}`}>
               <time>{formatTime(item.tsMs)}</time>
               <span className="zml-feed-kind" aria-hidden="true" />
@@ -369,12 +404,14 @@ function RunsView({
   pending,
   onRefresh,
   onResume,
+  onDelete,
 }: {
   runs: RunDto[];
   activeRunId: number | null;
   pending: boolean;
   onRefresh: () => void;
   onResume: (runId: number) => void;
+  onDelete: (run: RunDto) => void;
 }) {
   return (
     <section className="zml-work-panel">
@@ -417,14 +454,24 @@ function RunsView({
                   <td>{run.updatedTsMs === undefined ? "-" : formatTime(run.updatedTsMs)}</td>
                   <td>{run.notes ?? "-"}</td>
                   <td>
-                    <button
-                      type="button"
-                      className="zml-button"
-                      onClick={() => onResume(run.runId)}
-                      disabled={pending || run.runId === activeRunId}
-                    >
-                      Resume
-                    </button>
+                    <div className="zml-table-actions">
+                      <button
+                        type="button"
+                        className="zml-button"
+                        onClick={() => onResume(run.runId)}
+                        disabled={pending || run.runId === activeRunId}
+                      >
+                        Resume
+                      </button>
+                      <button
+                        type="button"
+                        className="zml-button zml-button-danger"
+                        onClick={() => onDelete(run)}
+                        disabled={pending}
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -447,7 +494,11 @@ function SegmentsView({
 }) {
   const segmentRows = segments.map((segment) => {
     const segmentDrops = drops.filter((drop) => drop.segmentId === segment.segmentId);
-    const segmentClaims = claims.filter((claim) => claim.dropId !== null && segmentDrops.some((drop) => drop.dropId === claim.dropId));
+    const segmentDropIds = new Set(segmentDrops.map((drop) => drop.dropId));
+    const segmentClaims = claims.filter((claim) => (
+      claim.segmentId === segment.segmentId ||
+      (claim.segmentId === null && claim.dropId !== null && segmentDropIds.has(claim.dropId))
+    ));
     const costPed = segmentDrops.reduce((sum, drop) => sum + drop.cost.totalMpec, 0) / 100_000;
     return { segment, dropCount: segmentDrops.length, claimCount: segmentClaims.length, costPed };
   });
@@ -473,7 +524,9 @@ function SegmentsView({
                 <th>End</th>
                 <th>Finder</th>
                 <th>Amp</th>
-                <th>Extractor</th>
+                <th>Mode</th>
+                <th>Ammo</th>
+                <th>Probes</th>
                 <th>Drops</th>
                 <th>Claims</th>
                 <th>Cost TT</th>
@@ -492,7 +545,9 @@ function SegmentsView({
                   <td>{segment.endedTsMs === null ? "-" : formatTime(segment.endedTsMs)}</td>
                   <td>{readToolSnapshotName(segment.setupSnapshot, "finder")}</td>
                   <td>{readToolSnapshotName(segment.setupSnapshot, "amp")}</td>
-                  <td>{readToolSnapshotName(segment.setupSnapshot, "extractor")}</td>
+                  <td>{formatSegmentModes(readSnapshotNumber(segment.setupSnapshot, "modes_mask"))}</td>
+                  <td>{formatSnapshotUnits(readSnapshotNumber(segment.setupSnapshot, "ammo_per_drop"))}</td>
+                  <td>{formatSnapshotUnits(readSnapshotNumber(segment.setupSnapshot, "probes_per_drop"))}</td>
                   <td>{dropCount}</td>
                   <td>{claimCount}</td>
                   <td>{formatPed(costPed)}</td>
@@ -508,42 +563,98 @@ function SegmentsView({
 
 function LootView({ loot }: { loot: MiningLootItemDto[] }) {
   const totalMpec = loot.reduce((sum, item) => sum + item.valueMpec, 0);
+  const extractionCostMpec = totalExtractionCostMpec(loot);
+  const netMpec = totalMpec - extractionCostMpec;
+  const rows = useMemo(() => buildLootAggregation(loot), [loot]);
+
   return (
     <section className="zml-work-panel">
       <div className="zml-section-head">
         <div>
           <h2>Loot</h2>
-          <span>Live chat-derived returns</span>
+          <span>Run return aggregation by resource/item</span>
         </div>
         <strong className="zml-section-total">{formatPedFromMpec(totalMpec)}</strong>
       </div>
+      <div className="zml-claim-summary-grid">
+        <ClaimSummaryCard label="Items" value={String(rows.length)} />
+        <ClaimSummaryCard label="Events" value={String(loot.length)} />
+        <ClaimSummaryCard label="Return" value={formatPedFromMpec(totalMpec)} />
+        <ClaimSummaryCard label="Net Return" value={formatPedFromMpec(netMpec)} />
+      </div>
       {loot.length === 0 ? (
-        <EmptyState text="No loot recorded in this UI session" />
+        <EmptyState text="No loot recorded for this run" />
       ) : (
-        <div className="zml-table-wrap">
-          <table className="zml-data-table">
-            <thead>
-              <tr>
-                <th>Time</th>
-                <th>Item</th>
-                <th>Qty</th>
-                <th>Value</th>
-                <th>Extraction cost</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loot.map((item) => (
-                <tr key={`${item.eventId}:${item.createdTsMs}:${item.itemName}`}>
-                  <td>{item.eventDt ?? formatTime(item.createdTsMs)}</td>
-                  <td>{item.itemName}</td>
-                  <td>{item.qty}</td>
-                  <td>{formatPedFromMpec(item.valueMpec)}</td>
-                  <td>{formatPedFromMpec(item.extractionCostMpec)}</td>
+        <>
+          <div className="zml-table-wrap">
+            <table className="zml-data-table">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Events</th>
+                  <th>Qty</th>
+                  <th>Return</th>
+                  <th>Extraction Cost</th>
+                  <th>Net Return</th>
+                  <th>Distribution</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={row.itemName}>
+                    <td>
+                      <strong>{row.itemName}</strong>
+                    </td>
+                    <td>{row.eventCount}</td>
+                    <td>{row.qty}</td>
+                    <td>{formatPedFromMpec(row.valueMpec)}</td>
+                    <td>{formatPedFromMpec(row.extractionCostMpec)}</td>
+                    <td>{formatPedFromMpec(row.netMpec)}</td>
+                    <td>
+                      <div className="zml-distribution-cell">
+                        <div className="zml-distribution-bar" aria-hidden="true">
+                          <span style={{ width: `${row.percent * 100}%` }} />
+                        </div>
+                        <strong>{formatPercent(row.percent)}</strong>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="zml-section-head zml-subsection-head">
+            <div>
+              <h2>Loot History</h2>
+              <span>Raw chat-derived item received events</span>
+            </div>
+          </div>
+          <div className="zml-table-wrap">
+            <table className="zml-data-table">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Item</th>
+                  <th>Qty</th>
+                  <th>Value</th>
+                  <th>Extraction cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loot.map((item) => (
+                  <tr key={`${item.eventId}:${item.createdTsMs}:${item.itemName}`}>
+                    <td>{formatEventTime(item.eventDt, item.createdTsMs)}</td>
+                    <td>{item.itemName}</td>
+                    <td>{item.qty}</td>
+                    <td>{formatPedFromMpec(item.valueMpec)}</td>
+                    <td>{formatPedFromMpec(item.extractionCostMpec)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </section>
   );
@@ -564,11 +675,20 @@ function ClaimsView({ claims }: { claims: MiningClaimDto[] }) {
     () => claims.filter((claim) => claim.status === "active"),
     [claims],
   );
+  const depletedClaims = useMemo(
+    () => claims.filter((claim) => claim.status === "depleted"),
+    [claims],
+  );
+  const filteredHistory = useMemo(
+    () => sortClaimHistory(
+      filter === "all" ? claims : claims.filter((claim) => claim.miningType === filter),
+    ),
+    [claims, filter],
+  );
   const rows = useMemo(
     () => buildClaimDistribution(activeClaims, filter),
     [activeClaims, filter],
   );
-  const totals = useMemo(() => getClaimTypeTotals(activeClaims), [activeClaims]);
   const visibleTotal = rows.reduce((sum, row) => sum + row.count, 0);
 
   return (
@@ -576,7 +696,7 @@ function ClaimsView({ claims }: { claims: MiningClaimDto[] }) {
       <div className="zml-section-head">
         <div>
           <h2>Claims</h2>
-          <span>Active claim distribution</span>
+          <span>Active distribution and run claim history</span>
         </div>
       </div>
       <div className="zml-tabs-inline">
@@ -592,15 +712,22 @@ function ClaimsView({ claims }: { claims: MiningClaimDto[] }) {
         ))}
       </div>
       <div className="zml-claim-summary-grid">
-        <ClaimSummaryCard label="Visible" value={String(visibleTotal)} />
-        <ClaimSummaryCard label="Ore" value={String(totals.ore)} />
-        <ClaimSummaryCard label="Enmatter" value={String(totals.enmatter)} />
-        <ClaimSummaryCard label="Treasure" value={String(totals.treasure)} />
+        <ClaimSummaryCard label="Total" value={String(claims.length)} />
+        <ClaimSummaryCard label="Active" value={String(activeClaims.length)} />
+        <ClaimSummaryCard label="Extracted" value={String(depletedClaims.length)} />
+        <ClaimSummaryCard label="Visible Active" value={String(visibleTotal)} />
+      </div>
+
+      <div className="zml-section-head zml-subsection-head">
+        <div>
+          <h2>Active Distribution</h2>
+          <span>Map-visible claims only</span>
+        </div>
       </div>
       {activeClaims.length === 0 ? (
-        <EmptyState text="No active claims" />
+        <EmptyState text="No active claims" compact />
       ) : rows.length === 0 ? (
-        <EmptyState text="No claims for this filter" />
+        <EmptyState text="No active claims for this filter" compact />
       ) : (
         <div className="zml-table-wrap">
           <table className="zml-data-table">
@@ -630,6 +757,51 @@ function ClaimsView({ claims }: { claims: MiningClaimDto[] }) {
                     </div>
                   </td>
                   <td>{formatExpires(row.nextExpiresTsMs)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="zml-section-head zml-subsection-head">
+        <div>
+          <h2>Claim History</h2>
+          <span>Extracted claims stay here for run and segment stats</span>
+        </div>
+      </div>
+      {filteredHistory.length === 0 ? (
+        <EmptyState text="No claim history for this filter" compact />
+      ) : (
+        <div className="zml-table-wrap">
+          <table className="zml-data-table">
+            <thead>
+              <tr>
+                <th>Found</th>
+                <th>Resource</th>
+                <th>Type</th>
+                <th>Size</th>
+                <th>Status</th>
+                <th>Segment</th>
+                <th>Depleted</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredHistory.map((claim) => (
+                <tr key={claim.claimId}>
+                  <td>{formatTime(claim.observedTsMs)}</td>
+                  <td>
+                    <strong>{claim.resourceName ?? "Unknown resource"}</strong>
+                  </td>
+                  <td>{formatMiningType(claim.miningType)}</td>
+                  <td>{formatSize(claim.sizeLabel, claim.sizeIndex)}</td>
+                  <td>
+                    <span className={claim.status === "active" ? "zml-tag is-active" : "zml-tag"}>
+                      {claim.status === "active" ? "active" : "extracted"}
+                    </span>
+                  </td>
+                  <td>{formatSegmentRef(claim.segmentId)}</td>
+                  <td>{formatClaimDepletion(claim)}</td>
                 </tr>
               ))}
             </tbody>
@@ -852,7 +1024,9 @@ type RunStats = {
   dropCount: number;
   hitCount: number;
   noResourceCount: number;
+  totalClaimCount: number;
   activeClaimCount: number;
+  depletedClaimCount: number;
   hitRate: number | null;
   totalCostPed: number;
   totalReturnPed: number;
@@ -865,6 +1039,16 @@ type ClaimDistributionRow = {
   count: number;
   percent: number;
   nextExpiresTsMs: number | null;
+};
+
+type LootAggregationRow = {
+  itemName: string;
+  eventCount: number;
+  qty: number;
+  valueMpec: number;
+  extractionCostMpec: number;
+  netMpec: number;
+  percent: number;
 };
 
 function getActiveSetup(
@@ -914,27 +1098,40 @@ function buildClaimDistribution(
     .sort((a, b) => b.count - a.count || a.resourceName.localeCompare(b.resourceName));
 }
 
-function getClaimTypeTotals(claims: MiningClaimDto[]): Record<ClaimFilter, number> {
-  const totals: Record<ClaimFilter, number> = {
-    all: claims.length,
-    ore: 0,
-    enmatter: 0,
-    treasure: 0,
-  };
+function buildLootAggregation(loot: MiningLootItemDto[]): LootAggregationRow[] {
+  const totalMpec = loot.reduce((sum, item) => sum + item.valueMpec, 0);
+  const rows = new Map<string, LootAggregationRow>();
 
-  for (const claim of claims) {
-    if (claim.miningType === "ore" || claim.miningType === "enmatter" || claim.miningType === "treasure") {
-      totals[claim.miningType] += 1;
-    }
+  for (const item of loot) {
+    const current = rows.get(item.itemName);
+    const extractionCostMpec = item.extractionCostMpec ?? 0;
+    rows.set(item.itemName, {
+      itemName: item.itemName,
+      eventCount: (current?.eventCount ?? 0) + 1,
+      qty: (current?.qty ?? 0) + item.qty,
+      valueMpec: (current?.valueMpec ?? 0) + item.valueMpec,
+      extractionCostMpec: (current?.extractionCostMpec ?? 0) + extractionCostMpec,
+      netMpec: (current?.netMpec ?? 0) + item.valueMpec - extractionCostMpec,
+      percent: 0,
+    });
   }
 
-  return totals;
+  return [...rows.values()]
+    .map((row) => ({
+      ...row,
+      percent: totalMpec === 0 ? 0 : row.valueMpec / totalMpec,
+    }))
+    .sort((a, b) => b.valueMpec - a.valueMpec || a.itemName.localeCompare(b.itemName));
 }
 
 function minNullableTs(left: number | null, right: number | null): number | null {
   if (left === null) return right;
   if (right === null) return left;
   return Math.min(left, right);
+}
+
+function sortClaimHistory(claims: MiningClaimDto[]): MiningClaimDto[] {
+  return [...claims].sort((a, b) => claimActivityTsMs(b) - claimActivityTsMs(a));
 }
 
 function findToolName(
@@ -950,14 +1147,20 @@ function findToolName(
 function getRunStats(drops: MiningDropDto[], claims: MiningClaimDto[], loot: MiningLootItemDto[]): RunStats {
   const hitCount = drops.filter((drop) => drop.result === "hit").length;
   const noResourceCount = drops.filter((drop) => drop.result === "no_resources").length;
-  const totalCostPed = drops.reduce((sum, drop) => sum + drop.cost.totalMpec, 0) / 100_000;
+  const activeClaimCount = claims.filter((claim) => claim.status === "active").length;
+  const depletedClaimCount = claims.filter((claim) => claim.status === "depleted").length;
+  const totalCostPed =
+    (drops.reduce((sum, drop) => sum + drop.cost.totalMpec, 0) + totalExtractionCostMpec(loot)) /
+    100_000;
   const totalReturnPed = loot.reduce((sum, item) => sum + item.valueMpec, 0) / 100_000;
 
   return {
     dropCount: drops.length,
     hitCount,
     noResourceCount,
-    activeClaimCount: claims.filter((claim) => claim.status === "active").length,
+    totalClaimCount: claims.length,
+    activeClaimCount,
+    depletedClaimCount,
     hitRate: drops.length === 0 ? null : hitCount / drops.length,
     totalCostPed,
     totalReturnPed,
@@ -965,7 +1168,11 @@ function getRunStats(drops: MiningDropDto[], claims: MiningClaimDto[], loot: Min
   };
 }
 
-function buildFeed(drops: MiningDropDto[], claims: MiningClaimDto[]): FeedItem[] {
+function buildFeed(
+  drops: MiningDropDto[],
+  claims: MiningClaimDto[],
+  loot: MiningLootItemDto[],
+): FeedItem[] {
   const items: FeedItem[] = [];
 
   for (const drop of drops) {
@@ -1000,17 +1207,49 @@ function buildFeed(drops: MiningDropDto[], claims: MiningClaimDto[]): FeedItem[]
   }
 
   for (const claim of claims) {
+    const isDepleted = claim.status === "depleted";
     items.push({
-      id: `${claim.claimId}:claim`,
-      tsMs: claim.observedTsMs,
-      kind: "claim",
-      title: "Claim Active",
+      id: `${claim.claimId}:claim:${claim.status}`,
+      tsMs: claimActivityTsMs(claim),
+      kind: isDepleted ? "depleted" : "claim",
+      title: isDepleted ? "Claim Extracted" : "Claim Recorded",
       detail: `${claim.resourceName ?? "Unknown resource"} ${formatSize(claim.sizeLabel, claim.sizeIndex)}`,
-      amount: formatExpires(claim.expectedExpiresTsMs),
+      amount: isDepleted ? formatMeters(claim.depletedDistanceM) : formatExpires(claim.expectedExpiresTsMs),
     });
   }
 
-  return items.sort((a, b) => b.tsMs - a.tsMs).slice(0, 80);
+  for (const item of loot) {
+    items.push({
+      id: `${item.eventId}:${item.createdTsMs}:loot`,
+      tsMs: lootActivityTsMs(item),
+      kind: "loot",
+      title: "Item Received",
+      detail: `${item.itemName} x${item.qty}`,
+      amount: formatPedFromMpec(item.valueMpec),
+    });
+  }
+
+  return items.sort((a, b) => b.tsMs - a.tsMs);
+}
+
+function filterFeed(feed: FeedItem[], filter: DashboardFeedFilter): FeedItem[] {
+  if (filter === "all") return feed.slice(0, MAX_DASHBOARD_FEED_ITEMS);
+  if (filter === "activity") {
+    return feed
+      .filter((item) => item.kind !== "loot" && item.kind !== "hit")
+      .slice(0, MAX_DASHBOARD_FEED_ITEMS);
+  }
+  if (filter === "drops") {
+    return feed
+      .filter((item) => item.kind === "drop" || item.kind === "miss")
+      .slice(0, MAX_DASHBOARD_FEED_ITEMS);
+  }
+  if (filter === "claims") {
+    return feed
+      .filter((item) => item.kind === "hit" || item.kind === "claim" || item.kind === "depleted")
+      .slice(0, MAX_DASHBOARD_FEED_ITEMS);
+  }
+  return feed.filter((item) => item.kind === "loot").slice(0, MAX_DASHBOARD_FEED_ITEMS);
 }
 
 function buildWarnings({
@@ -1072,6 +1311,39 @@ function formatMeters(value: number | null | undefined): string {
   return `${value.toFixed(1)} m`;
 }
 
+function formatSegmentRef(segmentId: string | null): string {
+  if (segmentId === null) return "-";
+  return segmentId.length <= 8 ? segmentId : segmentId.slice(0, 8);
+}
+
+function formatClaimDepletion(claim: MiningClaimDto): string {
+  if (claim.status !== "depleted") return "-";
+  const distance = formatMeters(claim.depletedDistanceM);
+  if (claim.depletedEventDt === null) return distance;
+  const when = formatDateTimeString(claim.depletedEventDt);
+  if (distance === "-") return when;
+  return `${when} / ${distance}`;
+}
+
+function claimActivityTsMs(claim: MiningClaimDto): number {
+  if (claim.status !== "depleted" || claim.depletedEventDt === null) {
+    return claim.observedTsMs;
+  }
+  const parsed = Date.parse(claim.depletedEventDt);
+  return Number.isFinite(parsed) ? parsed : claim.observedTsMs;
+}
+
+function lootActivityTsMs(item: MiningLootItemDto): number {
+  if (item.eventDt === null) return item.createdTsMs;
+  const parsed = Date.parse(item.eventDt);
+  return Number.isFinite(parsed) ? parsed : item.createdTsMs;
+}
+
+function formatDateTimeString(value: string): string {
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? formatTime(parsed) : value;
+}
+
 function formatMiningType(value: MiningResourceType | null): string {
   if (value === "ore") return "Ore";
   if (value === "enmatter") return "Enmatter";
@@ -1083,6 +1355,10 @@ function formatMiningType(value: MiningResourceType | null): string {
 function formatPedFromMpec(value: number | null | undefined): string {
   if (value === null || value === undefined) return "-";
   return formatPed(value / 100_000);
+}
+
+function totalExtractionCostMpec(loot: MiningLootItemDto[]): number {
+  return loot.reduce((sum, item) => sum + (item.extractionCostMpec ?? 0), 0);
 }
 
 function formatPed(value: number): string {
@@ -1102,6 +1378,11 @@ function formatTime(tsMs: number): string {
   });
 }
 
+function formatEventTime(eventDt: string | null, fallbackTsMs: number): string {
+  if (eventDt === null) return formatTime(fallbackTsMs);
+  return formatDateTimeString(eventDt);
+}
+
 function formatExpires(tsMs: number | null): string {
   if (tsMs === null) return "no timer";
   const remainingMs = tsMs - Date.now();
@@ -1113,10 +1394,34 @@ function formatExpires(tsMs: number | null): string {
   return `${hours}h ${minutes.toString().padStart(2, "0")}m`;
 }
 
-function readToolSnapshotName(snapshot: Record<string, unknown>, key: "finder" | "amp" | "extractor"): string {
+function readToolSnapshotName(snapshot: Record<string, unknown>, key: "finder" | "amp"): string {
   const value = snapshot[key];
   if (!isRecord(value)) return key === "amp" ? "No amp" : "-";
   return typeof value.name === "string" ? value.name : "-";
+}
+
+function readSnapshotNumber(snapshot: Record<string, unknown>, key: string): number | null {
+  const value = snapshot[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function formatSegmentModes(mask: number | null): string {
+  if (mask === null) return "-";
+  if (mask === 0) return "None";
+
+  const labels: string[] = [];
+  if ((mask & 1) !== 0) labels.push("Ore");
+  if ((mask & 2) !== 0) labels.push("Enmatter");
+  if ((mask & 4) !== 0) labels.push("Treasure");
+
+  const unknownMask = mask & ~7;
+  if (unknownMask !== 0) labels.push(`Unknown ${unknownMask}`);
+  return labels.length > 0 ? labels.join(" + ") : `Unknown ${mask}`;
+}
+
+function formatSnapshotUnits(value: number | null): string {
+  if (value === null) return "-";
+  return value.toLocaleString();
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
