@@ -272,6 +272,11 @@
   font-size: 13px;
 }
 
+.zml-subsection-head {
+  min-height: 44px;
+  padding-top: 16px;
+}
+
 .zml-section-total {
   color: #40d889;
   font-family: "Cascadia Mono", "Consolas", monospace;
@@ -567,8 +572,16 @@
   background: #8994a3;
 }
 
+.zml-feed-row.is-depleted .zml-feed-kind {
+  background: #40d889;
+}
+
 .zml-feed-row.is-claim b {
   color: #f5d96b;
+}
+
+.zml-feed-row.is-depleted b {
+  color: #40d889;
 }
 
 .zml-warning-list {

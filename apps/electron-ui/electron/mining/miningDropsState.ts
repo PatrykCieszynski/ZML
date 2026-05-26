@@ -9,7 +9,10 @@ import {
     miningDropDtoWithHitHint,
     miningDropDtoWithNoResources,
     type AgentEventEnvelope,
+    type MiningClaimDepletedEventWire,
     type MiningClaimDto,
+    type MiningClaimPositionDto,
+    type MiningClaimPositionWire,
     type MiningDropDto,
 } from "@zml/shared";
 
@@ -44,11 +47,7 @@ export function applyMiningEvent(event: AgentEventEnvelope<string, unknown>): vo
     }
 
     if (event.type === "MiningClaimDepletedEvent" && isMiningClaimDepletedEventWire(event.payload)) {
-        removeMiningClaim({
-            claimId: event.payload.claim_id,
-            dropId: event.payload.drop_id,
-            hitId: event.payload.hit_id,
-        });
+        markMiningClaimDepleted(event.payload, event.eventId ?? null, event.eventDt);
         return;
     }
 
@@ -59,29 +58,30 @@ export function applyMiningEvent(event: AgentEventEnvelope<string, unknown>): vo
 }
 
 function upsertMiningClaim(claim: MiningClaimDto): void {
-    if (claim.status !== "active") return;
     const withoutCurrent = runtime.miningClaims.filter((item) => item.claimId !== claim.claimId);
     runtime.miningClaims = sortClaims([claim, ...withoutCurrent]);
     pushStatePatch({ miningClaims: runtime.miningClaims });
 }
 
-function removeMiningClaim({
-    claimId,
-    dropId,
-    hitId,
-}: {
-    claimId: string;
-    dropId: string | null;
-    hitId: string | null;
-}): void {
-    const nextClaims = runtime.miningClaims.filter((claim) => {
-        if (claim.claimId === claimId) return false;
-        if (dropId !== null && claim.dropId === dropId) return false;
-        if (hitId !== null && claim.hitId === hitId) return false;
-        return true;
-    });
-    if (nextClaims.length === runtime.miningClaims.length) return;
-    runtime.miningClaims = nextClaims;
+function markMiningClaimDepleted(
+    payload: MiningClaimDepletedEventWire,
+    eventId: number | null,
+    eventDt: string | null,
+): void {
+    const hasClaim = runtime.miningClaims.some((claim) => claim.claimId === payload.claim_id);
+    if (!hasClaim) return;
+
+    runtime.miningClaims = sortClaims(runtime.miningClaims.map((claim) => {
+        if (claim.claimId !== payload.claim_id) return claim;
+        return {
+            ...claim,
+            status: "depleted",
+            depletedEventId: eventId,
+            depletedEventDt: eventDt,
+            depletedPosition: wireToClaimPosition(payload.position),
+            depletedDistanceM: payload.distance_m,
+        };
+    }));
     pushStatePatch({ miningClaims: runtime.miningClaims });
 }
 
@@ -113,7 +113,14 @@ function sortDrops(drops: MiningDropDto[]): MiningDropDto[] {
 }
 
 function sortClaims(claims: MiningClaimDto[]): MiningClaimDto[] {
-    return claims
-        .filter((claim) => claim.status === "active")
-        .sort((a, b) => b.observedTsMs - a.observedTsMs);
+    return claims.sort((a, b) => b.observedTsMs - a.observedTsMs);
+}
+
+function wireToClaimPosition(wire: MiningClaimPositionWire): MiningClaimPositionDto {
+    return {
+        planetName: wire.planet_name ?? "",
+        x: wire.x,
+        y: wire.y,
+        z: wire.z ?? null,
+    };
 }

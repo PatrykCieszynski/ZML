@@ -67,7 +67,7 @@ export function registerIpc({ agentRestClient, toggleMapWindow, toggleOverlayWin
             return activeRun;
         }
         replaceActiveRun(activeRun);
-        replaceMiningClaims(await agentRestClient.listMiningClaims({ active: true, runId: activeRun.runId }));
+        replaceMiningClaims(await agentRestClient.listMiningClaims({ active: false, runId: activeRun.runId }));
         replaceMiningDrops(await agentRestClient.listMiningDrops({ runId: activeRun.runId }));
         return activeRun;
     });
@@ -87,7 +87,7 @@ export function registerIpc({ agentRestClient, toggleMapWindow, toggleOverlayWin
         const [runs, runSegments, miningClaims, miningDrops] = await Promise.all([
             agentRestClient.listRuns(),
             agentRestClient.listActiveRunSegments(),
-            agentRestClient.listMiningClaims({ active: true, runId }),
+            agentRestClient.listMiningClaims({ active: false, runId }),
             agentRestClient.listMiningDrops({ runId }),
         ]);
         runtime.activeRun = activeRun;
@@ -141,8 +141,9 @@ export function registerIpc({ agentRestClient, toggleMapWindow, toggleOverlayWin
         runtime.activeRun = activeRun;
         runtime.runs = runs;
         runtime.runSegments = [];
+        runtime.miningClaims = [];
         runtime.miningDrops = [];
-        pushStatePatch({ activeRun, runs, runSegments: [], miningDrops: [] });
+        pushStatePatch({ activeRun, runs, runSegments: [], miningClaims: [], miningDrops: [] });
         return activeRun;
     });
 
@@ -155,8 +156,9 @@ export function registerIpc({ agentRestClient, toggleMapWindow, toggleOverlayWin
         runtime.activeRun = null;
         runtime.runs = runs;
         runtime.runSegments = [];
+        runtime.miningClaims = [];
         runtime.miningDrops = [];
-        pushStatePatch({ activeRun: null, runs, runSegments: [], miningDrops: [] });
+        pushStatePatch({ activeRun: null, runs, runSegments: [], miningClaims: [], miningDrops: [] });
         return stoppedRun;
     });
 
