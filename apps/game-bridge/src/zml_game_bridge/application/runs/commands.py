@@ -93,6 +93,8 @@ class ResumeRunCommand(RuntimeCommand[RunRow], DbCommand[RunRow]):
         row = store.get_run(self.run_id)
         if row is None:
             raise RunNotFoundError(self.run_id)
+        if row.status == "deleted":
+            raise RunNotFoundError(self.run_id)
 
         ts_ms = _now_ms()
         active_run_id = state.try_get_active_run_id()
@@ -114,6 +116,29 @@ class ResumeRunCommand(RuntimeCommand[RunRow], DbCommand[RunRow]):
 
 
 @dataclass(frozen=True, slots=True)
+class DeleteRunCommand(RuntimeCommand[RunRow], DbCommand[RunRow]):
+    run_id: int
+
+    def execute(self, conn: sqlite3.Connection) -> RunRow:
+        store = RunStore(conn)
+        state = RunState(conn)
+
+        row = store.get_run(self.run_id)
+        if row is None:
+            raise RunNotFoundError(self.run_id)
+
+        ts_ms = _now_ms()
+        RunSegmentStore(conn).end_active_for_run(self.run_id, ended_ts_ms=ts_ms, ts_ms=ts_ms)
+        state.clear_active_run(self.run_id)
+        store.mark_run_deleted(self.run_id, ts_ms=ts_ms)
+        deleted = store.get_run(self.run_id)
+
+        if deleted is None:
+            raise RuntimeError("Run disappeared while soft-deleting")
+        return deleted
+
+
+@dataclass(frozen=True, slots=True)
 class UpdateRunCommand(RuntimeCommand[RunRow], DbCommand[RunRow]):
     run_id: int
     name: str | None = None
@@ -124,6 +149,8 @@ class UpdateRunCommand(RuntimeCommand[RunRow], DbCommand[RunRow]):
         store = RunStore(conn)
         row = store.get_run(self.run_id)
         if row is None:
+            raise RunNotFoundError(self.run_id)
+        if row.status == "deleted":
             raise RunNotFoundError(self.run_id)
 
         if self.name is None and not self.notes_set:

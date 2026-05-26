@@ -50,6 +50,7 @@ export type AgentClient = {
   listRuns: () => Promise<RunDto[]>;
   resumeRun: (runId: number) => Promise<RunDto>;
   updateRun: (runId: number, request: UpdateRunRequest) => Promise<RunDto>;
+  deleteRun: (runId: number) => Promise<RunDto>;
   listActiveRunSegments: () => Promise<RunSegmentDto[]>;
   listRunSegments: (runId: number) => Promise<RunSegmentDto[]>;
   startRun: (request: StartRunRequest) => Promise<RunDto>;
@@ -131,6 +132,14 @@ export class AgentRestClient implements AgentClient {
     );
     if (!isRunWire(data)) {
       throw new Error("Agent update run returned an invalid payload");
+    }
+    return wireToRunDto(data);
+  }
+
+  async deleteRun(runId: number): Promise<RunDto> {
+    const data = await this.requestJson("DELETE", `/api/v1/runs/${encodeURIComponent(String(runId))}`);
+    if (!isRunWire(data)) {
+      throw new Error("Agent delete run returned an invalid payload");
     }
     return wireToRunDto(data);
   }

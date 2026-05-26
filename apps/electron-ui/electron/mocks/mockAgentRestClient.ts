@@ -138,17 +138,22 @@ export class MockAgentRestClient implements AgentClient {
     }
 
     async listRuns(): Promise<RunDto[]> {
-        return [...this.runs];
+        return this.runs.filter((run) => run.status !== "deleted");
     }
 
     async resumeRun(runId: number): Promise<RunDto> {
+        const current = this.runs.find((run) => run.runId === runId);
+        if (current?.status === "deleted") {
+            throw new Error(`Mock run not found: ${runId}`);
+        }
+
         const now = Date.now();
         this.activeRun = {
             runId,
-            name: `Mock run #${runId}`,
+            name: current?.name ?? `Mock run #${runId}`,
             status: "running",
-            notes: null,
-            createdTsMs: now,
+            notes: current?.notes ?? null,
+            createdTsMs: current?.createdTsMs ?? now,
             updatedTsMs: now,
         };
         this.runs = [this.activeRun, ...this.runs.filter((run) => run.runId !== runId)];
@@ -158,7 +163,7 @@ export class MockAgentRestClient implements AgentClient {
 
     async updateRun(runId: number, request: UpdateRunRequest): Promise<RunDto> {
         const current = this.runs.find((run) => run.runId === runId);
-        if (!current) {
+        if (!current || current.status === "deleted") {
             throw new Error(`Mock run not found: ${runId}`);
         }
 
@@ -174,6 +179,26 @@ export class MockAgentRestClient implements AgentClient {
             this.activeRun = updatedRun;
         }
         return updatedRun;
+    }
+
+    async deleteRun(runId: number): Promise<RunDto> {
+        const current = this.runs.find((run) => run.runId === runId);
+        if (!current) {
+            throw new Error(`Mock run not found: ${runId}`);
+        }
+
+        const deletedRun: RunDto = {
+            ...current,
+            status: "deleted",
+            updatedTsMs: Date.now(),
+        };
+
+        this.runs = [deletedRun, ...this.runs.filter((run) => run.runId !== runId)];
+        if (this.activeRun?.runId === runId) {
+            this.activeRun = null;
+            this.runSegments = [];
+        }
+        return deletedRun;
     }
 
     async listActiveRunSegments(): Promise<RunSegmentDto[]> {

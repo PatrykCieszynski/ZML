@@ -12,6 +12,7 @@ import type {
   WindowType,
 } from "@zml/shared";
 import {
+  deleteRun,
   refreshAgentHealth,
   refreshRuns,
   resumeRun,
@@ -243,6 +244,14 @@ export function MainWindow() {
                 onResume={(runId) => {
                   void resumeRun(runId);
                 }}
+                onDelete={(run) => {
+                  const confirmed = window.confirm(
+                    `Delete run "${run.name}"?\n\nIt will be hidden from the UI, but its data stays in the database.`,
+                  );
+                  if (confirmed) {
+                    void deleteRun(run.runId);
+                  }
+                }}
               />
             )}
             {view === "segments" && (
@@ -395,12 +404,14 @@ function RunsView({
   pending,
   onRefresh,
   onResume,
+  onDelete,
 }: {
   runs: RunDto[];
   activeRunId: number | null;
   pending: boolean;
   onRefresh: () => void;
   onResume: (runId: number) => void;
+  onDelete: (run: RunDto) => void;
 }) {
   return (
     <section className="zml-work-panel">
@@ -443,14 +454,24 @@ function RunsView({
                   <td>{run.updatedTsMs === undefined ? "-" : formatTime(run.updatedTsMs)}</td>
                   <td>{run.notes ?? "-"}</td>
                   <td>
-                    <button
-                      type="button"
-                      className="zml-button"
-                      onClick={() => onResume(run.runId)}
-                      disabled={pending || run.runId === activeRunId}
-                    >
-                      Resume
-                    </button>
+                    <div className="zml-table-actions">
+                      <button
+                        type="button"
+                        className="zml-button"
+                        onClick={() => onResume(run.runId)}
+                        disabled={pending || run.runId === activeRunId}
+                      >
+                        Resume
+                      </button>
+                      <button
+                        type="button"
+                        className="zml-button zml-button-danger"
+                        onClick={() => onDelete(run)}
+                        disabled={pending}
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

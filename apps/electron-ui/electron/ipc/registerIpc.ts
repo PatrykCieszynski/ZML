@@ -120,6 +120,35 @@ export function registerIpc({ agentRestClient, toggleMapWindow, toggleOverlayWin
         return activeRun;
     });
 
+    ipcMain.handle(IPC_CMD.DELETE_RUN, async (_evt, runId: unknown) => {
+        if (typeof runId !== "number" || !Number.isFinite(runId)) {
+            throw new Error("Invalid delete run request");
+        }
+        const wasActive = runtime.activeRun?.runId === runId;
+        const deletedRun = await agentRestClient.deleteRun(runId);
+        const runs = await agentRestClient.listRuns();
+        runtime.runs = runs;
+
+        if (wasActive) {
+            runtime.activeRun = null;
+            runtime.runSegments = [];
+            runtime.miningClaims = [];
+            runtime.miningDrops = [];
+            runtime.miningLoot = [];
+            pushStatePatch({
+                activeRun: null,
+                runs,
+                runSegments: [],
+                miningClaims: [],
+                miningDrops: [],
+                miningLoot: [],
+            });
+        } else {
+            pushStatePatch({ runs });
+        }
+        return deletedRun;
+    });
+
     ipcMain.handle(IPC_CMD.LIST_ACTIVE_RUN_SEGMENTS, async () => {
         const runSegments = await agentRestClient.listActiveRunSegments();
         replaceRunSegments(runSegments);

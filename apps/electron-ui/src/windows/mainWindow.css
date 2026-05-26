@@ -152,6 +152,16 @@
   border-color: #41d486;
 }
 
+.zml-button-danger {
+  color: #ffdce0;
+  border-color: #6f2f35;
+  background: #251117;
+}
+
+.zml-button-danger:hover {
+  border-color: #d64e5a;
+}
+
 .zml-run-name {
   display: grid;
   grid-template-columns: auto minmax(220px, 360px);
@@ -645,6 +655,12 @@
 
 .zml-data-table td {
   color: #e6eefb;
+}
+
+.zml-table-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .zml-tag {

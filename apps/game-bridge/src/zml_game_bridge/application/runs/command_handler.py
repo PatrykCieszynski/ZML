@@ -4,6 +4,7 @@ from collections.abc import Callable
 from typing import Any, TypeVar, cast
 
 from zml_game_bridge.application.runs.commands import (
+    DeleteRunCommand,
     ResumeRunCommand,
     StartRunCommand,
     StopRunCommand,
@@ -35,7 +36,11 @@ class RunCommandHandler:
     def process_command(self, command: RuntimeCommand[T]) -> RuntimeCommandResult[T]:
         if isinstance(
             command,
-            StartRunCommand | StopRunCommand | ResumeRunCommand | UpdateRunCommand,
+            StartRunCommand
+            | StopRunCommand
+            | ResumeRunCommand
+            | UpdateRunCommand
+            | DeleteRunCommand,
         ):
             result = self._db_command_executor(cast(DbCommand[RunRow], command))
             return cast(RuntimeCommandResult[T], RuntimeCommandResult(value=result))

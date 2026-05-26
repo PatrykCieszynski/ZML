@@ -6,6 +6,7 @@ from typing import Any, cast
 
 from zml_game_bridge.api.routes.runs import (
     active_run,
+    delete_run,
     list_runs,
     resume_run,
     start_run,
@@ -99,5 +100,44 @@ def test_update_run_name(tmp_path: Path) -> None:
         assert updated.run_id == started.run_id
         assert updated.name == "New name"
         assert updated.notes == "keep"
+    finally:
+        conn.close()
+
+
+def test_delete_run_marks_deleted_and_hides_from_default_list(tmp_path: Path) -> None:
+    conn = _open_test_db(tmp_path)
+    runtime: Any = _RuntimeStub(conn)
+    try:
+        first = start_run(StartRunRequestDto(name="First"), runtime)
+        second = start_run(StartRunRequestDto(name="Second"), runtime)
+
+        deleted = delete_run(first.run_id, runtime)
+
+        assert deleted.run_id == first.run_id
+        assert deleted.status == "deleted"
+        assert [row.run_id for row in list_runs(conn)] == [second.run_id]
+        assert {row.run_id for row in list_runs(conn, include_deleted=True)} == {
+            first.run_id,
+            second.run_id,
+        }
+
+        resumed = resume_run(second.run_id, runtime)
+
+        assert resumed.run_id == second.run_id
+        assert active_run(conn) is not None
+    finally:
+        conn.close()
+
+
+def test_delete_active_run_clears_active_run(tmp_path: Path) -> None:
+    conn = _open_test_db(tmp_path)
+    runtime: Any = _RuntimeStub(conn)
+    try:
+        started = start_run(StartRunRequestDto(name="Active"), runtime)
+
+        deleted = delete_run(started.run_id, runtime)
+
+        assert deleted.status == "deleted"
+        assert active_run(conn) is None
     finally:
         conn.close()

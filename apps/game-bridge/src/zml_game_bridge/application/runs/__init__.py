@@ -1,4 +1,5 @@
 from zml_game_bridge.application.runs.commands import (
+    DeleteRunCommand,
     InvalidRunCommandError,
     NoActiveRunError,
     ResumeRunCommand,
@@ -10,6 +11,7 @@ from zml_game_bridge.application.runs.commands import (
 )
 
 __all__ = [
+    "DeleteRunCommand",
     "InvalidRunCommandError",
     "NoActiveRunError",
     "ResumeRunCommand",

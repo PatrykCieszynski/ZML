@@ -11,6 +11,7 @@ from zml_game_bridge.api.schemas.runs import (
     UpdateRunRequestDto,
 )
 from zml_game_bridge.application.runs.commands import (
+    DeleteRunCommand,
     InvalidRunCommandError,
     NoActiveRunError,
     ResumeRunCommand,
@@ -41,10 +42,20 @@ def stop_run(request: StopRunRequestDto, runtime: RuntimeDep) -> RunDto:
 
 
 @router.get("", response_model=list[RunDto])
-def list_runs(conn: ReadConn, status: str | None = None, limit: int = 200) -> list[RunDto]:
+def list_runs(
+    conn: ReadConn,
+    status: str | None = None,
+    include_deleted: bool = False,
+    limit: int = 200,
+) -> list[RunDto]:
     safe_limit = max(1, min(limit, 1000))
     return [
-        RunDto.from_row(row) for row in RunStore(conn).list_runs(status=status, limit=safe_limit)
+        RunDto.from_row(row)
+        for row in RunStore(conn).list_runs(
+            status=status,
+            include_deleted=include_deleted,
+            limit=safe_limit,
+        )
     ]
 
 
@@ -65,6 +76,12 @@ def update_run(run_id: int, request: UpdateRunRequestDto, runtime: RuntimeDep) -
             notes_set="notes" in request.model_fields_set,
         ),
     )
+    return RunDto.from_row(row)
+
+
+@router.delete("/{run_id}", response_model=RunDto)
+def delete_run(run_id: int, runtime: RuntimeDep) -> RunDto:
+    row = _execute_run_command(runtime, DeleteRunCommand(run_id=run_id))
     return RunDto.from_row(row)
 
 

@@ -82,13 +82,21 @@ class RunStore:
         row = cur.fetchone()
         return _row_to_run(row) if row is not None else None
 
-    def list_runs(self, *, status: str | None = None, limit: int = 200) -> list[RunRow]:
+    def list_runs(
+        self,
+        *,
+        status: str | None = None,
+        include_deleted: bool = False,
+        limit: int = 200,
+    ) -> list[RunRow]:
         """List runs, optionally filtered by status."""
         if status is None:
+            where_clause = "" if include_deleted else "WHERE status != 'deleted'"
             cur = self._conn.execute(
-                """
+                f"""
                 SELECT run_id, name, notes, status, created_ts_ms, updated_ts_ms
                 FROM runs
+                {where_clause}
                 ORDER BY updated_ts_ms DESC, run_id DESC
                 LIMIT ?
                 """,
@@ -138,9 +146,9 @@ class RunStore:
             (status, ts_ms, run_id),
         )
 
-    def delete_run(self, run_id: int) -> None:
-        """Delete a run and let foreign-key cascades handle dependent rows."""
-        self._conn.execute("DELETE FROM runs WHERE run_id = ?", (run_id,))
+    def mark_run_deleted(self, run_id: int, *, ts_ms: int) -> None:
+        """Soft-delete a run; dependent rows remain available for recovery/history."""
+        self.set_run_status(run_id, status="deleted", ts_ms=ts_ms)
 
     def calc_total_cost_mpec(self, run_id: int) -> Mpec:
         """SUM(total_cost_mpec) over projected mining drops for the run."""
