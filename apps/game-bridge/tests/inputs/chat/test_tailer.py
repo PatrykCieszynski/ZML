@@ -48,6 +48,51 @@ def _q_expect_no_item(q: queue.Queue[str], timeout_s: float = 0.2) -> None:
     raise AssertionError(f"Expected no item, but got: {item!r}")
 
 
+def _wait_until_tailer_observes_new_lines(
+    *,
+    path: Path,
+    out: queue.Queue[str],
+    timeout_s: float = 2.0,
+) -> None:
+    """
+    Synchronize tests with a tailer running in start_at_end mode.
+
+    The tailer may start after the first appended line and skip it due to
+    start_at_end=True. Keep appending sentinel lines until one is observed.
+    """
+    prefix = "__TAILER_READY__"
+    writer = ChatLogWriter(path)
+    attempts = max(1, int(timeout_s / 0.05))
+
+    for attempt in range(attempts):
+        marker = f"{prefix}{attempt}"
+        writer.append(marker)
+
+        try:
+            item = out.get(timeout=0.05)
+        except queue.Empty:
+            continue
+
+        if not item.startswith(prefix):
+            raise AssertionError(f"Unexpected line while waiting for tailer readiness: {item!r}")
+
+        _drain_tailer_ready_markers(out, prefix=prefix)
+        return
+
+    raise AssertionError("Timed out waiting until tailer observes new lines")
+
+
+def _drain_tailer_ready_markers(q: queue.Queue[str], *, prefix: str) -> None:
+    while True:
+        try:
+            item = q.get(timeout=0.05)
+        except queue.Empty:
+            return
+
+        if not item.startswith(prefix):
+            raise AssertionError(f"Unexpected non-readiness line: {item!r}")
+
+
 @pytest.fixture()
 def chat_log(tmp_path: Path) -> Path:
     return tmp_path / "chat.log"
@@ -74,7 +119,8 @@ def test_ignores_existing_lines_when_start_at_end_true(chat_log: Path) -> None:
 
     t, stop, out = _start_tailer_thread(path=chat_log, start_at_end=True)
     try:
-        _q_expect_no_item(out, timeout_s=0.2)
+        _wait_until_tailer_observes_new_lines(path=chat_log, out=out)
+
         w.append("NEW1")
         assert _q_get(out) == "NEW1"
     finally:
@@ -87,6 +133,8 @@ def test_emits_lines_appended_later(chat_log: Path) -> None:
 
     t, stop, out = _start_tailer_thread(path=chat_log, start_at_end=True)
     try:
+        _wait_until_tailer_observes_new_lines(path=chat_log, out=out)
+
         w.append("A")
         w.append("B")
         assert _q_get(out) == "A"
@@ -100,10 +148,41 @@ def test_does_not_emit_partial_line_until_newline(chat_log: Path) -> None:
     """
     Chat logs can be written in chunks. Tailing must only emit complete lines.
     """
+    chat_log.parent.mkdir(parents=True, exist_ok=True)
+    chat_log.write_text("", encoding="utf-8")
+
+    t, stop, out = _start_tailer_thread(path=chat_log, start_at_end=False)
+    try:
+        with chat_log.open("a", encoding="utf-8", newline="\n") as f:
+            f.write("PARTIAL")
+            f.flush()
+
+        _q_expect_no_item(out, timeout_s=0.2)
+
+        with chat_log.open("a", encoding="utf-8", newline="\n") as f:
+            f.write("\n")
+            f.flush()
+
+        assert _q_get(out) == "PARTIAL"
+    finally:
+        stop.set()
+        t.join(timeout=1)
+
+
+def test_start_at_end_true_does_not_emit_partial_line_until_newline(
+    chat_log: Path,
+) -> None:
+    """
+    start_at_end=True ignores existing content, but newly appended partial lines
+    must still be buffered until a newline is written.
+    """
+    w = ChatLogWriter(chat_log)
+    w.append("OLD")
+
     t, stop, out = _start_tailer_thread(path=chat_log, start_at_end=True)
     try:
-        # write partial without newline (bypass ChatLogWriter.append)
-        chat_log.parent.mkdir(parents=True, exist_ok=True)
+        _wait_until_tailer_observes_new_lines(path=chat_log, out=out)
+
         with chat_log.open("a", encoding="utf-8", newline="\n") as f:
             f.write("PARTIAL")
             f.flush()
