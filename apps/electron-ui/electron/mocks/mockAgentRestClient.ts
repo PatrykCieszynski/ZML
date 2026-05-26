@@ -177,8 +177,12 @@ export class MockAgentRestClient implements AgentClient {
     }
 
     async listMiningClaims(request: ListMiningClaimsRequest = {}): Promise<MiningClaimDto[]> {
-        if (request.active === false) return MOCK_MINING_CLAIMS;
-        return MOCK_MINING_CLAIMS.filter((claim) => claim.status === "active");
+        const runId = request.activeRun ? this.activeRun?.runId ?? null : request.runId ?? null;
+        const claims = runId === null
+            ? MOCK_MINING_CLAIMS
+            : MOCK_MINING_CLAIMS.filter((claim) => claim.runId === runId);
+        if (request.active === false) return claims;
+        return claims.filter((claim) => claim.status === "active");
     }
 
     async listMiningDrops(request: ListMiningDropsRequest = {}): Promise<MiningDropDto[]> {
@@ -332,6 +336,8 @@ function createMockMiningClaim(
         createdEventId: -1,
         hitId: `${claimId}-hit`,
         dropId: `${claimId}-drop`,
+        runId: 1,
+        segmentId: "mock-segment-1",
         observedTsMs,
         position: {
             planetName: "Calypso",

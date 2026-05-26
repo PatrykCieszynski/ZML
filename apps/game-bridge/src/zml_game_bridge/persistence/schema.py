@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 SCHEMA_DDL = """
 -- =========================
@@ -117,6 +117,8 @@ CREATE TABLE IF NOT EXISTS mining_claims (
 
     hit_id                  TEXT,
     drop_id                 TEXT,
+    run_id                  INTEGER REFERENCES runs(run_id) ON DELETE SET NULL,
+    segment_id              TEXT REFERENCES run_segments(segment_id) ON DELETE SET NULL,
     observed_ts_ms          INTEGER NOT NULL,
 
     planet_name             TEXT,
@@ -190,6 +192,21 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
             )
     if user_version < 8 and not _column_exists(conn, "mining_claims", "mining_type"):
         conn.execute("ALTER TABLE mining_claims ADD COLUMN mining_type TEXT")
+    if user_version < 9:
+        if not _column_exists(conn, "mining_claims", "run_id"):
+            conn.execute(
+                "ALTER TABLE mining_claims ADD COLUMN run_id INTEGER REFERENCES runs(run_id) ON DELETE SET NULL"
+            )
+        if not _column_exists(conn, "mining_claims", "segment_id"):
+            conn.execute(
+                "ALTER TABLE mining_claims ADD COLUMN segment_id TEXT REFERENCES run_segments(segment_id) ON DELETE SET NULL"
+            )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_mining_claims_run_id ON mining_claims(run_id, observed_ts_ms)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_mining_claims_segment_id ON mining_claims(segment_id, observed_ts_ms)"
+    )
     if user_version < SCHEMA_VERSION:
         conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
     conn.commit()

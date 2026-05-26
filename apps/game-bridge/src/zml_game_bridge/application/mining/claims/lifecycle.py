@@ -27,6 +27,8 @@ class ActiveClaim:
     claim_id: str
     drop_id: str | None
     hit_id: str | None
+    run_id: int | None
+    segment_id: str | None
     position: WorldPos | None
     search_radius_m: float | None
 
@@ -84,6 +86,8 @@ class ClaimLifecycleCorrelator:
         claim_id = self._id_factory()
         position = event.position if event.position is not None else drop.position if drop else None
         search_radius_m = drop.drop_radius_m if drop is not None else None
+        run_id = drop.run_id if drop is not None else None
+        segment_id = drop.segment_id if drop is not None else None
 
         created = MiningClaimCreatedEvent(
             claim_id=claim_id,
@@ -99,11 +103,15 @@ class ClaimLifecycleCorrelator:
             expected_expires_ts_ms=event.expected_expires_ts_ms,
             range_m=event.range_m,
             depth_m=event.depth_m,
+            run_id=run_id,
+            segment_id=segment_id,
         )
         self._active_claims[claim_id] = ActiveClaim(
             claim_id=claim_id,
             drop_id=event.drop_id,
             hit_id=event.hit_id,
+            run_id=run_id,
+            segment_id=segment_id,
             position=position,
             search_radius_m=search_radius_m,
         )
@@ -163,6 +171,8 @@ class ClaimLifecycleCorrelator:
             position=position,
             distance_m=distance_m,
             raw=signal.raw,
+            run_id=claim.run_id,
+            segment_id=claim.segment_id,
         )
         logger.debug(
             "claim_depleted event_type=%s claim_id=%s distance_m=%.2f event_dt=%s",

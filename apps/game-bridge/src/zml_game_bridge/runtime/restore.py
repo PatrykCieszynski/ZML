@@ -35,6 +35,8 @@ class MiningLifecycleRestorer:
                 claim_id=row.claim_id,
                 drop_id=row.drop_id,
                 hit_id=row.hit_id,
+                run_id=row.run_id,
+                segment_id=row.segment_id,
                 position=row.position,
                 search_radius_m=row.search_radius_m,
             )

@@ -8,7 +8,7 @@ from zml_game_bridge.application.mining import (
     MiningCoordinatorConfig,
 )
 from zml_game_bridge.application.mining.claims.lifecycle import ActiveClaim
-from zml_game_bridge.application.mining.segments.session import DropRunContext
+from zml_game_bridge.application.mining.segments.session import DropRunContext, MiningSegmentSetup
 from zml_game_bridge.domain.mining import MiningMode
 from zml_game_bridge.domain.mining_cost import (
     FinderRangeEnhancerLoadout,
@@ -94,7 +94,7 @@ def test_mining_coordinator_attaches_active_run_segment_to_drop() -> None:
     )
     coordinator = MiningCoordinator(
         id_factory=_id_factory("drop-1"),
-        run_context_provider=lambda _ts, _profile: DropRunContext(
+        run_context_provider=lambda _ts, _setup: DropRunContext(
             run_id=7,
             segment_id="segment-1",
             lifecycle_events=(segment_started,),
@@ -111,6 +111,66 @@ def test_mining_coordinator_attaches_active_run_segment_to_drop() -> None:
     assert drop.drop_id == "drop-1"
     assert drop.run_id == 7
     assert drop.segment_id == "segment-1"
+
+
+def test_mining_coordinator_carries_drop_run_segment_to_claim() -> None:
+    coordinator = MiningCoordinator(
+        id_factory=_id_factory("drop-1", "hit-1", "claim-1"),
+        run_context_provider=lambda _ts, _setup: DropRunContext(
+            run_id=7,
+            segment_id="segment-1",
+        ),
+    )
+    coordinator.process_signal(
+        ProbeFiredSignal(ts_ms=1_000, position=None, modes_mask=1, ammo_per_drop=1_000)
+    )
+
+    events = coordinator.process_signal(
+        FinderHitHintSignal(
+            ts_ms=2_000,
+            size_label="Minimal",
+            size_index=1,
+            resource_name="Lysterium Stone",
+        )
+    )
+
+    claim = events[1]
+    assert isinstance(claim, MiningClaimCreatedEvent)
+    assert claim.drop_id == "drop-1"
+    assert claim.run_id == 7
+    assert claim.segment_id == "segment-1"
+
+
+def test_mining_coordinator_passes_drop_setup_to_run_segment_context() -> None:
+    captured_setups: list[MiningSegmentSetup] = []
+
+    def context_provider(_observed_ts_ms: int, setup: MiningSegmentSetup) -> DropRunContext:
+        captured_setups.append(setup)
+        return DropRunContext(run_id=7, segment_id="segment-1")
+
+    coordinator = MiningCoordinator(
+        id_factory=_id_factory("drop-1"),
+        run_context_provider=context_provider,
+    )
+
+    coordinator.process_signal(
+        FinderModesChangedSignal(
+            ts_ms=900,
+            modes_mask=int(MiningMode.ORE | MiningMode.ENMATTER),
+            previous_modes_mask=None,
+        )
+    )
+    coordinator.process_signal(
+        FinderUnitsChangedSignal(ts_ms=950, probes_per_drop=None, ammo_per_drop=1_500)
+    )
+    coordinator.process_signal(
+        ProbeFiredSignal(ts_ms=1_000, position=None, modes_mask=None, ammo_per_drop=None)
+    )
+
+    assert len(captured_setups) == 1
+    assert captured_setups[0].modes_mask == int(MiningMode.ORE | MiningMode.ENMATTER)
+    assert captured_setups[0].ammo_per_drop == 1_500
+    assert captured_setups[0].probes_per_drop is None
 
 
 def test_mining_coordinator_applies_finder_range_enhancer_to_drop_cost_and_radius() -> None:
@@ -204,6 +264,8 @@ def test_mining_coordinator_records_hit_hint_linked_to_recent_drop() -> None:
     assert claim.claim_id == "claim-1"
     assert claim.hit_id == "hit-1"
     assert claim.drop_id == "drop-1"
+    assert claim.run_id is None
+    assert claim.segment_id is None
     assert claim.position == position
     assert claim.search_radius_m == 55.0
     assert claim.resource_name == "Lysterium Stone"
@@ -609,6 +671,8 @@ def test_mining_coordinator_depletes_restored_active_claim() -> None:
                 claim_id="claim-1",
                 drop_id="drop-1",
                 hit_id="hit-1",
+                run_id=7,
+                segment_id="segment-1",
                 position=WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None),
                 search_radius_m=55.0,
             )
@@ -631,6 +695,8 @@ def test_mining_coordinator_depletes_restored_active_claim() -> None:
     assert event.claim_id == "claim-1"
     assert event.drop_id == "drop-1"
     assert event.hit_id == "hit-1"
+    assert event.run_id == 7
+    assert event.segment_id == "segment-1"
 
 
 def test_mining_coordinator_records_item_received_chat_event() -> None:

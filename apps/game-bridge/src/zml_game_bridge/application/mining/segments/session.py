@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 ACTIVE_RUN_ID_KEY = "active_run_id"
 SETUP_CHANGED_REASON = "setup_changed"
+STALE_ACTIVE_SEGMENT_REASON = "stale_active_segment"
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,6 +27,21 @@ class DropRunContext:
     run_id: int | None
     segment_id: str | None
     lifecycle_events: tuple[RunSegmentEndedEvent | RunSegmentStartedEvent, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class MiningSegmentSetup:
+    profile: MiningEquipmentProfile
+    modes_mask: int | None
+    ammo_per_drop: int | None
+    probes_per_drop: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class ActiveSegmentState:
+    segment_id: str
+    segment_index: int
+    setup_hash: str
 
 
 class RunSessionService:
@@ -57,9 +73,9 @@ class RunSessionService:
         self,
         *,
         observed_ts_ms: int,
-        profile: MiningEquipmentProfile,
+        setup: MiningSegmentSetup,
     ) -> DropRunContext:
-        setup_snapshot = equipment_profile_snapshot(profile)
+        setup_snapshot = mining_segment_setup_snapshot(setup)
         setup_json = _stable_json(setup_snapshot)
         setup_hash = _setup_hash(setup_json)
 
@@ -69,13 +85,18 @@ class RunSessionService:
                 self._reset_active_segment()
                 return DropRunContext(run_id=None, segment_id=None)
 
+            lifecycle_events: list[RunSegmentEndedEvent | RunSegmentStartedEvent] = []
             if run_id != self._active_run_id:
                 self._active_run_id = run_id
-                self._active_segment_id = None
-                self._active_setup_hash = None
                 self._next_segment_index = self._load_next_segment_index(run_id)
+                lifecycle_events.extend(
+                    self._restore_active_segment_from_db(
+                        run_id=run_id,
+                        setup_hash=setup_hash,
+                        observed_ts_ms=observed_ts_ms,
+                    )
+                )
 
-            lifecycle_events: list[RunSegmentEndedEvent | RunSegmentStartedEvent] = []
             if self._active_segment_id is not None and self._active_setup_hash != setup_hash:
                 lifecycle_events.append(
                     RunSegmentEndedEvent(
@@ -153,16 +174,86 @@ class RunSessionService:
         finally:
             conn.close()
 
+    def _restore_active_segment_from_db(
+        self,
+        *,
+        run_id: int,
+        setup_hash: str,
+        observed_ts_ms: int,
+    ) -> list[RunSegmentEndedEvent]:
+        active_segments = self._load_active_segments(run_id)
+        reusable_segment = _select_reusable_active_segment(active_segments, setup_hash)
+        self._active_segment_id = (
+            reusable_segment.segment_id if reusable_segment is not None else None
+        )
+        self._active_setup_hash = (
+            reusable_segment.setup_hash if reusable_segment is not None else None
+        )
 
-def equipment_profile_snapshot(profile: MiningEquipmentProfile) -> dict[str, object]:
+        reusable_segment_id = reusable_segment.segment_id if reusable_segment is not None else None
+        stale_segments = [
+            segment for segment in active_segments if segment.segment_id != reusable_segment_id
+        ]
+        if not stale_segments:
+            return []
+
+        reason = (
+            STALE_ACTIVE_SEGMENT_REASON if reusable_segment is not None else SETUP_CHANGED_REASON
+        )
+        logger.info(
+            "run_segment_reconciled run_id=%s reused_segment_id=%s ended_segment_count=%s reason=%s",
+            run_id,
+            reusable_segment_id,
+            len(stale_segments),
+            reason,
+        )
+        return [
+            RunSegmentEndedEvent(
+                segment_id=segment.segment_id,
+                run_id=run_id,
+                ended_ts_ms=observed_ts_ms,
+                reason=reason,
+            )
+            for segment in stale_segments
+        ]
+
+    def _load_active_segments(self, run_id: int) -> list[ActiveSegmentState]:
+        conn = self._connect(self._db_path)
+        try:
+            cur = conn.execute(
+                """
+                SELECT segment_id, segment_index, setup_hash
+                FROM run_segments
+                WHERE run_id = ? AND status = 'active'
+                ORDER BY segment_index ASC, started_ts_ms ASC, segment_id ASC
+                """,
+                (run_id,),
+            )
+            return [
+                ActiveSegmentState(
+                    segment_id=str(row["segment_id"]),
+                    segment_index=int(row["segment_index"]),
+                    setup_hash=str(row["setup_hash"]),
+                )
+                for row in cur.fetchall()
+            ]
+        finally:
+            conn.close()
+
+
+def mining_segment_setup_snapshot(setup: MiningSegmentSetup) -> dict[str, object]:
     """Snapshot fields that define mining drop segment boundaries.
 
     Extractor is intentionally excluded: it affects extraction cost, but should
     not split a drop segment.
     """
+    profile = setup.profile
     return {
         "finder": _tool_snapshot(profile.finder),
         "amp": _tool_snapshot(profile.amp),
+        "modes_mask": setup.modes_mask,
+        "ammo_per_drop": setup.ammo_per_drop,
+        "probes_per_drop": setup.probes_per_drop,
         "finder_range_enhancers": {
             "count": profile.finder_range_enhancers.count,
             "decay_bonus_per_enhancer_ppm": profile.finder_range_enhancers.decay_bonus_per_enhancer.ppm,
@@ -190,6 +281,16 @@ def _stable_json(value: dict[str, object]) -> str:
 
 def _setup_hash(setup_json: str) -> str:
     return hashlib.sha256(setup_json.encode("utf-8")).hexdigest()[:16]
+
+
+def _select_reusable_active_segment(
+    active_segments: list[ActiveSegmentState],
+    setup_hash: str,
+) -> ActiveSegmentState | None:
+    for segment in reversed(active_segments):
+        if segment.setup_hash == setup_hash:
+            return segment
+    return None
 
 
 def _default_connect(path: Path) -> sqlite3.Connection:

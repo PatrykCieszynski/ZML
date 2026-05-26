@@ -447,7 +447,11 @@ function SegmentsView({
 }) {
   const segmentRows = segments.map((segment) => {
     const segmentDrops = drops.filter((drop) => drop.segmentId === segment.segmentId);
-    const segmentClaims = claims.filter((claim) => claim.dropId !== null && segmentDrops.some((drop) => drop.dropId === claim.dropId));
+    const segmentDropIds = new Set(segmentDrops.map((drop) => drop.dropId));
+    const segmentClaims = claims.filter((claim) => (
+      claim.segmentId === segment.segmentId ||
+      (claim.segmentId === null && claim.dropId !== null && segmentDropIds.has(claim.dropId))
+    ));
     const costPed = segmentDrops.reduce((sum, drop) => sum + drop.cost.totalMpec, 0) / 100_000;
     return { segment, dropCount: segmentDrops.length, claimCount: segmentClaims.length, costPed };
   });
@@ -473,7 +477,9 @@ function SegmentsView({
                 <th>End</th>
                 <th>Finder</th>
                 <th>Amp</th>
-                <th>Extractor</th>
+                <th>Mode</th>
+                <th>Ammo</th>
+                <th>Probes</th>
                 <th>Drops</th>
                 <th>Claims</th>
                 <th>Cost TT</th>
@@ -492,7 +498,9 @@ function SegmentsView({
                   <td>{segment.endedTsMs === null ? "-" : formatTime(segment.endedTsMs)}</td>
                   <td>{readToolSnapshotName(segment.setupSnapshot, "finder")}</td>
                   <td>{readToolSnapshotName(segment.setupSnapshot, "amp")}</td>
-                  <td>{readToolSnapshotName(segment.setupSnapshot, "extractor")}</td>
+                  <td>{formatSegmentModes(readSnapshotNumber(segment.setupSnapshot, "modes_mask"))}</td>
+                  <td>{formatSnapshotUnits(readSnapshotNumber(segment.setupSnapshot, "ammo_per_drop"))}</td>
+                  <td>{formatSnapshotUnits(readSnapshotNumber(segment.setupSnapshot, "probes_per_drop"))}</td>
                   <td>{dropCount}</td>
                   <td>{claimCount}</td>
                   <td>{formatPed(costPed)}</td>
@@ -1113,10 +1121,34 @@ function formatExpires(tsMs: number | null): string {
   return `${hours}h ${minutes.toString().padStart(2, "0")}m`;
 }
 
-function readToolSnapshotName(snapshot: Record<string, unknown>, key: "finder" | "amp" | "extractor"): string {
+function readToolSnapshotName(snapshot: Record<string, unknown>, key: "finder" | "amp"): string {
   const value = snapshot[key];
   if (!isRecord(value)) return key === "amp" ? "No amp" : "-";
   return typeof value.name === "string" ? value.name : "-";
+}
+
+function readSnapshotNumber(snapshot: Record<string, unknown>, key: string): number | null {
+  const value = snapshot[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function formatSegmentModes(mask: number | null): string {
+  if (mask === null) return "-";
+  if (mask === 0) return "None";
+
+  const labels: string[] = [];
+  if ((mask & 1) !== 0) labels.push("Ore");
+  if ((mask & 2) !== 0) labels.push("Enmatter");
+  if ((mask & 4) !== 0) labels.push("Treasure");
+
+  const unknownMask = mask & ~7;
+  if (unknownMask !== 0) labels.push(`Unknown ${unknownMask}`);
+  return labels.length > 0 ? labels.join(" + ") : `Unknown ${mask}`;
+}
+
+function formatSnapshotUnits(value: number | null): string {
+  if (value === null) return "-";
+  return value.toLocaleString();
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

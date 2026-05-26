@@ -62,6 +62,8 @@ export type AgentClient = {
 
 export type ListMiningClaimsRequest = {
   active?: boolean;
+  runId?: number;
+  activeRun?: boolean;
 };
 
 export type ListMiningDropsRequest = {
@@ -160,6 +162,12 @@ export class AgentRestClient implements AgentClient {
     const params = new URLSearchParams();
     if (request.active !== undefined) {
       params.set("active", request.active ? "yes" : "no");
+    }
+    if (request.runId !== undefined) {
+      params.set("run_id", String(request.runId));
+    }
+    if (request.activeRun !== undefined) {
+      params.set("active_run", request.activeRun ? "yes" : "no");
     }
 
     const serializedParams = params.toString();
