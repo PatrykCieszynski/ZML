@@ -723,6 +723,28 @@ def test_mining_coordinator_records_item_received_chat_event() -> None:
     assert event.qty == 8
     assert event.value_mpec == Mpec(16_000)
     assert event.extraction_cost_mpec is None
+    assert event.run_id is None
+
+
+def test_mining_coordinator_attaches_active_run_to_item_received_chat_event() -> None:
+    coordinator = MiningCoordinator(run_id_provider=lambda: 7)
+    event_dt = datetime(2026, 1, 10, 12, 37, 50)
+
+    events = coordinator.process_signal(
+        ItemReceivedSignal(
+            event_dt=event_dt,
+            channel_type=ChannelType.SYSTEM,
+            channel_token="System",
+            raw="2026-01-10 12:37:50 [System] [] You received Blue Crystal x (8) Value: 0.1600 PED",
+            item_name="Blue Crystal",
+            qty=8,
+            value_mpec=Mpec(16_000),
+        )
+    )
+
+    event = events[0]
+    assert isinstance(event, MiningItemReceivedEvent)
+    assert event.run_id == 7
 
 
 def test_mining_coordinator_adds_extractor_cost_to_item_received_event() -> None:

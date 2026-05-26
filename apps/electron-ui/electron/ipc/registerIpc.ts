@@ -15,6 +15,7 @@ import { runtime } from "../runtime";
 import type { AgentClient } from "../agent/restClient.ts";
 import { pushStatePatch } from "./pushStatePatch.ts";
 import { replaceMiningClaims, replaceMiningDrops } from "../mining/miningDropsState.ts";
+import { replaceMiningLoot } from "../mining/miningLootState.ts";
 import { replaceActiveRun, replaceRunSegments } from "../runs/runSegmentsState.ts";
 
 type RegisterIpcDeps = {
@@ -63,12 +64,14 @@ export function registerIpc({ agentRestClient, toggleMapWindow, toggleOverlayWin
             runtime.runSegments = [];
             replaceMiningClaims([]);
             replaceMiningDrops([]);
+            replaceMiningLoot([]);
             pushStatePatch({ activeRun: null, runSegments: [] });
             return activeRun;
         }
         replaceActiveRun(activeRun);
         replaceMiningClaims(await agentRestClient.listMiningClaims({ active: false, runId: activeRun.runId }));
         replaceMiningDrops(await agentRestClient.listMiningDrops({ runId: activeRun.runId }));
+        replaceMiningLoot(await agentRestClient.listMiningLoot({ runId: activeRun.runId }));
         return activeRun;
     });
 
@@ -84,18 +87,20 @@ export function registerIpc({ agentRestClient, toggleMapWindow, toggleOverlayWin
             throw new Error("Invalid resume run request");
         }
         const activeRun = await agentRestClient.resumeRun(runId);
-        const [runs, runSegments, miningClaims, miningDrops] = await Promise.all([
+        const [runs, runSegments, miningClaims, miningDrops, miningLoot] = await Promise.all([
             agentRestClient.listRuns(),
             agentRestClient.listActiveRunSegments(),
             agentRestClient.listMiningClaims({ active: false, runId }),
             agentRestClient.listMiningDrops({ runId }),
+            agentRestClient.listMiningLoot({ runId }),
         ]);
         runtime.activeRun = activeRun;
         runtime.runs = runs;
         runtime.runSegments = runSegments;
         runtime.miningClaims = miningClaims;
         runtime.miningDrops = miningDrops;
-        pushStatePatch({ activeRun, runs, runSegments, miningClaims, miningDrops });
+        runtime.miningLoot = miningLoot;
+        pushStatePatch({ activeRun, runs, runSegments, miningClaims, miningDrops, miningLoot });
         return activeRun;
     });
 
@@ -143,7 +148,8 @@ export function registerIpc({ agentRestClient, toggleMapWindow, toggleOverlayWin
         runtime.runSegments = [];
         runtime.miningClaims = [];
         runtime.miningDrops = [];
-        pushStatePatch({ activeRun, runs, runSegments: [], miningClaims: [], miningDrops: [] });
+        runtime.miningLoot = [];
+        pushStatePatch({ activeRun, runs, runSegments: [], miningClaims: [], miningDrops: [], miningLoot: [] });
         return activeRun;
     });
 
@@ -158,7 +164,8 @@ export function registerIpc({ agentRestClient, toggleMapWindow, toggleOverlayWin
         runtime.runSegments = [];
         runtime.miningClaims = [];
         runtime.miningDrops = [];
-        pushStatePatch({ activeRun: null, runs, runSegments: [], miningClaims: [], miningDrops: [] });
+        runtime.miningLoot = [];
+        pushStatePatch({ activeRun: null, runs, runSegments: [], miningClaims: [], miningDrops: [], miningLoot: [] });
         return stoppedRun;
     });
 

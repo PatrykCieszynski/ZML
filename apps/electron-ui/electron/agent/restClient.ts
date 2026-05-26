@@ -7,6 +7,7 @@ import {
   isActiveMiningToolsWire,
   isMiningClaimWire,
   isMiningDropWire,
+  isMiningLootItemWire,
   isMiningToolProfileWire,
   setActiveMiningToolsRequestToWire,
   startRunRequestToWire,
@@ -16,6 +17,7 @@ import {
   wireToActiveMiningToolsDto,
   wireToMiningClaimDto,
   wireToMiningDropDto,
+  wireToMiningLootItemDto,
   wireToMiningToolProfileDto,
   wireToRunSegmentDto,
   wireToRunDto,
@@ -24,6 +26,7 @@ import {
   type CreateMiningToolProfileRequest,
   type MiningClaimDto,
   type MiningDropDto,
+  type MiningLootItemDto,
   type MiningToolProfileDto,
   type RunDto,
   type RunSegmentDto,
@@ -53,6 +56,7 @@ export type AgentClient = {
   stopRun: (request: StopRunRequest) => Promise<RunDto>;
   listMiningClaims: (request?: ListMiningClaimsRequest) => Promise<MiningClaimDto[]>;
   listMiningDrops: (request?: ListMiningDropsRequest) => Promise<MiningDropDto[]>;
+  listMiningLoot: (request?: ListMiningLootRequest) => Promise<MiningLootItemDto[]>;
   listMiningTools: () => Promise<MiningToolProfileDto[]>;
   createMiningTool: (request: CreateMiningToolProfileRequest) => Promise<MiningToolProfileDto>;
   deleteMiningTool: (toolId: string) => Promise<void>;
@@ -68,6 +72,11 @@ export type ListMiningClaimsRequest = {
 
 export type ListMiningDropsRequest = {
   windowMinutes?: number;
+  runId?: number;
+  activeRun?: boolean;
+};
+
+export type ListMiningLootRequest = {
   runId?: number;
   activeRun?: boolean;
 };
@@ -198,6 +207,24 @@ export class AgentRestClient implements AgentClient {
       throw new Error("Agent mining drops returned an invalid payload");
     }
     return data.map(wireToMiningDropDto);
+  }
+
+  async listMiningLoot(request: ListMiningLootRequest = {}): Promise<MiningLootItemDto[]> {
+    const params = new URLSearchParams();
+    if (request.runId !== undefined) {
+      params.set("run_id", String(request.runId));
+    }
+    if (request.activeRun !== undefined) {
+      params.set("active_run", request.activeRun ? "yes" : "no");
+    }
+
+    const serializedParams = params.toString();
+    const query = serializedParams ? `?${serializedParams}` : "";
+    const data = await this.getJson(`/api/v1/mining/loot${query}`);
+    if (!Array.isArray(data) || !data.every(isMiningLootItemWire)) {
+      throw new Error("Agent mining loot returned an invalid payload");
+    }
+    return data.map(wireToMiningLootItemDto);
   }
 
   async listMiningTools(): Promise<MiningToolProfileDto[]> {

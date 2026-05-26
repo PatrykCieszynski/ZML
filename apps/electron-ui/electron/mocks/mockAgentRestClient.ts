@@ -4,6 +4,7 @@ import type {
     CreateMiningToolProfileRequest,
     MiningClaimDto,
     MiningDropDto,
+    MiningLootItemDto,
     MiningToolKind,
     MiningToolProfileDto,
     RunDto,
@@ -18,6 +19,7 @@ import type {
     AgentClient,
     ListMiningClaimsRequest,
     ListMiningDropsRequest,
+    ListMiningLootRequest,
 } from "../agent/restClient.ts";
 
 const MOCK_MINING_CLAIMS: MiningClaimDto[] = [
@@ -30,6 +32,12 @@ const MOCK_MINING_DROPS: MiningDropDto[] = [
     createMockMiningDrop("mock-drop-1", Date.now() - 9 * 60_000, 58890, 84639, "no_resources"),
     createMockMiningDrop("mock-drop-2", Date.now() - 5 * 60_000, 58913, 84653, "hit"),
     createMockMiningDrop("mock-drop-3", Date.now() - 90_000, 58940, 84667, "pending"),
+];
+
+const MOCK_MINING_LOOT: MiningLootItemDto[] = [
+    createMockMiningLoot(1, Date.now() - 4 * 60_000, "Lysterium Stone", 8, 64_000, 170),
+    createMockMiningLoot(2, Date.now() - 3 * 60_000, "Lysterium Stone", 4, 32_000, 170),
+    createMockMiningLoot(3, Date.now() - 2 * 60_000, "Crude Oil", 12, 120_000, 170),
 ];
 
 export class MockAgentRestClient implements AgentClient {
@@ -197,6 +205,13 @@ export class MockAgentRestClient implements AgentClient {
         return MOCK_MINING_DROPS.filter((drop) => drop.observedTsMs >= cutoff);
     }
 
+    async listMiningLoot(request: ListMiningLootRequest = {}): Promise<MiningLootItemDto[]> {
+        if (request.activeRun && this.activeRun === null) return [];
+        const runId = request.activeRun ? this.activeRun?.runId ?? null : request.runId ?? null;
+        if (runId === null) return [...MOCK_MINING_LOOT];
+        return MOCK_MINING_LOOT.filter((item) => item.runId === runId);
+    }
+
     async listMiningTools(): Promise<MiningToolProfileDto[]> {
         return [...this.miningTools];
     }
@@ -322,6 +337,26 @@ function createMockMiningDrop(
         expectedExpiresTsMs: isHit ? observedTsMs + 60 * 60_000 : null,
         rangeM: isHit ? 51.14 : null,
         depthM: isHit ? 53 : null,
+    };
+}
+
+function createMockMiningLoot(
+    eventId: number,
+    createdTsMs: number,
+    itemName: string,
+    qty: number,
+    valueMpec: number,
+    extractionCostMpec: number | null,
+): MiningLootItemDto {
+    return {
+        eventId,
+        createdTsMs,
+        eventDt: new Date(createdTsMs).toISOString(),
+        runId: 1,
+        itemName,
+        qty,
+        valueMpec,
+        extractionCostMpec,
     };
 }
 

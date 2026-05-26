@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 SCHEMA_DDL = """
 -- =========================
@@ -150,6 +150,22 @@ CREATE TABLE IF NOT EXISTS mining_claims (
 CREATE INDEX IF NOT EXISTS idx_mining_claims_status ON mining_claims(status);
 CREATE INDEX IF NOT EXISTS idx_mining_claims_observed_ts_ms ON mining_claims(observed_ts_ms);
 CREATE INDEX IF NOT EXISTS idx_mining_claims_expires ON mining_claims(expected_expires_ts_ms);
+
+CREATE TABLE IF NOT EXISTS mining_loot_items (
+    event_id                INTEGER PRIMARY KEY REFERENCES events(event_id) ON DELETE CASCADE,
+    created_ts_ms           INTEGER NOT NULL,
+    event_dt                TEXT,
+    run_id                  INTEGER REFERENCES runs(run_id) ON DELETE SET NULL,
+
+    item_name               TEXT NOT NULL,
+    qty                     INTEGER NOT NULL,
+    value_mpec              INTEGER NOT NULL,
+    extraction_cost_mpec    INTEGER,
+    raw                     TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_mining_loot_run_id ON mining_loot_items(run_id, created_ts_ms);
+CREATE INDEX IF NOT EXISTS idx_mining_loot_item_name ON mining_loot_items(item_name);
 
 -- =========================
 -- App state:

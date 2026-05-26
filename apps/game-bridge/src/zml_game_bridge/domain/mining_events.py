@@ -96,6 +96,7 @@ class MiningItemReceivedEvent(EventBase):
     value_mpec: Mpec
     raw: str
     extraction_cost_mpec: Mpec | None = None
+    run_id: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -15,6 +15,7 @@ from zml_game_bridge.events.in_memory_persisted_event_bus import InMemoryPersist
 from zml_game_bridge.persistence.event_projector import CompositeEventProjector
 from zml_game_bridge.persistence.mining_claims import MiningClaimProjector
 from zml_game_bridge.persistence.mining_drops import MiningDropProjector
+from zml_game_bridge.persistence.mining_loot import MiningLootProjector
 from zml_game_bridge.persistence.runs import RunSegmentProjector
 from zml_game_bridge.resources.mining_resources import MiningResourceCatalog
 from zml_game_bridge.runtime.channels import EventChannel, RuntimeInputChannel
@@ -64,11 +65,15 @@ def build_runtime_components(settings: Settings) -> RuntimeComponents:
             setup=setup,
         )
 
+    def current_run_id() -> int | None:
+        return run_session_service.current_run_id()
+
     mining_coordinator = MiningCoordinator(
         profile_provider=mining_equipment_service.get_equipment_profile,
         position_provider=current_position,
         resource_catalog=resource_catalog,
         run_context_provider=run_context_for_drop,
+        run_id_provider=current_run_id,
         db_command_executor=pending_db_commands.execute,
         mining_equipment_service=mining_equipment_service,
     )
@@ -87,6 +92,7 @@ def build_runtime_components(settings: Settings) -> RuntimeComponents:
                 RunSegmentProjector(),
                 MiningDropProjector(),
                 MiningClaimProjector(),
+                MiningLootProjector(),
             ]
         ),
     )

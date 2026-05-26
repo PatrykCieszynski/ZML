@@ -7,9 +7,10 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 
 from zml_game_bridge.api.dependencies import ReadConn
-from zml_game_bridge.api.schemas.mining import MiningClaimDto, MiningDropDto
+from zml_game_bridge.api.schemas.mining import MiningClaimDto, MiningDropDto, MiningLootItemDto
 from zml_game_bridge.persistence.mining_claims import MiningClaimReader
 from zml_game_bridge.persistence.mining_drops import MiningDropReader
+from zml_game_bridge.persistence.mining_loot import MiningLootReader
 from zml_game_bridge.persistence.run_state import RunState
 
 router = APIRouter(prefix="/api/v1/mining", tags=["mining"])
@@ -65,6 +66,28 @@ def list_mining_claims(
         len(rows),
     )
     return [MiningClaimDto.from_row(row) for row in rows]
+
+
+@router.get("/loot", response_model=list[MiningLootItemDto])
+def list_mining_loot(
+    conn: ReadConn,
+    run_id: Annotated[int | None, Query(ge=1)] = None,
+    active_run: Annotated[bool, Query()] = False,
+) -> list[MiningLootItemDto]:
+    resolved_run_id = run_id
+    if active_run:
+        resolved_run_id = RunState(conn).try_get_active_run_id()
+        if resolved_run_id is None:
+            return []
+
+    rows = MiningLootReader(conn).list_all(run_id=resolved_run_id)
+    logger.debug(
+        "api_request_read_loot active_run=%s run_id=%s rows=%s",
+        active_run,
+        resolved_run_id,
+        len(rows),
+    )
+    return [MiningLootItemDto.from_row(row) for row in rows]
 
 
 def _now_ms() -> int:

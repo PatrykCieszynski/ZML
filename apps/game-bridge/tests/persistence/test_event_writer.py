@@ -97,7 +97,7 @@ def test_event_writer_stores_event_dt_and_raw_outside_payload(tmp_path: Path) ->
     assert row["event_type"] == "MiningItemReceivedEvent"
     assert (
         row["payload_json"]
-        == '{"item_name":"Blue Crystal","qty":8,"value_mpec":16000,"extraction_cost_mpec":null}'
+        == '{"item_name":"Blue Crystal","qty":8,"value_mpec":16000,"extraction_cost_mpec":null,"run_id":null}'
     )
     assert row["event_dt"] == "2026-01-10T12:37:50"
     assert row["raw"] == raw

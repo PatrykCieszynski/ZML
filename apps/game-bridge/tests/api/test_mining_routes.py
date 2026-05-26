@@ -1,17 +1,28 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 
-from zml_game_bridge.api.routes.mining import list_mining_claims, list_mining_drops
+from zml_game_bridge.api.routes.mining import (
+    list_mining_claims,
+    list_mining_drops,
+    list_mining_loot,
+)
 from zml_game_bridge.domain.mining_cost import DropCostBreakdown, DropUnitCost
-from zml_game_bridge.domain.mining_events import MiningClaimCreatedEvent, MiningDropEvent
+from zml_game_bridge.domain.mining_events import (
+    MiningClaimCreatedEvent,
+    MiningDropEvent,
+    MiningItemReceivedEvent,
+)
 from zml_game_bridge.domain.money import Mpec
 from zml_game_bridge.domain.position import WorldPos
 from zml_game_bridge.persistence.event_projector import CompositeEventProjector
 from zml_game_bridge.persistence.event_writer import EventWriter
 from zml_game_bridge.persistence.mining_claims import MiningClaimProjector
 from zml_game_bridge.persistence.mining_drops import MiningDropProjector
+from zml_game_bridge.persistence.mining_loot import MiningLootProjector
+from zml_game_bridge.persistence.runs import RunStore
 from zml_game_bridge.persistence.schema import ensure_schema
 from zml_game_bridge.persistence.sqlite import open_sqlite
 
@@ -107,6 +118,32 @@ def test_list_mining_claims_returns_active_unexpired_claims(
         conn.close()
 
 
+def test_list_mining_loot_returns_items_for_run(tmp_path: Path) -> None:
+    conn = _open_test_db(tmp_path)
+    try:
+        with conn:
+            RunStore(conn).create_run(
+                name="Test run",
+                notes=None,
+                ts_ms=1_000,
+                status="running",
+            )
+        writer = EventWriter(conn, projector=MiningLootProjector())
+        writer.write(_loot_event(item_name="Blue Crystal", run_id=1, value_mpec=16_000))
+        writer.write(_loot_event(item_name="Crude Oil", run_id=None, value_mpec=10_000))
+
+        loot = list_mining_loot(conn, run_id=1)
+
+        assert len(loot) == 1
+        assert loot[0].run_id == 1
+        assert loot[0].item_name == "Blue Crystal"
+        assert loot[0].qty == 8
+        assert loot[0].value_mpec == 16_000
+        assert loot[0].extraction_cost_mpec == 125
+    finally:
+        conn.close()
+
+
 def _drop_event(*, drop_id: str, observed_ts_ms: int) -> MiningDropEvent:
     return MiningDropEvent(
         drop_id=drop_id,
@@ -145,4 +182,21 @@ def _claim_created_event(
         expected_expires_ts_ms=expected_expires_ts_ms,
         range_m=51.14,
         depth_m=53.0,
+    )
+
+
+def _loot_event(
+    *,
+    item_name: str,
+    run_id: int | None,
+    value_mpec: int,
+) -> MiningItemReceivedEvent:
+    return MiningItemReceivedEvent(
+        event_dt=datetime(2026, 1, 10, 12, 37, 50),
+        item_name=item_name,
+        qty=8,
+        value_mpec=Mpec(value_mpec),
+        raw="raw",
+        extraction_cost_mpec=Mpec(125),
+        run_id=run_id,
     )

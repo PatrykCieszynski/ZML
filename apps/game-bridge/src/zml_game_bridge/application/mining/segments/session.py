@@ -139,6 +139,13 @@ class RunSessionService:
                 lifecycle_events=tuple(lifecycle_events),
             )
 
+    def current_run_id(self) -> int | None:
+        with self._lock:
+            run_id = self._load_active_run_id()
+            if run_id is None:
+                self._reset_active_segment()
+            return run_id
+
     def _reset_active_segment(self) -> None:
         self._active_run_id = None
         self._active_segment_id = None

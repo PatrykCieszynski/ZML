@@ -518,42 +518,98 @@ function SegmentsView({
 
 function LootView({ loot }: { loot: MiningLootItemDto[] }) {
   const totalMpec = loot.reduce((sum, item) => sum + item.valueMpec, 0);
+  const extractionCostMpec = totalExtractionCostMpec(loot);
+  const netMpec = totalMpec - extractionCostMpec;
+  const rows = useMemo(() => buildLootAggregation(loot), [loot]);
+
   return (
     <section className="zml-work-panel">
       <div className="zml-section-head">
         <div>
           <h2>Loot</h2>
-          <span>Live chat-derived returns</span>
+          <span>Run return aggregation by resource/item</span>
         </div>
         <strong className="zml-section-total">{formatPedFromMpec(totalMpec)}</strong>
       </div>
+      <div className="zml-claim-summary-grid">
+        <ClaimSummaryCard label="Items" value={String(rows.length)} />
+        <ClaimSummaryCard label="Events" value={String(loot.length)} />
+        <ClaimSummaryCard label="Return" value={formatPedFromMpec(totalMpec)} />
+        <ClaimSummaryCard label="Net Return" value={formatPedFromMpec(netMpec)} />
+      </div>
       {loot.length === 0 ? (
-        <EmptyState text="No loot recorded in this UI session" />
+        <EmptyState text="No loot recorded for this run" />
       ) : (
-        <div className="zml-table-wrap">
-          <table className="zml-data-table">
-            <thead>
-              <tr>
-                <th>Time</th>
-                <th>Item</th>
-                <th>Qty</th>
-                <th>Value</th>
-                <th>Extraction cost</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loot.map((item) => (
-                <tr key={`${item.eventId}:${item.createdTsMs}:${item.itemName}`}>
-                  <td>{item.eventDt ?? formatTime(item.createdTsMs)}</td>
-                  <td>{item.itemName}</td>
-                  <td>{item.qty}</td>
-                  <td>{formatPedFromMpec(item.valueMpec)}</td>
-                  <td>{formatPedFromMpec(item.extractionCostMpec)}</td>
+        <>
+          <div className="zml-table-wrap">
+            <table className="zml-data-table">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Events</th>
+                  <th>Qty</th>
+                  <th>Return</th>
+                  <th>Extraction Cost</th>
+                  <th>Net Return</th>
+                  <th>Distribution</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={row.itemName}>
+                    <td>
+                      <strong>{row.itemName}</strong>
+                    </td>
+                    <td>{row.eventCount}</td>
+                    <td>{row.qty}</td>
+                    <td>{formatPedFromMpec(row.valueMpec)}</td>
+                    <td>{formatPedFromMpec(row.extractionCostMpec)}</td>
+                    <td>{formatPedFromMpec(row.netMpec)}</td>
+                    <td>
+                      <div className="zml-distribution-cell">
+                        <div className="zml-distribution-bar" aria-hidden="true">
+                          <span style={{ width: `${row.percent * 100}%` }} />
+                        </div>
+                        <strong>{formatPercent(row.percent)}</strong>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="zml-section-head zml-subsection-head">
+            <div>
+              <h2>Loot History</h2>
+              <span>Raw chat-derived item received events</span>
+            </div>
+          </div>
+          <div className="zml-table-wrap">
+            <table className="zml-data-table">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Item</th>
+                  <th>Qty</th>
+                  <th>Value</th>
+                  <th>Extraction cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loot.map((item) => (
+                  <tr key={`${item.eventId}:${item.createdTsMs}:${item.itemName}`}>
+                    <td>{formatEventTime(item.eventDt, item.createdTsMs)}</td>
+                    <td>{item.itemName}</td>
+                    <td>{item.qty}</td>
+                    <td>{formatPedFromMpec(item.valueMpec)}</td>
+                    <td>{formatPedFromMpec(item.extractionCostMpec)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </section>
   );
@@ -940,6 +996,16 @@ type ClaimDistributionRow = {
   nextExpiresTsMs: number | null;
 };
 
+type LootAggregationRow = {
+  itemName: string;
+  eventCount: number;
+  qty: number;
+  valueMpec: number;
+  extractionCostMpec: number;
+  netMpec: number;
+  percent: number;
+};
+
 function getActiveSetup(
   tools: MiningToolProfileDto[],
   activeTools?: ActiveMiningToolsDto,
@@ -987,6 +1053,32 @@ function buildClaimDistribution(
     .sort((a, b) => b.count - a.count || a.resourceName.localeCompare(b.resourceName));
 }
 
+function buildLootAggregation(loot: MiningLootItemDto[]): LootAggregationRow[] {
+  const totalMpec = loot.reduce((sum, item) => sum + item.valueMpec, 0);
+  const rows = new Map<string, LootAggregationRow>();
+
+  for (const item of loot) {
+    const current = rows.get(item.itemName);
+    const extractionCostMpec = item.extractionCostMpec ?? 0;
+    rows.set(item.itemName, {
+      itemName: item.itemName,
+      eventCount: (current?.eventCount ?? 0) + 1,
+      qty: (current?.qty ?? 0) + item.qty,
+      valueMpec: (current?.valueMpec ?? 0) + item.valueMpec,
+      extractionCostMpec: (current?.extractionCostMpec ?? 0) + extractionCostMpec,
+      netMpec: (current?.netMpec ?? 0) + item.valueMpec - extractionCostMpec,
+      percent: 0,
+    });
+  }
+
+  return [...rows.values()]
+    .map((row) => ({
+      ...row,
+      percent: totalMpec === 0 ? 0 : row.valueMpec / totalMpec,
+    }))
+    .sort((a, b) => b.valueMpec - a.valueMpec || a.itemName.localeCompare(b.itemName));
+}
+
 function minNullableTs(left: number | null, right: number | null): number | null {
   if (left === null) return right;
   if (right === null) return left;
@@ -1012,7 +1104,9 @@ function getRunStats(drops: MiningDropDto[], claims: MiningClaimDto[], loot: Min
   const noResourceCount = drops.filter((drop) => drop.result === "no_resources").length;
   const activeClaimCount = claims.filter((claim) => claim.status === "active").length;
   const depletedClaimCount = claims.filter((claim) => claim.status === "depleted").length;
-  const totalCostPed = drops.reduce((sum, drop) => sum + drop.cost.totalMpec, 0) / 100_000;
+  const totalCostPed =
+    (drops.reduce((sum, drop) => sum + drop.cost.totalMpec, 0) + totalExtractionCostMpec(loot)) /
+    100_000;
   const totalReturnPed = loot.reduce((sum, item) => sum + item.valueMpec, 0) / 100_000;
 
   return {
@@ -1177,6 +1271,10 @@ function formatPedFromMpec(value: number | null | undefined): string {
   return formatPed(value / 100_000);
 }
 
+function totalExtractionCostMpec(loot: MiningLootItemDto[]): number {
+  return loot.reduce((sum, item) => sum + (item.extractionCostMpec ?? 0), 0);
+}
+
 function formatPed(value: number): string {
   return `${value.toFixed(2)} PED`;
 }
@@ -1192,6 +1290,11 @@ function formatTime(tsMs: number): string {
     minute: "2-digit",
     second: "2-digit",
   });
+}
+
+function formatEventTime(eventDt: string | null, fallbackTsMs: number): string {
+  if (eventDt === null) return formatTime(fallbackTsMs);
+  return formatDateTimeString(eventDt);
 }
 
 function formatExpires(tsMs: number | null): string {

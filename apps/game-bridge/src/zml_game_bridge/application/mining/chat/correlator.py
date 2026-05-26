@@ -23,6 +23,7 @@ from zml_game_bridge.resources.mining_resources import MiningResourceCatalog
 
 logger = logging.getLogger(__name__)
 ExtractionCostProvider = Callable[[], Mpec | None]
+RunIdProvider = Callable[[], int | None]
 DEFAULT_PENDING_DEED_LINK_WINDOW_MS = 10_000
 
 
@@ -42,11 +43,13 @@ class MiningChatCorrelator:
         *,
         resource_catalog: MiningResourceCatalog | None = None,
         extraction_cost_provider: ExtractionCostProvider | None = None,
+        run_id_provider: RunIdProvider | None = None,
         pending_deed_link_window_ms: int = DEFAULT_PENDING_DEED_LINK_WINDOW_MS,
     ) -> None:
         self._pending_deeds: list[PendingClaimDeed] = []
         self._resource_catalog = resource_catalog or MiningResourceCatalog()
         self._extraction_cost_provider = extraction_cost_provider or _missing_extraction_cost
+        self._run_id_provider = run_id_provider or _missing_run_id
         self._pending_deed_link_window = timedelta(milliseconds=pending_deed_link_window_ms)
 
     def process_signal(self, signal: SignalBase) -> list[EventBase]:
@@ -147,15 +150,17 @@ class MiningChatCorrelator:
             value_mpec=signal.value_mpec,
             raw=signal.raw,
             extraction_cost_mpec=self._extraction_cost_provider(),
+            run_id=self._run_id_provider(),
         )
         logger.debug(
             "item_received_recorded event_type=%s item=%r qty=%s value_mpec=%s "
-            "extraction_cost_mpec=%s event_dt=%s",
+            "extraction_cost_mpec=%s run_id=%s event_dt=%s",
             type(event).__name__,
             event.item_name,
             event.qty,
             event.value_mpec,
             event.extraction_cost_mpec,
+            event.run_id,
             event.event_dt,
         )
         return event
@@ -210,4 +215,8 @@ def _mining_type_from_deed_item_name(item_name: str) -> str | None:
 
 
 def _missing_extraction_cost() -> Mpec | None:
+    return None
+
+
+def _missing_run_id() -> int | None:
     return None

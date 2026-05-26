@@ -23,7 +23,7 @@ import { startMockPositionSource } from "./mocks/mockPositionSource.ts";
 import { pushPosition } from "./ipc/pushPosition.ts";
 import { pushStatePatch } from "./ipc/pushStatePatch.ts";
 import { applyMiningEvent, replaceMiningClaims, replaceMiningDrops } from "./mining/miningDropsState.ts";
-import { applyMiningLootEvent } from "./mining/miningLootState.ts";
+import { applyMiningLootEvent, replaceMiningLoot } from "./mining/miningLootState.ts";
 import { applyRunEvent, replaceActiveRun, replaceRunSegments } from "./runs/runSegmentsState.ts";
 import type { PositionSourceOptions, PositionSourceStatus, StopPositionSource } from "./agent/positionSource.ts";
 
@@ -92,12 +92,14 @@ function handleEventStreamStatus(status: AgentEventStreamStatus, err?: string) {
 
 async function refreshMiningSnapshot() {
   try {
-    const [miningClaims, miningDrops] = await Promise.all([
+    const [miningClaims, miningDrops, miningLoot] = await Promise.all([
       agentRestClient.listMiningClaims({ active: false, activeRun: true }),
       agentRestClient.listMiningDrops({ activeRun: true }),
+      agentRestClient.listMiningLoot({ activeRun: true }),
     ]);
     replaceMiningClaims(miningClaims);
     replaceMiningDrops(miningDrops);
+    replaceMiningLoot(miningLoot);
   } catch (error) {
     runtime.lastError = error instanceof Error ? error.message : String(error);
     pushStatePatch({
