@@ -84,6 +84,8 @@ class MiningClaimCreatedEvent(EventBase):
     expected_expires_ts_ms: int | None
     range_m: float | None = None
     depth_m: float | None = None
+    run_id: int | None = None
+    segment_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,6 +120,8 @@ class MiningClaimDepletedEvent(EventBase):
     position: WorldPos
     distance_m: float
     raw: str
+    run_id: int | None = None
+    segment_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

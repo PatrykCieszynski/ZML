@@ -14,7 +14,7 @@ import {
 import { runtime } from "../runtime";
 import type { AgentClient } from "../agent/restClient.ts";
 import { pushStatePatch } from "./pushStatePatch.ts";
-import { replaceMiningDrops } from "../mining/miningDropsState.ts";
+import { replaceMiningClaims, replaceMiningDrops } from "../mining/miningDropsState.ts";
 import { replaceActiveRun, replaceRunSegments } from "../runs/runSegmentsState.ts";
 
 type RegisterIpcDeps = {
@@ -61,11 +61,13 @@ export function registerIpc({ agentRestClient, toggleMapWindow, toggleOverlayWin
         if (activeRun === null) {
             runtime.activeRun = null;
             runtime.runSegments = [];
+            replaceMiningClaims([]);
             replaceMiningDrops([]);
             pushStatePatch({ activeRun: null, runSegments: [] });
             return activeRun;
         }
         replaceActiveRun(activeRun);
+        replaceMiningClaims(await agentRestClient.listMiningClaims({ active: true, runId: activeRun.runId }));
         replaceMiningDrops(await agentRestClient.listMiningDrops({ runId: activeRun.runId }));
         return activeRun;
     });
@@ -82,16 +84,18 @@ export function registerIpc({ agentRestClient, toggleMapWindow, toggleOverlayWin
             throw new Error("Invalid resume run request");
         }
         const activeRun = await agentRestClient.resumeRun(runId);
-        const [runs, runSegments, miningDrops] = await Promise.all([
+        const [runs, runSegments, miningClaims, miningDrops] = await Promise.all([
             agentRestClient.listRuns(),
             agentRestClient.listActiveRunSegments(),
+            agentRestClient.listMiningClaims({ active: true, runId }),
             agentRestClient.listMiningDrops({ runId }),
         ]);
         runtime.activeRun = activeRun;
         runtime.runs = runs;
         runtime.runSegments = runSegments;
+        runtime.miningClaims = miningClaims;
         runtime.miningDrops = miningDrops;
-        pushStatePatch({ activeRun, runs, runSegments, miningDrops });
+        pushStatePatch({ activeRun, runs, runSegments, miningClaims, miningDrops });
         return activeRun;
     });
 

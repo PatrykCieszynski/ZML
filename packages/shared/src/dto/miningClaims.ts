@@ -10,6 +10,8 @@ export type MiningClaimDto = {
     createdEventId: number;
     hitId: string | null;
     dropId: string | null;
+    runId: number | null;
+    segmentId: string | null;
     observedTsMs: number;
     position: MiningClaimPositionDto | null;
     searchRadiusM: number | null;
@@ -39,6 +41,8 @@ export type MiningClaimWire = {
     created_event_id: number;
     hit_id: string | null;
     drop_id: string | null;
+    run_id: number | null;
+    segment_id: string | null;
     observed_ts_ms: number;
     position: MiningClaimPositionWire | null;
     search_radius_m: number | null;
@@ -60,6 +64,8 @@ export type MiningClaimCreatedEventWire = {
     claim_id: string;
     hit_id: string | null;
     drop_id: string | null;
+    run_id?: number | null;
+    segment_id?: string | null;
     observed_ts_ms: number;
     position: MiningClaimPositionWire | null;
     search_radius_m: number | null;
@@ -87,6 +93,8 @@ export function isMiningClaimWire(value: unknown): value is MiningClaimWire {
         isFiniteNumber(value.created_event_id) &&
         isNullableString(value.hit_id) &&
         isNullableString(value.drop_id) &&
+        isNullableNumber(value.run_id) &&
+        isNullableString(value.segment_id) &&
         isFiniteNumber(value.observed_ts_ms) &&
         isNullablePositionWire(value.position) &&
         isNullableNumber(value.search_radius_m) &&
@@ -113,6 +121,8 @@ export function isMiningClaimCreatedEventWire(
         typeof value.claim_id === "string" &&
         isNullableString(value.hit_id) &&
         isNullableString(value.drop_id) &&
+        (value.run_id === undefined || isNullableNumber(value.run_id)) &&
+        (value.segment_id === undefined || isNullableString(value.segment_id)) &&
         isFiniteNumber(value.observed_ts_ms) &&
         isNullablePositionWire(value.position) &&
         isNullableNumber(value.search_radius_m) &&
@@ -145,6 +155,8 @@ export function wireToMiningClaimDto(wire: MiningClaimWire): MiningClaimDto {
         createdEventId: wire.created_event_id,
         hitId: wire.hit_id,
         dropId: wire.drop_id,
+        runId: wire.run_id,
+        segmentId: wire.segment_id,
         observedTsMs: wire.observed_ts_ms,
         position: wire.position ? wireToPositionDto(wire.position) : null,
         searchRadiusM: wire.search_radius_m,
@@ -172,6 +184,8 @@ export function miningClaimDtoFromCreatedEventWire(
         createdEventId: eventId,
         hitId: wire.hit_id,
         dropId: wire.drop_id,
+        runId: wire.run_id ?? null,
+        segmentId: wire.segment_id ?? null,
         observedTsMs: wire.observed_ts_ms,
         position: wire.position ? wireToPositionDto(wire.position) : null,
         searchRadiusM: wire.search_radius_m,

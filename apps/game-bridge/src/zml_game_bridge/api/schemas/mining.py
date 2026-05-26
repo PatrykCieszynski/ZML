@@ -115,6 +115,8 @@ class MiningClaimDto(BaseModel):
     created_event_id: int
     hit_id: str | None
     drop_id: str | None
+    run_id: int | None
+    segment_id: str | None
     observed_ts_ms: int
     position: MiningClaimPositionDto | None
     search_radius_m: float | None
@@ -138,6 +140,8 @@ class MiningClaimDto(BaseModel):
             created_event_id=row.created_event_id,
             hit_id=row.hit_id,
             drop_id=row.drop_id,
+            run_id=row.run_id,
+            segment_id=row.segment_id,
             observed_ts_ms=row.observed_ts_ms,
             position=_claim_position_dto(row.position),
             search_radius_m=row.search_radius_m,

@@ -11,6 +11,7 @@ from zml_game_bridge.domain.mining_events import (
 from zml_game_bridge.domain.position import WorldPos
 from zml_game_bridge.persistence.event_writer import EventWriter
 from zml_game_bridge.persistence.mining_claims import MiningClaimProjector, MiningClaimReader
+from zml_game_bridge.persistence.runs import RunSegmentStore, RunStore
 from zml_game_bridge.persistence.schema import ensure_schema
 from zml_game_bridge.persistence.sqlite import open_sqlite
 
@@ -18,6 +19,7 @@ from zml_game_bridge.persistence.sqlite import open_sqlite
 def _open_test_db(tmp_path: Path) -> sqlite3.Connection:
     conn = open_sqlite(tmp_path / "mining-claims.sqlite3")
     ensure_schema(conn)
+    _create_test_run_segment(conn)
     return conn
 
 
@@ -32,6 +34,8 @@ def test_mining_claim_projector_stores_claim_read_model(tmp_path: Path) -> None:
         assert row.created_event_id == env.event_id
         assert row.hit_id == "hit-1"
         assert row.drop_id == "drop-1"
+        assert row.run_id == 1
+        assert row.segment_id == "segment-1"
         assert row.observed_ts_ms == 2_000
         assert row.position == WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None)
         assert row.search_radius_m == 55.0
@@ -107,6 +111,8 @@ def _claim_created_event(
         claim_id=claim_id,
         hit_id="hit-1",
         drop_id="drop-1",
+        run_id=1,
+        segment_id="segment-1",
         observed_ts_ms=2_000,
         position=WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None),
         search_radius_m=55.0,
@@ -118,3 +124,22 @@ def _claim_created_event(
         range_m=51.14,
         depth_m=53.0,
     )
+
+
+def _create_test_run_segment(conn: sqlite3.Connection) -> None:
+    with conn:
+        run_id = RunStore(conn).create_run(
+            name="Test run",
+            notes=None,
+            ts_ms=1_000,
+            status="running",
+        )
+        RunSegmentStore(conn).create(
+            run_id=run_id,
+            segment_id="segment-1",
+            segment_index=1,
+            started_ts_ms=1_000,
+            setup_hash="setup-hash",
+            setup_snapshot={"finder": {"name": "Finder"}},
+            ts_ms=1_000,
+        )

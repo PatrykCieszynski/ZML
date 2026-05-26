@@ -198,9 +198,7 @@ class RunSessionService:
             return []
 
         reason = (
-            STALE_ACTIVE_SEGMENT_REASON
-            if reusable_segment is not None
-            else SETUP_CHANGED_REASON
+            STALE_ACTIVE_SEGMENT_REASON if reusable_segment is not None else SETUP_CHANGED_REASON
         )
         logger.info(
             "run_segment_reconciled run_id=%s reused_segment_id=%s ended_segment_count=%s reason=%s",

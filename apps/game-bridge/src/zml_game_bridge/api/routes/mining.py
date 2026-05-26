@@ -44,12 +44,26 @@ def list_mining_drops(
 def list_mining_claims(
     conn: ReadConn,
     active: Annotated[bool, Query()] = True,
+    run_id: Annotated[int | None, Query(ge=1)] = None,
+    active_run: Annotated[bool, Query()] = False,
 ) -> list[MiningClaimDto]:
+    resolved_run_id = run_id
+    if active_run:
+        resolved_run_id = RunState(conn).try_get_active_run_id()
+        if resolved_run_id is None:
+            return []
+
     if not active:
-        rows = MiningClaimReader(conn).list_all()
+        rows = MiningClaimReader(conn).list_all(run_id=resolved_run_id)
     else:
-        rows = MiningClaimReader(conn).list_active(now_ts_ms=_now_ms())
-    logger.debug("api_request_read_claims active=%s rows=%s", active, len(rows))
+        rows = MiningClaimReader(conn).list_active(now_ts_ms=_now_ms(), run_id=resolved_run_id)
+    logger.debug(
+        "api_request_read_claims active=%s active_run=%s run_id=%s rows=%s",
+        active,
+        active_run,
+        resolved_run_id,
+        len(rows),
+    )
     return [MiningClaimDto.from_row(row) for row in rows]
 
 

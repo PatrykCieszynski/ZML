@@ -447,7 +447,11 @@ function SegmentsView({
 }) {
   const segmentRows = segments.map((segment) => {
     const segmentDrops = drops.filter((drop) => drop.segmentId === segment.segmentId);
-    const segmentClaims = claims.filter((claim) => claim.dropId !== null && segmentDrops.some((drop) => drop.dropId === claim.dropId));
+    const segmentDropIds = new Set(segmentDrops.map((drop) => drop.dropId));
+    const segmentClaims = claims.filter((claim) => (
+      claim.segmentId === segment.segmentId ||
+      (claim.segmentId === null && claim.dropId !== null && segmentDropIds.has(claim.dropId))
+    ));
     const costPed = segmentDrops.reduce((sum, drop) => sum + drop.cost.totalMpec, 0) / 100_000;
     return { segment, dropCount: segmentDrops.length, claimCount: segmentClaims.length, costPed };
   });
