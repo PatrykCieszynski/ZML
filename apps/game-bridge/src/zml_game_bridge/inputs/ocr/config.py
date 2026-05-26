@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Literal
 
 import numpy as np
 
@@ -16,6 +17,7 @@ from zml_game_bridge.inputs.ocr.pipelines.position.model import PositionRois
 logger = logging.getLogger(__name__)
 
 ScreenRoiAnchor = Literal["top_left", "bottom_left"]
+JsonObject = Mapping[str, object]
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +45,7 @@ class ScreenRoiConfig:
             y1 = frame_height - self.y - self.height
         else:
             raise ValueError(f"Unsupported ROI anchor: {self.anchor}")
+
         return RoiRect(
             x1=x1,
             x2=x1 + self.width,
@@ -101,14 +104,16 @@ class OcrRoiProfile:
 
 def load_ocr_roi_profile(path: Path | None) -> OcrRoiProfile:
     default_profile = default_ocr_roi_profile()
+
     if path is None:
         return default_profile
+
     if not path.exists():
         _try_write_default_profile(path, default_profile)
         return default_profile
 
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload: object = json.loads(path.read_text(encoding="utf-8"))
         return _profile_from_payload(payload, fallback=default_profile)
     except Exception:
         logger.exception("ocr_roi_profile_load_failed path=%s", path)
@@ -172,24 +177,32 @@ def _try_write_default_profile(path: Path, profile: OcrRoiProfile) -> None:
 
 
 def _profile_from_payload(payload: object, *, fallback: OcrRoiProfile) -> OcrRoiProfile:
-    if not isinstance(payload, dict):
+    raw = _json_object(payload)
+    if raw is None:
         raise ValueError("OCR ROI profile must be a JSON object")
-    raw = cast(dict[str, Any], payload)
-    screen_rois = raw.get("screen_rois")
-    position_rois = raw.get("position_rois")
-    finder_panel = raw.get("finder_panel")
+
     return OcrRoiProfile(
         name=_optional_str(raw.get("name")) or fallback.name,
-        screen_rois=_screen_rois_from_json(screen_rois, fallback=fallback.screen_rois),
-        position_rois=_position_rois_from_json(position_rois, fallback=fallback.position_rois),
-        finder_panel=_finder_panel_from_json(finder_panel, fallback=fallback.finder_panel),
+        screen_rois=_screen_rois_from_json(
+            raw.get("screen_rois"),
+            fallback=fallback.screen_rois,
+        ),
+        position_rois=_position_rois_from_json(
+            raw.get("position_rois"),
+            fallback=fallback.position_rois,
+        ),
+        finder_panel=_finder_panel_from_json(
+            raw.get("finder_panel"),
+            fallback=fallback.finder_panel,
+        ),
     )
 
 
 def _screen_rois_from_json(value: object, *, fallback: OcrScreenRois) -> OcrScreenRois:
-    if not isinstance(value, dict):
+    raw = _json_object(value)
+    if raw is None:
         return fallback
-    raw = cast(dict[str, object], value)
+
     return OcrScreenRois(
         compass=_screen_roi_from_json(raw.get("compass"), fallback=fallback.compass),
         finder=_screen_roi_from_json(raw.get("finder"), fallback=fallback.finder),
@@ -199,24 +212,18 @@ def _screen_rois_from_json(value: object, *, fallback: OcrScreenRois) -> OcrScre
 
 
 def _screen_roi_from_json(value: object, *, fallback: ScreenRoiConfig) -> ScreenRoiConfig:
-    if not isinstance(value, dict):
+    raw = _json_object(value)
+    if raw is None:
         return fallback
-    raw = cast(dict[str, object], value)
-    name = _optional_str(raw.get("name")) or fallback.name
-    anchor = _screen_anchor(raw.get("anchor"), fallback=fallback.anchor)
-    x = _int(raw.get("x"), fallback=fallback.x)
-    y = _int(raw.get("y"), fallback=fallback.y)
-    width = _positive_int(raw.get("width"), fallback=fallback.width)
-    height = _positive_int(raw.get("height"), fallback=fallback.height)
-    enabled = raw.get("enabled") if isinstance(raw.get("enabled"), bool) else fallback.enabled
+
     return ScreenRoiConfig(
-        name=name,
-        anchor=anchor,
-        x=x,
-        y=y,
-        width=width,
-        height=height,
-        enabled=cast(bool, enabled),
+        name=_optional_str(raw.get("name")) or fallback.name,
+        anchor=_screen_anchor(raw.get("anchor"), fallback=fallback.anchor),
+        x=_int(raw.get("x"), fallback=fallback.x),
+        y=_int(raw.get("y"), fallback=fallback.y),
+        width=_positive_int(raw.get("width"), fallback=fallback.width),
+        height=_positive_int(raw.get("height"), fallback=fallback.height),
+        enabled=_bool(raw.get("enabled"), fallback=fallback.enabled),
     )
 
 
@@ -227,6 +234,7 @@ def _optional_screen_roi_from_json(
 ) -> ScreenRoiConfig | None:
     if value is None:
         return fallback
+
     fallback_value = fallback or ScreenRoiConfig(
         name="loot_custom",
         anchor="top_left",
@@ -240,9 +248,10 @@ def _optional_screen_roi_from_json(
 
 
 def _position_rois_from_json(value: object, *, fallback: PositionRoiConfig) -> PositionRoiConfig:
-    if not isinstance(value, dict):
+    raw = _json_object(value)
+    if raw is None:
         return fallback
-    raw = cast(dict[str, object], value)
+
     return PositionRoiConfig(
         planet=_roi_rect_from_json(raw.get("planet"), fallback=fallback.planet),
         lon=_roi_rect_from_json(raw.get("lon"), fallback=fallback.lon),
@@ -255,9 +264,10 @@ def _finder_panel_from_json(
     *,
     fallback: FinderPanelLayoutConfig,
 ) -> FinderPanelLayoutConfig:
-    if not isinstance(value, dict):
+    raw = _json_object(value)
+    if raw is None:
         return fallback
-    raw = cast(dict[str, object], value)
+
     return FinderPanelLayoutConfig(
         radar=_relative_rect_from_json(raw.get("radar"), fallback=fallback.radar),
         modes=_relative_rect_from_json(raw.get("modes"), fallback=fallback.modes),
@@ -268,9 +278,10 @@ def _finder_panel_from_json(
 
 
 def _roi_rect_from_json(value: object, *, fallback: RoiRect) -> RoiRect:
-    if not isinstance(value, dict):
+    raw = _json_object(value)
+    if raw is None:
         return fallback
-    raw = cast(dict[str, object], value)
+
     return RoiRect(
         x1=_int(raw.get("x1"), fallback=fallback.x1),
         x2=_int(raw.get("x2"), fallback=fallback.x2),
@@ -280,14 +291,17 @@ def _roi_rect_from_json(value: object, *, fallback: RoiRect) -> RoiRect:
 
 
 def _relative_rect_from_json(value: object, *, fallback: RelativeRect) -> RelativeRect:
-    if not isinstance(value, list | tuple) or len(value) != 4:
+    items = _json_sequence(value)
+    if items is None or len(items) != 4:
         return fallback
+
     values: list[float] = []
-    for item in value:
-        if not isinstance(item, int | float):
+    for item in items:
+        if isinstance(item, bool) or not isinstance(item, int | float):
             return fallback
         values.append(max(0.0, min(1.0, float(item))))
-    return cast(RelativeRect, tuple(values))
+
+    return values[0], values[1], values[2], values[3]
 
 
 def _profile_to_json(profile: OcrRoiProfile) -> dict[str, object]:
@@ -340,9 +354,34 @@ def _roi_rect_to_json(roi: RoiRect) -> dict[str, int]:
     }
 
 
+def _json_object(value: object) -> JsonObject | None:
+    if not isinstance(value, Mapping):
+        return None
+
+    raw = value
+    parsed: dict[str, object] = {}
+
+    for key, item in raw.items():
+        if not isinstance(key, str):
+            return None
+        parsed[key] = item
+
+    return parsed
+
+
+def _json_sequence(value: object) -> Sequence[object] | None:
+    if isinstance(value, str | bytes | bytearray):
+        return None
+    if not isinstance(value, Sequence):
+        return None
+    return value
+
+
 def _screen_anchor(value: object, *, fallback: ScreenRoiAnchor) -> ScreenRoiAnchor:
-    if value in ("top_left", "bottom_left"):
-        return cast(ScreenRoiAnchor, value)
+    if value == "top_left":
+        return "top_left"
+    if value == "bottom_left":
+        return "bottom_left"
     return fallback
 
 
@@ -350,7 +389,13 @@ def _optional_str(value: object) -> str | None:
     return value.strip() if isinstance(value, str) and value.strip() else None
 
 
+def _bool(value: object, *, fallback: bool) -> bool:
+    return value if isinstance(value, bool) else fallback
+
+
 def _int(value: object, *, fallback: int) -> int:
+    if isinstance(value, bool):
+        return fallback
     return value if isinstance(value, int) else fallback
 
 
