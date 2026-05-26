@@ -31,7 +31,7 @@ type MainView = "dashboard" | "runs" | "segments" | "loot" | "claims" | "setup" 
 type FeedItem = {
   id: string;
   tsMs: number;
-  kind: "drop" | "hit" | "miss" | "claim";
+  kind: "drop" | "hit" | "miss" | "claim" | "depleted";
   title: string;
   detail: string;
   amount?: string;
@@ -323,6 +323,9 @@ function RunSummaryPanel({
       <MetricRow label="Hits" value={String(stats.hitCount)} accent="warn" />
       <MetricRow label="Misses" value={String(stats.noResourceCount)} />
       <MetricRow label="Hit rate" value={formatPercent(stats.hitRate)} />
+      <MetricRow label="Claims" value={String(stats.totalClaimCount)} accent="warn" />
+      <MetricRow label="Extracted" value={String(stats.depletedClaimCount)} />
+      <MetricRow label="Active claims" value={String(stats.activeClaimCount)} accent="gain" />
       <MetricRow label="Cost TT" value={formatPed(stats.totalCostPed)} accent="loss" />
       <MetricRow label="Return TT" value={formatPed(stats.totalReturnPed)} accent="gain" />
       <MetricRow
@@ -330,7 +333,6 @@ function RunSummaryPanel({
         value={formatPed(stats.profitPed)}
         accent={stats.profitPed >= 0 ? "gain" : "loss"}
       />
-      <MetricRow label="Active claims" value={String(stats.activeClaimCount)} accent="gain" />
     </section>
   );
 }
@@ -572,11 +574,20 @@ function ClaimsView({ claims }: { claims: MiningClaimDto[] }) {
     () => claims.filter((claim) => claim.status === "active"),
     [claims],
   );
+  const depletedClaims = useMemo(
+    () => claims.filter((claim) => claim.status === "depleted"),
+    [claims],
+  );
+  const filteredHistory = useMemo(
+    () => sortClaimHistory(
+      filter === "all" ? claims : claims.filter((claim) => claim.miningType === filter),
+    ),
+    [claims, filter],
+  );
   const rows = useMemo(
     () => buildClaimDistribution(activeClaims, filter),
     [activeClaims, filter],
   );
-  const totals = useMemo(() => getClaimTypeTotals(activeClaims), [activeClaims]);
   const visibleTotal = rows.reduce((sum, row) => sum + row.count, 0);
 
   return (
@@ -584,7 +595,7 @@ function ClaimsView({ claims }: { claims: MiningClaimDto[] }) {
       <div className="zml-section-head">
         <div>
           <h2>Claims</h2>
-          <span>Active claim distribution</span>
+          <span>Active distribution and run claim history</span>
         </div>
       </div>
       <div className="zml-tabs-inline">
@@ -600,15 +611,22 @@ function ClaimsView({ claims }: { claims: MiningClaimDto[] }) {
         ))}
       </div>
       <div className="zml-claim-summary-grid">
-        <ClaimSummaryCard label="Visible" value={String(visibleTotal)} />
-        <ClaimSummaryCard label="Ore" value={String(totals.ore)} />
-        <ClaimSummaryCard label="Enmatter" value={String(totals.enmatter)} />
-        <ClaimSummaryCard label="Treasure" value={String(totals.treasure)} />
+        <ClaimSummaryCard label="Total" value={String(claims.length)} />
+        <ClaimSummaryCard label="Active" value={String(activeClaims.length)} />
+        <ClaimSummaryCard label="Extracted" value={String(depletedClaims.length)} />
+        <ClaimSummaryCard label="Visible Active" value={String(visibleTotal)} />
+      </div>
+
+      <div className="zml-section-head zml-subsection-head">
+        <div>
+          <h2>Active Distribution</h2>
+          <span>Map-visible claims only</span>
+        </div>
       </div>
       {activeClaims.length === 0 ? (
-        <EmptyState text="No active claims" />
+        <EmptyState text="No active claims" compact />
       ) : rows.length === 0 ? (
-        <EmptyState text="No claims for this filter" />
+        <EmptyState text="No active claims for this filter" compact />
       ) : (
         <div className="zml-table-wrap">
           <table className="zml-data-table">
@@ -638,6 +656,51 @@ function ClaimsView({ claims }: { claims: MiningClaimDto[] }) {
                     </div>
                   </td>
                   <td>{formatExpires(row.nextExpiresTsMs)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="zml-section-head zml-subsection-head">
+        <div>
+          <h2>Claim History</h2>
+          <span>Extracted claims stay here for run and segment stats</span>
+        </div>
+      </div>
+      {filteredHistory.length === 0 ? (
+        <EmptyState text="No claim history for this filter" compact />
+      ) : (
+        <div className="zml-table-wrap">
+          <table className="zml-data-table">
+            <thead>
+              <tr>
+                <th>Found</th>
+                <th>Resource</th>
+                <th>Type</th>
+                <th>Size</th>
+                <th>Status</th>
+                <th>Segment</th>
+                <th>Depleted</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredHistory.map((claim) => (
+                <tr key={claim.claimId}>
+                  <td>{formatTime(claim.observedTsMs)}</td>
+                  <td>
+                    <strong>{claim.resourceName ?? "Unknown resource"}</strong>
+                  </td>
+                  <td>{formatMiningType(claim.miningType)}</td>
+                  <td>{formatSize(claim.sizeLabel, claim.sizeIndex)}</td>
+                  <td>
+                    <span className={claim.status === "active" ? "zml-tag is-active" : "zml-tag"}>
+                      {claim.status === "active" ? "active" : "extracted"}
+                    </span>
+                  </td>
+                  <td>{formatSegmentRef(claim.segmentId)}</td>
+                  <td>{formatClaimDepletion(claim)}</td>
                 </tr>
               ))}
             </tbody>
@@ -860,7 +923,9 @@ type RunStats = {
   dropCount: number;
   hitCount: number;
   noResourceCount: number;
+  totalClaimCount: number;
   activeClaimCount: number;
+  depletedClaimCount: number;
   hitRate: number | null;
   totalCostPed: number;
   totalReturnPed: number;
@@ -922,27 +987,14 @@ function buildClaimDistribution(
     .sort((a, b) => b.count - a.count || a.resourceName.localeCompare(b.resourceName));
 }
 
-function getClaimTypeTotals(claims: MiningClaimDto[]): Record<ClaimFilter, number> {
-  const totals: Record<ClaimFilter, number> = {
-    all: claims.length,
-    ore: 0,
-    enmatter: 0,
-    treasure: 0,
-  };
-
-  for (const claim of claims) {
-    if (claim.miningType === "ore" || claim.miningType === "enmatter" || claim.miningType === "treasure") {
-      totals[claim.miningType] += 1;
-    }
-  }
-
-  return totals;
-}
-
 function minNullableTs(left: number | null, right: number | null): number | null {
   if (left === null) return right;
   if (right === null) return left;
   return Math.min(left, right);
+}
+
+function sortClaimHistory(claims: MiningClaimDto[]): MiningClaimDto[] {
+  return [...claims].sort((a, b) => claimActivityTsMs(b) - claimActivityTsMs(a));
 }
 
 function findToolName(
@@ -958,6 +1010,8 @@ function findToolName(
 function getRunStats(drops: MiningDropDto[], claims: MiningClaimDto[], loot: MiningLootItemDto[]): RunStats {
   const hitCount = drops.filter((drop) => drop.result === "hit").length;
   const noResourceCount = drops.filter((drop) => drop.result === "no_resources").length;
+  const activeClaimCount = claims.filter((claim) => claim.status === "active").length;
+  const depletedClaimCount = claims.filter((claim) => claim.status === "depleted").length;
   const totalCostPed = drops.reduce((sum, drop) => sum + drop.cost.totalMpec, 0) / 100_000;
   const totalReturnPed = loot.reduce((sum, item) => sum + item.valueMpec, 0) / 100_000;
 
@@ -965,7 +1019,9 @@ function getRunStats(drops: MiningDropDto[], claims: MiningClaimDto[], loot: Min
     dropCount: drops.length,
     hitCount,
     noResourceCount,
-    activeClaimCount: claims.filter((claim) => claim.status === "active").length,
+    totalClaimCount: claims.length,
+    activeClaimCount,
+    depletedClaimCount,
     hitRate: drops.length === 0 ? null : hitCount / drops.length,
     totalCostPed,
     totalReturnPed,
@@ -1008,13 +1064,14 @@ function buildFeed(drops: MiningDropDto[], claims: MiningClaimDto[]): FeedItem[]
   }
 
   for (const claim of claims) {
+    const isDepleted = claim.status === "depleted";
     items.push({
-      id: `${claim.claimId}:claim`,
-      tsMs: claim.observedTsMs,
-      kind: "claim",
-      title: "Claim Active",
+      id: `${claim.claimId}:claim:${claim.status}`,
+      tsMs: claimActivityTsMs(claim),
+      kind: isDepleted ? "depleted" : "claim",
+      title: isDepleted ? "Claim Extracted" : "Claim Active",
       detail: `${claim.resourceName ?? "Unknown resource"} ${formatSize(claim.sizeLabel, claim.sizeIndex)}`,
-      amount: formatExpires(claim.expectedExpiresTsMs),
+      amount: isDepleted ? formatMeters(claim.depletedDistanceM) : formatExpires(claim.expectedExpiresTsMs),
     });
   }
 
@@ -1078,6 +1135,33 @@ function formatPosition(position?: { x: number; y: number } | null): string {
 function formatMeters(value: number | null | undefined): string {
   if (value === null || value === undefined) return "-";
   return `${value.toFixed(1)} m`;
+}
+
+function formatSegmentRef(segmentId: string | null): string {
+  if (segmentId === null) return "-";
+  return segmentId.length <= 8 ? segmentId : segmentId.slice(0, 8);
+}
+
+function formatClaimDepletion(claim: MiningClaimDto): string {
+  if (claim.status !== "depleted") return "-";
+  const distance = formatMeters(claim.depletedDistanceM);
+  if (claim.depletedEventDt === null) return distance;
+  const when = formatDateTimeString(claim.depletedEventDt);
+  if (distance === "-") return when;
+  return `${when} / ${distance}`;
+}
+
+function claimActivityTsMs(claim: MiningClaimDto): number {
+  if (claim.status !== "depleted" || claim.depletedEventDt === null) {
+    return claim.observedTsMs;
+  }
+  const parsed = Date.parse(claim.depletedEventDt);
+  return Number.isFinite(parsed) ? parsed : claim.observedTsMs;
+}
+
+function formatDateTimeString(value: string): string {
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? formatTime(parsed) : value;
 }
 
 function formatMiningType(value: MiningResourceType | null): string {

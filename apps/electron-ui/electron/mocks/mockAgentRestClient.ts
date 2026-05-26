@@ -23,6 +23,7 @@ import type {
 const MOCK_MINING_CLAIMS: MiningClaimDto[] = [
     createMockMiningClaim("mock-claim-1", Date.now() - 5 * 60_000, 58913, 84653, "Lysterium Stone", "ore"),
     createMockMiningClaim("mock-claim-2", Date.now() - 90_000, 58940, 84667, "Crude Oil", "enmatter"),
+    createMockMiningClaim("mock-claim-3", Date.now() - 18 * 60_000, 58890, 84639, "Belkar Stone", "ore", "depleted"),
 ];
 
 const MOCK_MINING_DROPS: MiningDropDto[] = [
@@ -177,6 +178,7 @@ export class MockAgentRestClient implements AgentClient {
     }
 
     async listMiningClaims(request: ListMiningClaimsRequest = {}): Promise<MiningClaimDto[]> {
+        if (request.activeRun && this.activeRun === null) return [];
         const runId = request.activeRun ? this.activeRun?.runId ?? null : request.runId ?? null;
         const claims = runId === null
             ? MOCK_MINING_CLAIMS
@@ -330,6 +332,7 @@ function createMockMiningClaim(
     y: number,
     resourceName: string,
     miningType: MiningClaimDto["miningType"],
+    status: MiningClaimDto["status"] = "active",
 ): MiningClaimDto {
     return {
         claimId,
@@ -353,10 +356,17 @@ function createMockMiningClaim(
         expectedExpiresTsMs: observedTsMs + 60 * 60_000,
         rangeM: 51.14,
         depthM: 53,
-        status: "active",
-        depletedEventId: null,
-        depletedEventDt: null,
-        depletedPosition: null,
-        depletedDistanceM: null,
+        status,
+        depletedEventId: status === "depleted" ? -2 : null,
+        depletedEventDt: status === "depleted" ? new Date(observedTsMs + 8 * 60_000).toISOString() : null,
+        depletedPosition: status === "depleted"
+            ? {
+                planetName: "Calypso",
+                x: x + 4,
+                y: y + 3,
+                z: null,
+            }
+            : null,
+        depletedDistanceM: status === "depleted" ? 5 : null,
     };
 }

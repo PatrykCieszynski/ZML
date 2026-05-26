@@ -141,6 +141,14 @@ export function MapViewport({
           return [];
         }
 
+        const expiresAtSec =
+          claim.expectedExpiresTsMs !== null
+            ? Math.floor(claim.expectedExpiresTsMs / 1000)
+            : null;
+        if (expiresAtSec !== null && expiresAtSec <= currentSec) {
+          return [];
+        }
+
         return [
           {
             id: claim.claimId,
@@ -148,14 +156,11 @@ export function MapViewport({
             y: claim.position.y,
             position: entropiaToDeckPosition(planetId, claim.position),
             resourceKind: resourceKindFromName(claim.resourceName),
-            expiresAtSec:
-              claim.expectedExpiresTsMs !== null
-                ? Math.floor(claim.expectedExpiresTsMs / 1000)
-                : null,
+            expiresAtSec,
           },
         ];
       }),
-    [miningClaims, planetId],
+    [currentSec, miningClaims, planetId],
   );
   const hasClaimTimers = useMemo(
     () => mapMiningClaims.some((claim) => claim.expiresAtSec !== null),

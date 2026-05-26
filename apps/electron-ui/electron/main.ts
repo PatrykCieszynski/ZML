@@ -93,7 +93,7 @@ function handleEventStreamStatus(status: AgentEventStreamStatus, err?: string) {
 async function refreshMiningSnapshot() {
   try {
     const [miningClaims, miningDrops] = await Promise.all([
-      agentRestClient.listMiningClaims({ active: true, activeRun: true }),
+      agentRestClient.listMiningClaims({ active: false, activeRun: true }),
       agentRestClient.listMiningDrops({ activeRun: true }),
     ]);
     replaceMiningClaims(miningClaims);
