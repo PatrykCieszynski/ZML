@@ -21,6 +21,8 @@ def test_apply_env_overrides_sets_mock_mode(monkeypatch, tmp_path: Path) -> None
     monkeypatch.delenv("ZML_FINDER_RECORDING", raising=False)
     monkeypatch.delenv("ZML_FINDER_RECORDING_DIR", raising=False)
     monkeypatch.delenv("ZML_FINDER_RECORDING_INTERVAL_S", raising=False)
+    monkeypatch.delenv("ZML_OCR_PROFILING", raising=False)
+    monkeypatch.delenv("ZML_OCR_PROFILING_INTERVAL_S", raising=False)
     monkeypatch.delenv("ZML_LOG_LEVEL", raising=False)
     monkeypatch.delenv("ZML_MOCK_MINING_INTERVAL_MS", raising=False)
 
@@ -33,6 +35,8 @@ def test_apply_env_overrides_sets_mock_mode(monkeypatch, tmp_path: Path) -> None
         finder_recording="state-change",
         finder_recording_dir=tmp_path / "finder-crops",
         finder_recording_interval_s=2.5,
+        ocr_profiling=True,
+        ocr_profiling_interval_s=1.5,
         log_level="debug",
         mock_interval_ms=1_250,
     )
@@ -46,6 +50,8 @@ def test_apply_env_overrides_sets_mock_mode(monkeypatch, tmp_path: Path) -> None
     assert os.environ["ZML_FINDER_RECORDING"] == "state-change"
     assert os.environ["ZML_FINDER_RECORDING_DIR"] == str(tmp_path / "finder-crops")
     assert os.environ["ZML_FINDER_RECORDING_INTERVAL_S"] == "2.5"
+    assert os.environ["ZML_OCR_PROFILING"] == "1"
+    assert os.environ["ZML_OCR_PROFILING_INTERVAL_S"] == "1.5"
     assert os.environ["ZML_LOG_LEVEL"] == "DEBUG"
     assert os.environ["ZML_MOCK_MINING_INTERVAL_MS"] == "1250"
 
@@ -66,3 +72,4 @@ def test_config_command_prints_resolved_settings(monkeypatch, tmp_path: Path) ->
     assert "ocr_enabled" in result.output
     assert "ocr_profile_path" in result.output
     assert "finder_recording_modes" in result.output
+    assert "ocr_profiling_enabled" in result.output

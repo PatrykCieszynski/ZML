@@ -12,6 +12,7 @@ from zml_game_bridge.inputs.ocr.pipelines.position.preprocess import (
     DigitsPreprocessor,
 )
 from zml_game_bridge.inputs.ocr.pipelines.text import digits_only
+from zml_game_bridge.inputs.ocr.profiling import OcrProfiler
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,12 +29,14 @@ class PositionPipeline:
         engine: TesserDigitsEngine | None = None,
         pre_cfg: DigitsPreprocessConfig | None = None,
         cfg: PositionPipelineConfig | None = None,
+        profiler: OcrProfiler | None = None,
     ) -> None:
         self._rois = rois
         self._engine = engine or TesserDigitsEngine()
         self._pre_cfg = pre_cfg or DigitsPreprocessConfig()
         self._pre = DigitsPreprocessor(pre_cfg)
         self._cfg = cfg or PositionPipelineConfig()
+        self._profiler = profiler
 
         self._last_emitted: tuple[int, int] | None = None
 
@@ -41,46 +44,64 @@ class PositionPipeline:
         self._engine.close()
 
     def step(self, compass_roi: np.ndarray, ts_ms: int) -> OcrPosition | None:
-        lon_img = self._rois.lon.crop(compass_roi)
-        lat_img = self._rois.lat.crop(compass_roi)
+        with self._measure("position.step"):
+            with self._measure("position.crop"):
+                lon_img = self._rois.lon.crop(compass_roi)
+                lat_img = self._rois.lat.crop(compass_roi)
 
-        if lon_img is None or lat_img is None:
-            return None
-        lon = self._read_int(lon_img)
-        lat = self._read_int(lat_img)
-        # TODO range check lat/lon?
+            if lon_img is None or lat_img is None:
+                return None
+            lon = self._read_int(lon_img)
+            lat = self._read_int(lat_img)
+            # TODO range check lat/lon?
 
-        if lon is None or lat is None:
-            return None
-        if (lon, lat) == self._last_emitted:
-            return None
+            if lon is None or lat is None:
+                return None
+            if (lon, lat) == self._last_emitted:
+                return None
 
-        self._last_emitted = (lon, lat)
+            self._last_emitted = (lon, lat)
 
-        return OcrPosition(
-            ts_ms=ts_ms,
-            position=WorldPos(
-                planet_name="",  # fill later when planet OCR returns
-                x=lon,
-                y=lat,
-                z=None,
-            ),
-        )
+            return OcrPosition(
+                ts_ms=ts_ms,
+                position=WorldPos(
+                    planet_name="",  # fill later when planet OCR returns
+                    x=lon,
+                    y=lat,
+                    z=None,
+                ),
+            )
 
     def _read_int(self, img: np.ndarray) -> int | None:
-        pre = self._pre.process(img)
-        raw = self._engine.recognize_digits(pre)
+        with self._measure("position.preprocess"):
+            pre = self._pre.process(img)
+        with self._measure("position.ocr"):
+            raw = self._engine.recognize_digits(pre)
 
-        digits = digits_only(raw)
-        if not digits:
-            return None
+        with self._measure("position.parse"):
+            digits = digits_only(raw)
+            if not digits:
+                return None
 
-        try:
-            val = int(digits)
-        except ValueError:
-            return None
+            try:
+                val = int(digits)
+            except ValueError:
+                return None
 
-        if not (self._cfg.sanity_min <= val <= self._cfg.sanity_max):
-            return None
+            if not (self._cfg.sanity_min <= val <= self._cfg.sanity_max):
+                return None
 
-        return val
+            return val
+
+    def _measure(self, name: str):
+        if self._profiler is None:
+            return _NullMeasure()
+        return self._profiler.measure(name)
+
+
+class _NullMeasure:
+    def __enter__(self) -> None:
+        return None
+
+    def __exit__(self, *args: object) -> None:
+        return None

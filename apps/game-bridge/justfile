@@ -16,6 +16,9 @@ mock:
 finder-debug:
     uv run python -m zml_game_bridge.dev_cli serve --mode live --finder-debug
 
+ocr-profile-record:
+    uv run python -m zml_game_bridge.dev_cli serve --mode live --ocr-profiling --ocr-profiling-interval-s 5 --finder-record manual,state-change,low-confidence,interval --finder-record-interval-s 10 --finder-record-low-confidence-interval-s 2
+
 lint-fix:
     uv run ruff check . --fix
 

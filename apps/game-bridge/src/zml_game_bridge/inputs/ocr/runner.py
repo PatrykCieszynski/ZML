@@ -9,6 +9,8 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from ctypes import windll
 from pathlib import Path
 
+import numpy as np
+
 from zml_game_bridge.events.contracts import SignalSink
 from zml_game_bridge.inputs.ocr.capture.window_capturer import WindowCapturer
 from zml_game_bridge.inputs.ocr.config import OcrRoiProfile, load_ocr_roi_profile
@@ -32,6 +34,10 @@ from zml_game_bridge.inputs.ocr.pipelines.mining_finder.signals import (
 from zml_game_bridge.inputs.ocr.pipelines.mining_finder.vision import VisionFinderFeatureDetector
 from zml_game_bridge.inputs.ocr.pipelines.position.model import OcrPosition
 from zml_game_bridge.inputs.ocr.pipelines.position.pipeline import PositionPipeline
+from zml_game_bridge.inputs.ocr.profiling import (
+    OcrProfiler,
+    ocr_profiling_config_from_env,
+)
 
 PositionSink = Callable[[OcrPosition], None]
 logger = logging.getLogger(__name__)
@@ -48,6 +54,8 @@ def start_ocr_input(
     finder_recording_dir: Path | None = None,
     finder_recording_interval_s: float | None = None,
     finder_recording_low_confidence_interval_s: float | None = None,
+    ocr_profiling_enabled: bool | None = None,
+    ocr_profiling_interval_s: float | None = None,
     roi_profile_path: Path | None = None,
     roi_profile: OcrRoiProfile | None = None,
 ) -> None:
@@ -66,7 +74,18 @@ def start_ocr_input(
     period = 1.0 / target_hz
     next_t = time.perf_counter()
 
-    position_pipeline = PositionPipeline(roi_profile.position_rois.to_position_rois())
+    ocr_profiling_config = ocr_profiling_config_from_env(
+        enabled=ocr_profiling_enabled,
+        interval_s=ocr_profiling_interval_s,
+    )
+    profiler = OcrProfiler(config=ocr_profiling_config)
+    if profiler.enabled:
+        logger.info("ocr_profiling_enabled interval_s=%s", ocr_profiling_config.interval_s)
+
+    position_pipeline = PositionPipeline(
+        roi_profile.position_rois.to_position_rois(),
+        profiler=profiler,
+    )
     if finder_debug_logging is None:
         finder_debug_logging = _env_bool("ZML_FINDER_DEBUG", default=False)
     if finder_debug_logging:
@@ -97,7 +116,10 @@ def start_ocr_input(
         )
 
     finder_pipeline = MiningFinderPipeline(
-        detector=VisionFinderFeatureDetector(layout=roi_profile.finder_panel.to_panel_layout()),
+        detector=VisionFinderFeatureDetector(
+            layout=roi_profile.finder_panel.to_panel_layout(),
+            profiler=profiler,
+        ),
         cfg=MiningFinderPipelineConfig(debug_logging=finder_debug_logging),
         frame_observer=finder_recorder,
     )
@@ -124,11 +146,14 @@ def start_ocr_input(
             next_t += period
             tick += 1
 
+            capture_started_at = time.perf_counter()
             frame = cap.grab()
+            profiler.record_elapsed("capture", capture_started_at)
 
             ts_ms = time.time_ns() // 1_000_000
 
-            compass = roi_profile.screen_rois.compass.crop(frame)
+            with profiler.measure("position.screen_crop"):
+                compass = roi_profile.screen_rois.compass.crop(frame)
             if compass is not None:
                 pos = position_pipeline.step(compass, ts_ms)
                 if pos is not None:
@@ -142,29 +167,49 @@ def start_ocr_input(
                     logger.exception("finder_ocr_worker_crashed")
                 else:
                     if signal_sink is not None:
-                        for signal in signals:
-                            signal_sink(
-                                _to_finder_signal(
-                                    signal,
-                                    finder_position,
-                                    roi_name=roi_profile.screen_rois.finder.name,
+                        emit_started_at = time.perf_counter()
+                        try:
+                            emit_ts_ms = time.time_ns() // 1_000_000
+                            for signal in signals:
+                                latency_ms = max(0, emit_ts_ms - signal.ts_ms)
+                                profiler.record("finder.signal_latency", float(latency_ms))
+                                profiler.record(
+                                    f"finder.signal_latency.{signal.kind}",
+                                    float(latency_ms),
                                 )
-                            )
+                                signal_sink(
+                                    _to_finder_signal(
+                                        signal,
+                                        finder_position,
+                                        roi_name=roi_profile.screen_rois.finder.name,
+                                    )
+                                )
+                        finally:
+                            profiler.record_elapsed("emit.signal", emit_started_at)
                 finally:
                     finder_future = None
                     finder_position = None
 
             if tick % finder_every_n == 0 and finder_future is None:
-                finder = roi_profile.screen_rois.finder.crop(frame)
+                with profiler.measure("finder.screen_crop"):
+                    finder = roi_profile.screen_rois.finder.crop(frame)
                 if finder is not None:
                     finder_position = latest_position
-                    finder_future = finder_executor.submit(finder_pipeline.step, finder, ts_ms)
+                    finder_future = finder_executor.submit(
+                        _run_finder_step,
+                        finder_pipeline,
+                        finder,
+                        ts_ms,
+                        profiler,
+                        time.perf_counter(),
+                    )
 
             if tick % deeds_every_n == 0:
                 pass
                 # deeds = roi_profile.screen_rois.deeds.crop(frame)
                 # if deeds is not None:
                 #     deeds_pipeline.step(deeds, ts_ms)
+            profiler.maybe_log()
     except Exception:
         logger.exception("ocr_worker_crashed")
         raise
@@ -191,6 +236,21 @@ def _configure_finder_debug_logging() -> None:
     )
     logger.setLevel(logging.DEBUG)
     logging.getLogger("zml_game_bridge.inputs.ocr.pipelines.mining_finder").setLevel(logging.DEBUG)
+
+
+def _run_finder_step(
+    pipeline: MiningFinderPipeline,
+    finder_roi: np.ndarray,
+    ts_ms: int,
+    profiler: OcrProfiler,
+    submitted_at: float,
+) -> list[MiningFinderSignal]:
+    profiler.record_elapsed("finder.queue_wait", submitted_at)
+    step_started_at = time.perf_counter()
+    try:
+        return pipeline.step(finder_roi, ts_ms)
+    finally:
+        profiler.record_elapsed("finder.step", step_started_at)
 
 
 def _to_finder_signal(

@@ -213,6 +213,14 @@ def _default_finder_recording_low_confidence_interval_s() -> float:
     return _env_float("ZML_FINDER_RECORDING_LOW_CONFIDENCE_INTERVAL_S", default=5.0)
 
 
+def _default_ocr_profiling_enabled() -> bool:
+    return _env_bool("ZML_OCR_PROFILING", default=False)
+
+
+def _default_ocr_profiling_interval_s() -> float:
+    return _env_float("ZML_OCR_PROFILING_INTERVAL_S", default=10.0)
+
+
 def configure_logging_from_env() -> None:
     logging_level = os.getenv("ZML_LOG_LEVEL", "INFO").strip().upper()
     log_format = "%(asctime)s %(levelname)s [%(name)s] %(message)s"
@@ -299,3 +307,5 @@ class Settings:
     finder_recording_low_confidence_interval_s: float = field(
         default_factory=_default_finder_recording_low_confidence_interval_s
     )
+    ocr_profiling_enabled: bool = field(default_factory=_default_ocr_profiling_enabled)
+    ocr_profiling_interval_s: float = field(default_factory=_default_ocr_profiling_interval_s)
