@@ -63,6 +63,8 @@ Input modes:
 - `ZML_FINDER_RECORDING_DIR`: output directory for finder crop PNG + JSON metadata.
 - `ZML_FINDER_RECORDING_INTERVAL_S`: cadence for `interval` recording mode, defaults to `10`.
 - `ZML_FINDER_RECORDING_LOW_CONFIDENCE_INTERVAL_S`: minimum cadence for low-confidence samples, defaults to `5`.
+- `ZML_OCR_PROFILING`: enable OCR timing summaries in logs.
+- `ZML_OCR_PROFILING_INTERVAL_S`: OCR profiling summary interval, defaults to `10`.
 
 For manual finder recording, enable `manual` mode and create a `record-now.flag` file in `ZML_FINDER_RECORDING_DIR`; the OCR worker consumes the flag on the next finder frame.
 

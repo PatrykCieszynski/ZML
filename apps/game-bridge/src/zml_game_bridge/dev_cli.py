@@ -37,6 +37,8 @@ def _apply_env_overrides(
     finder_recording_dir: Path | None = None,
     finder_recording_interval_s: float | None = None,
     finder_recording_low_confidence_interval_s: float | None = None,
+    ocr_profiling: bool = False,
+    ocr_profiling_interval_s: float | None = None,
     log_level: str | None,
     mock_interval_ms: int | None,
 ) -> None:
@@ -80,6 +82,12 @@ def _apply_env_overrides(
         os.environ["ZML_FINDER_RECORDING_LOW_CONFIDENCE_INTERVAL_S"] = str(
             finder_recording_low_confidence_interval_s
         )
+    if ocr_profiling:
+        os.environ["ZML_OCR_PROFILING"] = "1"
+    if ocr_profiling_interval_s is not None:
+        if ocr_profiling_interval_s <= 0:
+            raise typer.BadParameter("OCR profiling interval must be greater than 0")
+        os.environ["ZML_OCR_PROFILING_INTERVAL_S"] = str(ocr_profiling_interval_s)
     if log_level is not None:
         os.environ["ZML_LOG_LEVEL"] = log_level.upper()
     if mock_interval_ms is not None:
@@ -116,6 +124,8 @@ def _settings_table(settings: Settings) -> Table:
         "finder_recording_low_confidence_interval_s",
         str(settings.finder_recording_low_confidence_interval_s),
     )
+    table.add_row("ocr_profiling_enabled", _format_bool(settings.ocr_profiling_enabled))
+    table.add_row("ocr_profiling_interval_s", str(settings.ocr_profiling_interval_s))
     return table
 
 
@@ -173,6 +183,14 @@ def show_config(
             help="Minimum seconds between low-confidence samples.",
         ),
     ] = None,
+    ocr_profiling: Annotated[
+        bool,
+        typer.Option("--ocr-profiling", help="Log OCR profiling summaries."),
+    ] = False,
+    ocr_profiling_interval_s: Annotated[
+        float | None,
+        typer.Option("--ocr-profiling-interval-s", help="OCR profiling summary interval."),
+    ] = None,
     log_level: Annotated[
         str | None, typer.Option("--log-level", help="Override ZML_LOG_LEVEL.")
     ] = None,
@@ -191,6 +209,8 @@ def show_config(
         finder_recording_dir=finder_recording_dir,
         finder_recording_interval_s=finder_recording_interval_s,
         finder_recording_low_confidence_interval_s=finder_recording_low_confidence_interval_s,
+        ocr_profiling=ocr_profiling,
+        ocr_profiling_interval_s=ocr_profiling_interval_s,
         log_level=log_level,
         mock_interval_ms=mock_interval_ms,
     )
@@ -243,6 +263,14 @@ def serve(
             help="Minimum seconds between low-confidence samples.",
         ),
     ] = None,
+    ocr_profiling: Annotated[
+        bool,
+        typer.Option("--ocr-profiling", help="Log OCR profiling summaries."),
+    ] = False,
+    ocr_profiling_interval_s: Annotated[
+        float | None,
+        typer.Option("--ocr-profiling-interval-s", help="OCR profiling summary interval."),
+    ] = None,
     log_level: Annotated[
         str | None, typer.Option("--log-level", help="Override ZML_LOG_LEVEL.")
     ] = None,
@@ -261,6 +289,8 @@ def serve(
         finder_recording_dir=finder_recording_dir,
         finder_recording_interval_s=finder_recording_interval_s,
         finder_recording_low_confidence_interval_s=finder_recording_low_confidence_interval_s,
+        ocr_profiling=ocr_profiling,
+        ocr_profiling_interval_s=ocr_profiling_interval_s,
         log_level=log_level,
         mock_interval_ms=mock_interval_ms,
     )

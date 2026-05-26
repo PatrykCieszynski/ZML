@@ -27,6 +27,7 @@ from zml_game_bridge.inputs.ocr.pipelines.mining_finder.parsing import (
     parse_units_text,
 )
 from zml_game_bridge.inputs.ocr.pipelines.text import clean_ocr_text
+from zml_game_bridge.inputs.ocr.profiling import OcrProfiler
 
 logger = logging.getLogger(__name__)
 
@@ -70,46 +71,51 @@ class VisionFinderFeatureDetector:
         cfg: VisionFinderFeatureConfig | None = None,
         text_engine: FinderTextEngine | None = None,
         enable_text_ocr: bool = True,
+        profiler: OcrProfiler | None = None,
     ) -> None:
         self._layout = layout or FinderPanelLayout()
         self._cfg = cfg or VisionFinderFeatureConfig()
+        self._profiler = profiler
         self._previous_radar_blue_mask: np.ndarray | None = None
         self._text_engine = self._build_text_engine(text_engine, enable_text_ocr)
 
     def detect(self, finder_roi: np.ndarray) -> FinderFeatures:
-        radar = crop_relative(finder_roi, self._layout.radar)
-        modes = crop_relative(finder_roi, self._layout.modes)
+        with self._measure("finder.detect"):
+            with self._measure("finder.crop"):
+                radar = crop_relative(finder_roi, self._layout.radar)
+                modes = crop_relative(finder_roi, self._layout.modes)
 
-        radar_active, radar_score, radar_change_score, radar_center_score = (
-            self._detect_radar_signal(radar)
-        )
-        modes_mask, mode_scores = self._detect_modes(modes)
-        text_features = self._detect_text_features(finder_roi)
+            with self._measure("finder.visual"):
+                radar_active, radar_score, radar_change_score, radar_center_score = (
+                    self._detect_radar_signal(radar)
+                )
+                modes_mask, mode_scores = self._detect_modes(modes)
+            text_features = self._detect_text_features(finder_roi)
 
-        debug = {
-            "radar_blue_score": radar_score,
-            "radar_change_score": radar_change_score,
-            "radar_center_blue_score": radar_center_score,
-            "mode_ore_score": mode_scores[0],
-            "mode_enmatter_score": mode_scores[1],
-            "mode_treasure_score": mode_scores[2],
-        }
-        return FinderFeatures(
-            radar_signal_active=radar_active,
-            modes_mask=modes_mask,
-            status_kind=text_features.status_kind,
-            raw_status_text=text_features.raw_status_text,
-            probes_per_drop=text_features.probes_per_drop,
-            ammo_per_drop=text_features.ammo_per_drop,
-            raw_units_text=text_features.raw_units_text,
-            raw_details_text=text_features.raw_details_text,
-            hit_size_label=text_features.hit_size_label,
-            hit_size_index=text_features.hit_size_index,
-            resource_name=text_features.resource_name,
-            range_m=text_features.range_m,
-            depth_m=text_features.depth_m,
-            debug=debug,
-        )
+            debug = {
+                "radar_blue_score": radar_score,
+                "radar_change_score": radar_change_score,
+                "radar_center_blue_score": radar_center_score,
+                "mode_ore_score": mode_scores[0],
+                "mode_enmatter_score": mode_scores[1],
+                "mode_treasure_score": mode_scores[2],
+            }
+            return FinderFeatures(
+                radar_signal_active=radar_active,
+                modes_mask=modes_mask,
+                status_kind=text_features.status_kind,
+                raw_status_text=text_features.raw_status_text,
+                probes_per_drop=text_features.probes_per_drop,
+                ammo_per_drop=text_features.ammo_per_drop,
+                raw_units_text=text_features.raw_units_text,
+                raw_details_text=text_features.raw_details_text,
+                hit_size_label=text_features.hit_size_label,
+                hit_size_index=text_features.hit_size_index,
+                resource_name=text_features.resource_name,
+                range_m=text_features.range_m,
+                depth_m=text_features.depth_m,
+                debug=debug,
+            )
 
     def close(self) -> None:
         self._previous_radar_blue_mask = None
@@ -167,30 +173,34 @@ class VisionFinderFeatureDetector:
             logger.debug("Finder text OCR failed for frame", exc_info=True)
             return FinderFeatures()
 
-        probes_per_drop, ammo_per_drop = parse_units_text(raw_units)
-        hit_size_label, hit_size_index = parse_hit_size(raw_status)
-        range_m, depth_m, resource_name = parse_details_text(raw_details)
+        with self._measure("finder.parse"):
+            probes_per_drop, ammo_per_drop = parse_units_text(raw_units)
+            hit_size_label, hit_size_index = parse_hit_size(raw_status)
+            range_m, depth_m, resource_name = parse_details_text(raw_details)
 
-        return FinderFeatures(
-            status_kind=classify_status(raw_status),
-            raw_status_text=clean_ocr_text(raw_status),
-            probes_per_drop=probes_per_drop,
-            ammo_per_drop=ammo_per_drop,
-            raw_units_text=clean_ocr_text(raw_units),
-            raw_details_text=clean_ocr_text(raw_details),
-            hit_size_label=hit_size_label,
-            hit_size_index=hit_size_index,
-            resource_name=resource_name,
-            range_m=range_m,
-            depth_m=depth_m,
-        )
+            return FinderFeatures(
+                status_kind=classify_status(raw_status),
+                raw_status_text=clean_ocr_text(raw_status),
+                probes_per_drop=probes_per_drop,
+                ammo_per_drop=ammo_per_drop,
+                raw_units_text=clean_ocr_text(raw_units),
+                raw_details_text=clean_ocr_text(raw_details),
+                hit_size_label=hit_size_label,
+                hit_size_index=hit_size_index,
+                resource_name=resource_name,
+                range_m=range_m,
+                depth_m=depth_m,
+            )
 
     def _recognize_relative(self, img: np.ndarray, rect: RelativeRect) -> str:
         if self._text_engine is None:
             return ""
-        roi = crop_relative(img, rect)
-        prepared = _prepare_text_ocr_image(roi, self._cfg.text_ocr_scale)
-        return self._text_engine.recognize_text(prepared, psm=6)
+        with self._measure("finder.crop"):
+            roi = crop_relative(img, rect)
+        with self._measure("finder.preprocess"):
+            prepared = _prepare_text_ocr_image(roi, self._cfg.text_ocr_scale)
+        with self._measure("finder.ocr"):
+            return self._text_engine.recognize_text(prepared, psm=6)
 
     def _detect_modes(self, modes_roi: np.ndarray) -> tuple[int, tuple[float, float, float]]:
         parts = np.array_split(modes_roi, 3, axis=1)
@@ -208,6 +218,11 @@ class VisionFinderFeatureDetector:
         if scores[2] >= self._cfg.mode_active_thresholds[2]:
             mask |= int(MiningMode.TREASURE)
         return mask, scores
+
+    def _measure(self, name: str):
+        if self._profiler is None:
+            return _NullMeasure()
+        return self._profiler.measure(name)
 
 
 def _blue_mask(img: np.ndarray) -> np.ndarray:
@@ -238,3 +253,11 @@ def _lit_icon_score(img: np.ndarray) -> float:
 
 def _prepare_text_ocr_image(img: np.ndarray, scale: int) -> np.ndarray:
     return upscale(to_gray_u8(img), scale, cv2.INTER_CUBIC)
+
+
+class _NullMeasure:
+    def __enter__(self) -> None:
+        return None
+
+    def __exit__(self, *args: object) -> None:
+        return None
