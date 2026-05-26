@@ -4,6 +4,10 @@ from typing import Any, Protocol
 
 import numpy as np
 
+from zml_game_bridge.inputs.ocr.pipelines.image import to_gray_u8
+from zml_game_bridge.inputs.ocr.tesserocr_runtime import preload_tesserocr
+from zml_game_bridge.paths import get_tessdata_dir
+
 
 class FinderTextEngine(Protocol):
     def recognize_text(self, img: np.ndarray, *, psm: int = 6) -> str: ...
@@ -11,24 +15,32 @@ class FinderTextEngine(Protocol):
     def close(self) -> None: ...
 
 
-class PytesseractFinderTextEngine:
-    def __init__(self) -> None:
-        # TODO: Benchmark a tesserocr-based finder text engine on real finder crops.
-        # Position OCR shows tesserocr is much faster, but finder OCR has different text/layout needs.
-        try:
-            import pytesseract
-        except Exception as exc:
-            raise RuntimeError(f"pytesseract import failed: {exc}") from exc
+class TesserocrFinderTextEngine:
+    def __init__(
+        self,
+        *,
+        tessdata_dir: str | None = None,
+        tesserocr_module: Any | None = None,
+    ) -> None:
+        tesserocr = tesserocr_module or preload_tesserocr()
+        resolved_tessdata_dir = get_tessdata_dir(tessdata_dir)
 
-        self._pytesseract: Any = pytesseract
+        self._api = tesserocr.PyTessBaseAPI(
+            path=str(resolved_tessdata_dir),
+            lang="eng",
+            psm=tesserocr.PSM.SINGLE_BLOCK,
+            oem=tesserocr.OEM.LSTM_ONLY,
+        )
+        self._api.SetVariable("user_defined_dpi", "300")
+        self._api.SetVariable("load_system_dawg", "0")
+        self._api.SetVariable("load_freq_dawg", "0")
 
     def recognize_text(self, img: np.ndarray, *, psm: int = 6) -> str:
-        raw = self._pytesseract.image_to_string(img, config=f"--psm {psm}")
-        if isinstance(raw, bytes):
-            return raw.decode(errors="replace")
-        if isinstance(raw, str):
-            return raw
-        return ""
+        gray = np.ascontiguousarray(to_gray_u8(img))
+        height, width = gray.shape
+        self._api.SetPageSegMode(psm)
+        self._api.SetImageBytes(gray.tobytes(), width, height, 1, width)
+        return self._api.GetUTF8Text() or ""
 
     def close(self) -> None:
-        pass
+        self._api.End()

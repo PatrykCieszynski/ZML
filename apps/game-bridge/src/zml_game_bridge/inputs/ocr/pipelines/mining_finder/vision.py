@@ -17,7 +17,7 @@ from zml_game_bridge.inputs.ocr.pipelines.image import (
 )
 from zml_game_bridge.inputs.ocr.pipelines.mining_finder.engine import (
     FinderTextEngine,
-    PytesseractFinderTextEngine,
+    TesserocrFinderTextEngine,
 )
 from zml_game_bridge.inputs.ocr.pipelines.mining_finder.model import FinderFeatures
 from zml_game_bridge.inputs.ocr.pipelines.mining_finder.parsing import (
@@ -126,7 +126,7 @@ class VisionFinderFeatureDetector:
         if not enable_text_ocr:
             return None
         try:
-            return PytesseractFinderTextEngine()
+            return TesserocrFinderTextEngine()
         except RuntimeError:
             return None
 

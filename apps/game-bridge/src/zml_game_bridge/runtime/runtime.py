@@ -11,9 +11,9 @@ from zml_game_bridge.application.mining.segments.session import RunSessionServic
 from zml_game_bridge.application.position.latest_position import LatestPositionState
 from zml_game_bridge.inputs.chat.runner import start_chat_input
 from zml_game_bridge.inputs.mock.mining import start_mock_mining_input
-from zml_game_bridge.inputs.ocr.pipelines.position.engine import preload_tesserocr
 from zml_game_bridge.inputs.ocr.pipelines.position.model import OcrPosition
 from zml_game_bridge.inputs.ocr.runner import start_ocr_input
+from zml_game_bridge.inputs.ocr.tesserocr_runtime import preload_tesserocr
 from zml_game_bridge.runtime.bootstrap import RuntimeComponents
 from zml_game_bridge.runtime.db_commands import DbCommand
 from zml_game_bridge.runtime.runtime_commands import RuntimeCommand, RuntimeCommandRequest

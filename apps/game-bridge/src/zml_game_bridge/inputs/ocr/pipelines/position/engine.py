@@ -1,18 +1,9 @@
 from __future__ import annotations
 
-import importlib
-from types import ModuleType
-
 import numpy as np
 
+from zml_game_bridge.inputs.ocr.tesserocr_runtime import preload_tesserocr
 from zml_game_bridge.paths import get_tessdata_dir
-
-
-def preload_tesserocr() -> ModuleType:
-    try:
-        return importlib.import_module("tesserocr")
-    except Exception as exc:
-        raise RuntimeError(f"tesserocr import failed: {exc}") from exc
 
 
 class TesserDigitsEngine:
