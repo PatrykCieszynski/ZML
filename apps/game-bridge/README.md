@@ -59,6 +59,12 @@ Input modes:
 - `ZML_MOCK_INPUTS`: enable mock mining input.
 - `ZML_MOCK_MINING_INTERVAL_MS`: mock drop interval.
 - `ZML_FINDER_DEBUG`: enable detailed finder OCR debug logging.
+- `ZML_FINDER_RECORDING`: finder crop recording modes, comma-separated: `manual`, `state-change`, `low-confidence`, `interval`, or `all`.
+- `ZML_FINDER_RECORDING_DIR`: output directory for finder crop PNG + JSON metadata.
+- `ZML_FINDER_RECORDING_INTERVAL_S`: cadence for `interval` recording mode, defaults to `10`.
+- `ZML_FINDER_RECORDING_LOW_CONFIDENCE_INTERVAL_S`: minimum cadence for low-confidence samples, defaults to `5`.
+
+For manual finder recording, enable `manual` mode and create a `record-now.flag` file in `ZML_FINDER_RECORDING_DIR`; the OCR worker consumes the flag on the next finder frame.
 
 By default, error logs are written to:
 

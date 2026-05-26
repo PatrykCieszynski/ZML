@@ -17,6 +17,10 @@ from zml_game_bridge.inputs.ocr.pipelines.mining_finder.pipeline import (
     MiningFinderPipeline,
     MiningFinderPipelineConfig,
 )
+from zml_game_bridge.inputs.ocr.pipelines.mining_finder.recording import (
+    FinderCropRecorder,
+    finder_recording_config_from_env,
+)
 from zml_game_bridge.inputs.ocr.pipelines.mining_finder.signals import (
     FinderHitHintSignal,
     FinderModeInvalidatedSignal,
@@ -40,6 +44,10 @@ def start_ocr_input(
     stop_event: threading.Event,
     target_hz: float = 10.0,
     finder_debug_logging: bool | None = None,
+    finder_recording_modes: str | None = None,
+    finder_recording_dir: Path | None = None,
+    finder_recording_interval_s: float | None = None,
+    finder_recording_low_confidence_interval_s: float | None = None,
     roi_profile_path: Path | None = None,
     roi_profile: OcrRoiProfile | None = None,
 ) -> None:
@@ -65,9 +73,33 @@ def start_ocr_input(
         _configure_finder_debug_logging()
         logger.info("finder_debug_enabled")
 
+    finder_recording_config = finder_recording_config_from_env(
+        modes=finder_recording_modes,
+        root_dir=finder_recording_dir,
+        interval_s=finder_recording_interval_s,
+        low_confidence_interval_s=finder_recording_low_confidence_interval_s,
+    )
+    finder_recorder = (
+        FinderCropRecorder(
+            config=finder_recording_config,
+            roi_name=roi_profile.screen_rois.finder.name,
+        )
+        if finder_recording_config.enabled
+        else None
+    )
+    if finder_recorder is not None:
+        logger.info(
+            "finder_recording_enabled modes=%s dir=%s interval_ms=%s low_confidence_interval_ms=%s",
+            ",".join(sorted(finder_recording_config.modes)),
+            finder_recording_config.root_dir,
+            finder_recording_config.interval_ms,
+            finder_recording_config.low_confidence_min_interval_ms,
+        )
+
     finder_pipeline = MiningFinderPipeline(
         detector=VisionFinderFeatureDetector(layout=roi_profile.finder_panel.to_panel_layout()),
         cfg=MiningFinderPipelineConfig(debug_logging=finder_debug_logging),
+        frame_observer=finder_recorder,
     )
     # deeds_pipeline = ...     # step(deeds_roi, ts_ms) -> ...
 

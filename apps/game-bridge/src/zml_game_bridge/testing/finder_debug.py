@@ -8,6 +8,9 @@ import cv2
 from zml_game_bridge.inputs.ocr.pipelines.mining_finder.pipeline import (
     MiningFinderPipeline,
 )
+from zml_game_bridge.inputs.ocr.pipelines.mining_finder.recording import (
+    default_finder_recording_dir,
+)
 from zml_game_bridge.inputs.ocr.pipelines.mining_finder.vision import (
     VisionFinderFeatureDetector,
 )
@@ -18,7 +21,7 @@ def main() -> int:
     parser.add_argument(
         "--root",
         type=Path,
-        default=Path("src/zml_game_bridge/inputs/ocr/pipelines/mining_finder/finder_debug_crops"),
+        default=default_finder_recording_dir(),
         help="Folder with finder crop PNG/JPG files.",
     )
     args = parser.parse_args()
