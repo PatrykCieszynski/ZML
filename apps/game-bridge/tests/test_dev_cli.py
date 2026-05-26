@@ -16,6 +16,7 @@ def test_apply_env_overrides_sets_mock_mode(monkeypatch, tmp_path: Path) -> None
     monkeypatch.delenv("ZML_MOCK_INPUTS", raising=False)
     monkeypatch.delenv("ZML_DB_PATH", raising=False)
     monkeypatch.delenv("ZML_CHAT_LOG_PATH", raising=False)
+    monkeypatch.delenv("ZML_OCR_PROFILE_PATH", raising=False)
     monkeypatch.delenv("ZML_FINDER_DEBUG", raising=False)
     monkeypatch.delenv("ZML_LOG_LEVEL", raising=False)
     monkeypatch.delenv("ZML_MOCK_MINING_INTERVAL_MS", raising=False)
@@ -24,6 +25,7 @@ def test_apply_env_overrides_sets_mock_mode(monkeypatch, tmp_path: Path) -> None
         mode=InputMode.MOCK,
         db_path=db_path,
         chat_log_path=chat_log_path,
+        ocr_profile_path=tmp_path / "ocr_profile.json",
         finder_debug=True,
         log_level="debug",
         mock_interval_ms=1_250,
@@ -33,6 +35,7 @@ def test_apply_env_overrides_sets_mock_mode(monkeypatch, tmp_path: Path) -> None
     assert os.environ["ZML_MOCK_INPUTS"] == "1"
     assert os.environ["ZML_DB_PATH"] == str(db_path)
     assert os.environ["ZML_CHAT_LOG_PATH"] == str(chat_log_path)
+    assert os.environ["ZML_OCR_PROFILE_PATH"] == str(tmp_path / "ocr_profile.json")
     assert os.environ["ZML_FINDER_DEBUG"] == "1"
     assert os.environ["ZML_LOG_LEVEL"] == "DEBUG"
     assert os.environ["ZML_MOCK_MINING_INTERVAL_MS"] == "1250"
@@ -52,3 +55,4 @@ def test_config_command_prints_resolved_settings(monkeypatch, tmp_path: Path) ->
     assert "Z Mining Log Game Bridge config" in result.output
     assert "mock_inputs_enabled" in result.output
     assert "ocr_enabled" in result.output
+    assert "ocr_profile_path" in result.output

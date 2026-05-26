@@ -16,6 +16,9 @@ mock:
 finder-debug:
     uv run python -m zml_game_bridge.dev_cli serve --mode live --finder-debug
 
+lint-fix:
+    uv run ruff check . --fix
+
 lint:
     uv run ruff check .
 
