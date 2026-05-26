@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from zml_game_bridge.inputs.ocr.pipelines.position.model import OcrPosition
+from zml_game_bridge.application.position.model import PositionSnapshot
 
 
 class PositionDto(BaseModel):
@@ -15,9 +15,9 @@ class PositionDto(BaseModel):
     z: int | None
 
     @classmethod
-    def from_domain(cls, pos: OcrPosition) -> PositionDto:
+    def from_domain(cls, pos: PositionSnapshot) -> PositionDto:
         return cls(
-            ts_ms=pos.ts_ms,
+            ts_ms=pos.observed_ts_ms,
             planet_name=pos.position.planet_name,
             x=pos.position.x,
             y=pos.position.y,

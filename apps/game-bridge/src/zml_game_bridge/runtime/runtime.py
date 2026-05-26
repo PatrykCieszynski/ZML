@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from pathlib import Path
 
-from zml_game_bridge.api.channels.position_hub import OcrPositionHub
+from zml_game_bridge.api.channels.position_hub import PositionHub
 from zml_game_bridge.api.channels.sse_hub import SseHub
 from zml_game_bridge.application.mining.equipment.service import MiningEquipmentService
 from zml_game_bridge.application.mining.segments.session import RunSessionService
-from zml_game_bridge.application.position.latest_position import LatestPositionState
+from zml_game_bridge.application.position.model import PositionSnapshot
+from zml_game_bridge.application.position.tracking import PositionTrackingService
 from zml_game_bridge.inputs.chat.runner import start_chat_input
 from zml_game_bridge.inputs.mock.mining import start_mock_mining_input
 from zml_game_bridge.inputs.ocr.pipelines.position.model import OcrPosition
@@ -31,7 +33,7 @@ class AppRuntime:
         components: RuntimeComponents,
         supervisor: WorkerSupervisor,
         sse_hub: SseHub | None = None,
-        position_hub: OcrPositionHub | None = None,
+        position_hub: PositionHub | None = None,
     ) -> None:
         self._settings = settings
         self._components = components
@@ -41,13 +43,16 @@ class AppRuntime:
         self._sse_hub = sse_hub
         self._position_hub = position_hub
         self._started = False
+        self._components.position_service.set_publisher(
+            None if position_hub is None else position_hub.publish_threadsafe
+        )
 
     @property
     def db_path(self) -> Path:
         return self._settings.db_path
 
     @property
-    def position_hub(self) -> OcrPositionHub:
+    def position_hub(self) -> PositionHub:
         if self._position_hub is None:
             raise RuntimeError("Position hub not attached")
         return self._position_hub
@@ -57,8 +62,8 @@ class AppRuntime:
         return self._sse_hub
 
     @property
-    def latest_position(self) -> LatestPositionState:
-        return self._components.latest_position
+    def position_service(self) -> PositionTrackingService:
+        return self._components.position_service
 
     @property
     def mining_equipment_service(self) -> MiningEquipmentService:
@@ -89,8 +94,9 @@ class AppRuntime:
     def attach_sse_hub(self, hub: SseHub) -> None:
         self._sse_hub = hub
 
-    def attach_position_hub(self, hub: OcrPositionHub) -> None:
+    def attach_position_hub(self, hub: PositionHub) -> None:
         self._position_hub = hub
+        self._components.position_service.set_publisher(hub.publish_threadsafe)
 
     def start(self) -> None:
         if self._started:
@@ -182,8 +188,14 @@ class AppRuntime:
             self._sub_sse = self._components.persisted_events.subscribe(self._sse_hub.on_envelope)
 
     def _on_position(self, position: OcrPosition) -> None:
-        self._components.latest_position.update(position)
-        self.position_hub.publish_threadsafe(position)
+        self._components.position_service.ingest_snapshot(
+            PositionSnapshot(
+                observed_ts_ms=position.ts_ms,
+                received_ts_ms=time.time_ns() // 1_000_000,
+                position=position.position,
+                source="ocr",
+            )
+        )
 
     def stop(self) -> None:
         if not self._started:

@@ -13,7 +13,7 @@ The backend is offline-first and currently designed for one local UI client.
 - `DbWriterWorker` is the only SQLite writer.
 - Durable events are appended to `events` and projected into read-model tables such as mining drops and claims in the same DB transaction.
 - Persisted event envelopes are published to SSE only after the DB write succeeds.
-- High-frequency position updates bypass SQLite and go through `/ws/position`.
+- High-frequency position updates bypass SQLite and go through `PositionTrackingService` to `/ws/position`.
 
 ## Runtime Flow
 
