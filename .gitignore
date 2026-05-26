@@ -237,3 +237,4 @@ apps/game-bridge/*.spec
 apps/game-bridge/.pytest-cache/
 apps/game-bridge/.pytest-cache-local/
 apps/game-bridge/.pytest-tmp/
+apps/game-bridge/.pytest-tmp-*/

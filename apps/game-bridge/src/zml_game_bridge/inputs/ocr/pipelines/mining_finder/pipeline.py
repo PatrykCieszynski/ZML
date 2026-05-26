@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Protocol
 
 import numpy as np
 
@@ -29,15 +30,28 @@ class MiningFinderPipelineConfig:
     debug_logging: bool = False
 
 
+class FinderFrameObserver(Protocol):
+    def record_frame(
+        self,
+        finder_roi: np.ndarray,
+        *,
+        ts_ms: int,
+        features: FinderFeatures,
+        signals: list[MiningFinderSignal],
+    ) -> None: ...
+
+
 class MiningFinderPipeline:
     def __init__(
         self,
         *,
         detector: FinderFeatureDetector | None = None,
         cfg: MiningFinderPipelineConfig | None = None,
+        frame_observer: FinderFrameObserver | None = None,
     ) -> None:
         self._detector = detector or VisionFinderFeatureDetector()
         self._cfg = cfg or MiningFinderPipelineConfig()
+        self._frame_observer = frame_observer
 
         self._last_status_kind: FinderStatusKind | None = None
         self._last_probe_ts_ms: int | None = None
@@ -95,6 +109,13 @@ class MiningFinderPipeline:
             signals.append(no_resources_signal)
 
         self._log_debug_changes(features, signals, ts_ms)
+        if self._frame_observer is not None:
+            self._frame_observer.record_frame(
+                finder_roi,
+                ts_ms=ts_ms,
+                features=features,
+                signals=signals,
+            )
         self._last_status_kind = features.status_kind
         return signals
 

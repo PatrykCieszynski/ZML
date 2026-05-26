@@ -104,7 +104,8 @@ class AppRuntime:
         self._started = True
         logger.info(
             "app_started db_path=%s chat_log_path=%s mining_resource_catalog_path=%s "
-            "mining_tools_path=%s ocr_profile_path=%s ocr_enabled=%s mock_inputs_enabled=%s",
+            "mining_tools_path=%s ocr_profile_path=%s ocr_enabled=%s mock_inputs_enabled=%s "
+            "finder_recording_modes=%s",
             self._settings.db_path,
             self._settings.chat_log_path,
             self._settings.mining_resource_catalog_path,
@@ -112,6 +113,7 @@ class AppRuntime:
             self._settings.ocr_profile_path,
             self._settings.ocr_enabled,
             self._settings.mock_inputs_enabled,
+            self._settings.finder_recording_modes,
         )
 
         self._supervisor.start_thread(
@@ -153,6 +155,12 @@ class AppRuntime:
                     "signal_sink": self._components.pending_inputs.emit,
                     "stop_event": self._stop_event,
                     "roi_profile_path": self._settings.ocr_profile_path,
+                    "finder_recording_modes": self._settings.finder_recording_modes,
+                    "finder_recording_dir": self._settings.finder_recording_dir,
+                    "finder_recording_interval_s": self._settings.finder_recording_interval_s,
+                    "finder_recording_low_confidence_interval_s": (
+                        self._settings.finder_recording_low_confidence_interval_s
+                    ),
                 },
             )
 

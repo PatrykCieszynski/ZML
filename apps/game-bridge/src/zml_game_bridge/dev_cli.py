@@ -33,6 +33,10 @@ def _apply_env_overrides(
     chat_log_path: Path | None,
     ocr_profile_path: Path | None,
     finder_debug: bool,
+    finder_recording: str | None = None,
+    finder_recording_dir: Path | None = None,
+    finder_recording_interval_s: float | None = None,
+    finder_recording_low_confidence_interval_s: float | None = None,
     log_level: str | None,
     mock_interval_ms: int | None,
 ) -> None:
@@ -60,6 +64,20 @@ def _apply_env_overrides(
         os.environ["ZML_OCR_PROFILE_PATH"] = str(ocr_profile_path)
     if finder_debug:
         os.environ["ZML_FINDER_DEBUG"] = "1"
+    if finder_recording is not None:
+        os.environ["ZML_FINDER_RECORDING"] = finder_recording
+    if finder_recording_dir is not None:
+        os.environ["ZML_FINDER_RECORDING_DIR"] = str(finder_recording_dir)
+    if finder_recording_interval_s is not None:
+        if finder_recording_interval_s <= 0:
+            raise typer.BadParameter("finder recording interval must be greater than 0")
+        os.environ["ZML_FINDER_RECORDING_INTERVAL_S"] = str(finder_recording_interval_s)
+    if finder_recording_low_confidence_interval_s is not None:
+        if finder_recording_low_confidence_interval_s <= 0:
+            raise typer.BadParameter("finder recording low confidence interval must be greater than 0")
+        os.environ["ZML_FINDER_RECORDING_LOW_CONFIDENCE_INTERVAL_S"] = str(
+            finder_recording_low_confidence_interval_s
+        )
     if log_level is not None:
         os.environ["ZML_LOG_LEVEL"] = log_level.upper()
     if mock_interval_ms is not None:
@@ -89,6 +107,13 @@ def _settings_table(settings: Settings) -> Table:
     table.add_row("ocr_enabled", _format_bool(settings.ocr_enabled))
     table.add_row("mock_inputs_enabled", _format_bool(settings.mock_inputs_enabled))
     table.add_row("mock_mining_interval_ms", str(settings.mock_mining_interval_ms))
+    table.add_row("finder_recording_modes", settings.finder_recording_modes or "[dim]<off>[/]")
+    table.add_row("finder_recording_dir", str(settings.finder_recording_dir))
+    table.add_row("finder_recording_interval_s", str(settings.finder_recording_interval_s))
+    table.add_row(
+        "finder_recording_low_confidence_interval_s",
+        str(settings.finder_recording_low_confidence_interval_s),
+    )
     return table
 
 
@@ -124,6 +149,28 @@ def show_config(
         bool,
         typer.Option("--finder-debug", help="Enable finder OCR debug logging."),
     ] = False,
+    finder_recording: Annotated[
+        str | None,
+        typer.Option(
+            "--finder-record",
+            help="Finder crop recording modes: manual,state-change,low-confidence,interval,all.",
+        ),
+    ] = None,
+    finder_recording_dir: Annotated[
+        Path | None,
+        typer.Option("--finder-record-dir", help="Override ZML_FINDER_RECORDING_DIR."),
+    ] = None,
+    finder_recording_interval_s: Annotated[
+        float | None,
+        typer.Option("--finder-record-interval-s", help="Interval recording cadence in seconds."),
+    ] = None,
+    finder_recording_low_confidence_interval_s: Annotated[
+        float | None,
+        typer.Option(
+            "--finder-record-low-confidence-interval-s",
+            help="Minimum seconds between low-confidence samples.",
+        ),
+    ] = None,
     log_level: Annotated[
         str | None, typer.Option("--log-level", help="Override ZML_LOG_LEVEL.")
     ] = None,
@@ -138,6 +185,10 @@ def show_config(
         chat_log_path=chat_log_path,
         ocr_profile_path=ocr_profile_path,
         finder_debug=finder_debug,
+        finder_recording=finder_recording,
+        finder_recording_dir=finder_recording_dir,
+        finder_recording_interval_s=finder_recording_interval_s,
+        finder_recording_low_confidence_interval_s=finder_recording_low_confidence_interval_s,
         log_level=log_level,
         mock_interval_ms=mock_interval_ms,
     )
@@ -168,6 +219,28 @@ def serve(
         bool,
         typer.Option("--finder-debug", help="Enable finder OCR debug logging."),
     ] = False,
+    finder_recording: Annotated[
+        str | None,
+        typer.Option(
+            "--finder-record",
+            help="Finder crop recording modes: manual,state-change,low-confidence,interval,all.",
+        ),
+    ] = None,
+    finder_recording_dir: Annotated[
+        Path | None,
+        typer.Option("--finder-record-dir", help="Override ZML_FINDER_RECORDING_DIR."),
+    ] = None,
+    finder_recording_interval_s: Annotated[
+        float | None,
+        typer.Option("--finder-record-interval-s", help="Interval recording cadence in seconds."),
+    ] = None,
+    finder_recording_low_confidence_interval_s: Annotated[
+        float | None,
+        typer.Option(
+            "--finder-record-low-confidence-interval-s",
+            help="Minimum seconds between low-confidence samples.",
+        ),
+    ] = None,
     log_level: Annotated[
         str | None, typer.Option("--log-level", help="Override ZML_LOG_LEVEL.")
     ] = None,
@@ -182,6 +255,10 @@ def serve(
         chat_log_path=chat_log_path,
         ocr_profile_path=ocr_profile_path,
         finder_debug=finder_debug,
+        finder_recording=finder_recording,
+        finder_recording_dir=finder_recording_dir,
+        finder_recording_interval_s=finder_recording_interval_s,
+        finder_recording_low_confidence_interval_s=finder_recording_low_confidence_interval_s,
         log_level=log_level,
         mock_interval_ms=mock_interval_ms,
     )
