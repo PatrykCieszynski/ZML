@@ -31,11 +31,22 @@ type MainView = "dashboard" | "runs" | "segments" | "loot" | "claims" | "setup" 
 type FeedItem = {
   id: string;
   tsMs: number;
-  kind: "drop" | "hit" | "miss" | "claim" | "depleted";
+  kind: "drop" | "hit" | "miss" | "claim" | "depleted" | "loot";
   title: string;
   detail: string;
   amount?: string;
 };
+
+type DashboardFeedFilter = "activity" | "all" | "drops" | "claims" | "loot";
+
+const DASHBOARD_FEED_FILTERS: Array<{ id: DashboardFeedFilter; label: string }> = [
+  { id: "activity", label: "Activity" },
+  { id: "all", label: "All Events" },
+  { id: "drops", label: "Drops" },
+  { id: "claims", label: "Claims" },
+  { id: "loot", label: "Loot" },
+];
+const MAX_DASHBOARD_FEED_ITEMS = 80;
 
 const NAV_ITEMS: Array<{ id: MainView; label: string }> = [
   { id: "dashboard", label: "Dashboard" },
@@ -77,8 +88,12 @@ export function MainWindow() {
     [state.miningDrops, state.miningClaims, state.miningLoot],
   );
   const feed = useMemo(
-    () => buildFeed(state.miningDrops, state.miningClaims),
-    [state.miningDrops, state.miningClaims],
+    () => buildFeed(state.miningDrops, state.miningClaims, state.miningLoot),
+    [state.miningDrops, state.miningClaims, state.miningLoot],
+  );
+  const activityFeed = useMemo(
+    () => filterFeed(feed, "activity"),
+    [feed],
   );
   const warnings = useMemo(
     () => buildWarnings({
@@ -260,7 +275,7 @@ export function MainWindow() {
 
           <aside className="zml-right-panel">
             <WarningsPanel warnings={warnings} />
-            <RecentActivityPanel feed={feed} positionSeq={state.positionEvent?.seq ?? null} />
+            <RecentActivityPanel feed={activityFeed} positionSeq={state.positionEvent?.seq ?? null} />
           </aside>
         </main>
       )}
@@ -338,19 +353,28 @@ function RunSummaryPanel({
 }
 
 function DashboardFeed({ feed }: { feed: FeedItem[] }) {
+  const [filter, setFilter] = useState<DashboardFeedFilter>("activity");
+  const visibleFeed = useMemo(() => filterFeed(feed, filter), [feed, filter]);
+
   return (
     <section className="zml-work-panel">
       <div className="zml-tabs-inline">
-        <button type="button" className="is-active">All</button>
-        <button type="button">Drops</button>
-        <button type="button">Claims</button>
-        <button type="button">Warnings</button>
+        {DASHBOARD_FEED_FILTERS.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={item.id === filter ? "is-active" : undefined}
+            onClick={() => setFilter(item.id)}
+          >
+            {item.label}
+          </button>
+        ))}
       </div>
-      {feed.length === 0 ? (
+      {visibleFeed.length === 0 ? (
         <EmptyState text="No mining events yet" />
       ) : (
         <div className="zml-feed">
-          {feed.map((item) => (
+          {visibleFeed.map((item) => (
             <div key={item.id} className={`zml-feed-row is-${item.kind}`}>
               <time>{formatTime(item.tsMs)}</time>
               <span className="zml-feed-kind" aria-hidden="true" />
@@ -1123,7 +1147,11 @@ function getRunStats(drops: MiningDropDto[], claims: MiningClaimDto[], loot: Min
   };
 }
 
-function buildFeed(drops: MiningDropDto[], claims: MiningClaimDto[]): FeedItem[] {
+function buildFeed(
+  drops: MiningDropDto[],
+  claims: MiningClaimDto[],
+  loot: MiningLootItemDto[],
+): FeedItem[] {
   const items: FeedItem[] = [];
 
   for (const drop of drops) {
@@ -1163,13 +1191,44 @@ function buildFeed(drops: MiningDropDto[], claims: MiningClaimDto[]): FeedItem[]
       id: `${claim.claimId}:claim:${claim.status}`,
       tsMs: claimActivityTsMs(claim),
       kind: isDepleted ? "depleted" : "claim",
-      title: isDepleted ? "Claim Extracted" : "Claim Active",
+      title: isDepleted ? "Claim Extracted" : "Claim Recorded",
       detail: `${claim.resourceName ?? "Unknown resource"} ${formatSize(claim.sizeLabel, claim.sizeIndex)}`,
       amount: isDepleted ? formatMeters(claim.depletedDistanceM) : formatExpires(claim.expectedExpiresTsMs),
     });
   }
 
-  return items.sort((a, b) => b.tsMs - a.tsMs).slice(0, 80);
+  for (const item of loot) {
+    items.push({
+      id: `${item.eventId}:${item.createdTsMs}:loot`,
+      tsMs: lootActivityTsMs(item),
+      kind: "loot",
+      title: "Item Received",
+      detail: `${item.itemName} x${item.qty}`,
+      amount: formatPedFromMpec(item.valueMpec),
+    });
+  }
+
+  return items.sort((a, b) => b.tsMs - a.tsMs);
+}
+
+function filterFeed(feed: FeedItem[], filter: DashboardFeedFilter): FeedItem[] {
+  if (filter === "all") return feed.slice(0, MAX_DASHBOARD_FEED_ITEMS);
+  if (filter === "activity") {
+    return feed
+      .filter((item) => item.kind !== "loot" && item.kind !== "hit")
+      .slice(0, MAX_DASHBOARD_FEED_ITEMS);
+  }
+  if (filter === "drops") {
+    return feed
+      .filter((item) => item.kind === "drop" || item.kind === "miss")
+      .slice(0, MAX_DASHBOARD_FEED_ITEMS);
+  }
+  if (filter === "claims") {
+    return feed
+      .filter((item) => item.kind === "hit" || item.kind === "claim" || item.kind === "depleted")
+      .slice(0, MAX_DASHBOARD_FEED_ITEMS);
+  }
+  return feed.filter((item) => item.kind === "loot").slice(0, MAX_DASHBOARD_FEED_ITEMS);
 }
 
 function buildWarnings({
@@ -1251,6 +1310,12 @@ function claimActivityTsMs(claim: MiningClaimDto): number {
   }
   const parsed = Date.parse(claim.depletedEventDt);
   return Number.isFinite(parsed) ? parsed : claim.observedTsMs;
+}
+
+function lootActivityTsMs(item: MiningLootItemDto): number {
+  if (item.eventDt === null) return item.createdTsMs;
+  const parsed = Date.parse(item.eventDt);
+  return Number.isFinite(parsed) ? parsed : item.createdTsMs;
 }
 
 function formatDateTimeString(value: string): string {

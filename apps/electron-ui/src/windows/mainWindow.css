@@ -576,12 +576,20 @@
   background: #40d889;
 }
 
+.zml-feed-row.is-loot .zml-feed-kind {
+  background: #7dc8ff;
+}
+
 .zml-feed-row.is-claim b {
   color: #f5d96b;
 }
 
 .zml-feed-row.is-depleted b {
   color: #40d889;
+}
+
+.zml-feed-row.is-loot b {
+  color: #7dc8ff;
 }
 
 .zml-warning-list {
