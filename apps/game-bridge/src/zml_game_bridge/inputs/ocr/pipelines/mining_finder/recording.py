@@ -73,7 +73,9 @@ class FinderCropRecorder:
             if not reasons:
                 return
 
-            self._write_sample(finder_roi, ts_ms=ts_ms, features=features, signals=signals, reasons=reasons)
+            self._write_sample(
+                finder_roi, ts_ms=ts_ms, features=features, signals=signals, reasons=reasons
+            )
         except Exception:
             logger.warning("finder_crop_record_failed ts_ms=%s", ts_ms, exc_info=True)
 
@@ -92,20 +94,26 @@ class FinderCropRecorder:
         if "state-change" in self._config.modes and self._is_state_change(features, signals):
             reasons.append("state-change")
 
-        if "low-confidence" in self._config.modes and self._is_low_confidence(features):
-            if self._last_low_confidence_ts_ms is None or (
-                ts_ms - self._last_low_confidence_ts_ms
-                >= self._config.low_confidence_min_interval_ms
-            ):
-                self._last_low_confidence_ts_ms = ts_ms
-                reasons.append("low-confidence")
+        if (
+            "low-confidence" in self._config.modes
+            and self._is_low_confidence(features)
+            and (
+                self._last_low_confidence_ts_ms is None
+                or (
+                    ts_ms - self._last_low_confidence_ts_ms
+                    >= self._config.low_confidence_min_interval_ms
+                )
+            )
+        ):
+            self._last_low_confidence_ts_ms = ts_ms
+            reasons.append("low-confidence")
 
-        if "interval" in self._config.modes:
-            if self._last_interval_ts_ms is None or (
-                ts_ms - self._last_interval_ts_ms >= self._config.interval_ms
-            ):
-                self._last_interval_ts_ms = ts_ms
-                reasons.append("interval")
+        if "interval" in self._config.modes and (
+            self._last_interval_ts_ms is None
+            or (ts_ms - self._last_interval_ts_ms >= self._config.interval_ms)
+        ):
+            self._last_interval_ts_ms = ts_ms
+            reasons.append("interval")
 
         return reasons
 
@@ -116,7 +124,9 @@ class FinderCropRecorder:
         try:
             trigger.unlink()
         except OSError:
-            logger.warning("finder_record_manual_trigger_delete_failed path=%s", trigger, exc_info=True)
+            logger.warning(
+                "finder_record_manual_trigger_delete_failed path=%s", trigger, exc_info=True
+            )
         return True
 
     def _is_state_change(
@@ -189,7 +199,9 @@ def finder_recording_config_from_env(
 ) -> FinderRecordingConfig:
     return FinderRecordingConfig(
         modes=_parse_modes(modes if modes is not None else os.getenv("ZML_FINDER_RECORDING")),
-        root_dir=root_dir or _env_path("ZML_FINDER_RECORDING_DIR") or default_finder_recording_dir(),
+        root_dir=root_dir
+        or _env_path("ZML_FINDER_RECORDING_DIR")
+        or default_finder_recording_dir(),
         interval_ms=_seconds_to_ms(
             interval_s
             if interval_s is not None

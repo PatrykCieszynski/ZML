@@ -74,7 +74,9 @@ def _apply_env_overrides(
         os.environ["ZML_FINDER_RECORDING_INTERVAL_S"] = str(finder_recording_interval_s)
     if finder_recording_low_confidence_interval_s is not None:
         if finder_recording_low_confidence_interval_s <= 0:
-            raise typer.BadParameter("finder recording low confidence interval must be greater than 0")
+            raise typer.BadParameter(
+                "finder recording low confidence interval must be greater than 0"
+            )
         os.environ["ZML_FINDER_RECORDING_LOW_CONFIDENCE_INTERVAL_S"] = str(
             finder_recording_low_confidence_interval_s
         )
