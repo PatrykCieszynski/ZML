@@ -9,8 +9,7 @@ from zml_game_bridge.application.mining.segments.session import (
     RunSessionService,
 )
 from zml_game_bridge.application.mining.settings import default_id_factory
-from zml_game_bridge.application.position.latest_position import LatestPositionState
-from zml_game_bridge.domain.position import WorldPos
+from zml_game_bridge.application.position.tracking import PositionTrackingService
 from zml_game_bridge.events.in_memory_persisted_event_bus import InMemoryPersistedEventBus
 from zml_game_bridge.persistence.event_projector import CompositeEventProjector
 from zml_game_bridge.persistence.mining_claims import MiningClaimProjector
@@ -33,7 +32,7 @@ class RuntimeComponents:
     pending_events: EventChannel
     pending_db_commands: DbCommandChannel
     persisted_events: InMemoryPersistedEventBus
-    latest_position: LatestPositionState
+    position_service: PositionTrackingService
     mining_equipment_service: MiningEquipmentService
     run_session_service: RunSessionService
     mining_coordinator: MiningCoordinator
@@ -47,17 +46,13 @@ def build_runtime_components(settings: Settings) -> RuntimeComponents:
     pending_events = EventChannel()
     pending_db_commands = DbCommandChannel()
     persisted_events = InMemoryPersistedEventBus()
-    latest_position = LatestPositionState()
+    position_service = PositionTrackingService()
     resource_catalog = MiningResourceCatalog(user_path=settings.mining_resource_catalog_path)
     mining_equipment_service = MiningEquipmentService(path=settings.mining_tools_path)
     run_session_service = RunSessionService(
         db_path=settings.db_path,
         id_factory=default_id_factory,
     )
-
-    def current_position() -> WorldPos | None:
-        position = latest_position.get()
-        return position.position if position is not None else None
 
     def run_context_for_drop(observed_ts_ms: int, setup: MiningSegmentSetup):
         return run_session_service.context_for_drop(
@@ -70,7 +65,7 @@ def build_runtime_components(settings: Settings) -> RuntimeComponents:
 
     mining_coordinator = MiningCoordinator(
         profile_provider=mining_equipment_service.get_equipment_profile,
-        position_provider=current_position,
+        position_provider=position_service.get_latest_world_pos,
         resource_catalog=resource_catalog,
         run_context_provider=run_context_for_drop,
         run_id_provider=current_run_id,
@@ -106,7 +101,7 @@ def build_runtime_components(settings: Settings) -> RuntimeComponents:
         pending_events=pending_events,
         pending_db_commands=pending_db_commands,
         persisted_events=persisted_events,
-        latest_position=latest_position,
+        position_service=position_service,
         mining_equipment_service=mining_equipment_service,
         run_session_service=run_session_service,
         mining_coordinator=mining_coordinator,
