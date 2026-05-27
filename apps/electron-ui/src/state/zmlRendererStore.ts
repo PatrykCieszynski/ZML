@@ -76,6 +76,9 @@ let initializedFor: WindowType | null = null;
 let positionUnsubscribe: (() => void) | null = null;
 let statePatchUnsubscribe: (() => void) | null = null;
 let bootstrapRequestId = 0;
+let lastMainPositionUpdateTsMs = 0;
+
+const MAIN_POSITION_UPDATE_INTERVAL_MS = 1_000;
 
 const listeners = new Set<() => void>();
 
@@ -138,6 +141,7 @@ export function initZmlRendererStore(windowType: WindowType): void {
 
   initializedFor = windowType;
   const requestId = ++bootstrapRequestId;
+  lastMainPositionUpdateTsMs = 0;
 
   let api;
   try {
@@ -172,6 +176,20 @@ export function initZmlRendererStore(windowType: WindowType): void {
     });
 
   positionUnsubscribe = api.onPosition((event) => {
+    const nowTsMs = Date.now();
+    const isMainWindow = initializedFor === "main";
+    if (
+      isMainWindow &&
+      state.position !== undefined &&
+      nowTsMs - lastMainPositionUpdateTsMs < MAIN_POSITION_UPDATE_INTERVAL_MS
+    ) {
+      return;
+    }
+
+    if (isMainWindow) {
+      lastMainPositionUpdateTsMs = nowTsMs;
+    }
+
     setState({
       positionEvent: event,
       position: event.payload,

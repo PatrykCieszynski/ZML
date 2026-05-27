@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   ActiveMiningToolsDto,
   MiningClaimDto,
@@ -9,6 +9,7 @@ import type {
   MiningToolProfileDto,
   RunDto,
   RunSegmentDto,
+  WorldPosDTO,
   WindowType,
 } from "@zml/shared";
 import {
@@ -16,6 +17,7 @@ import {
   refreshAgentHealth,
   refreshRuns,
   resumeRun,
+  setActiveMiningTools,
   startRun,
   stopRun,
   toggleMapWindow,
@@ -24,10 +26,11 @@ import {
   useZmlRendererStore,
 } from "../state/zmlRendererStore";
 import { MiningToolsPanel } from "./miningToolsPanel";
+import { useMapPreferences, type MapPreferences } from "./mapPreferences";
 import { useOverlayPreferences, type OverlayMetricKey } from "./overlayPreferences";
 import "./mainWindow.css";
 
-type MainView = "dashboard" | "runs" | "segments" | "loot" | "claims" | "setup" | "overlay" | "debug";
+type MainView = "dashboard" | "runs" | "segments" | "loot" | "claims" | "setup" | "map" | "overlay" | "debug";
 
 type FeedItem = {
   id: string;
@@ -56,6 +59,7 @@ const NAV_ITEMS: Array<{ id: MainView; label: string }> = [
   { id: "loot", label: "Loot" },
   { id: "claims", label: "Claims" },
   { id: "setup", label: "Setup" },
+  { id: "map", label: "Map" },
   { id: "overlay", label: "Overlay" },
   { id: "debug", label: "Debug" },
 ];
@@ -63,6 +67,7 @@ const NAV_ITEMS: Array<{ id: MainView; label: string }> = [
 export function MainWindow() {
   const windowType: WindowType = "main";
   const state = useZmlRendererStore(windowType);
+  const [mapPreferences] = useMapPreferences();
   const position = state.position?.position;
   const activeRunId = state.activeRun?.runId ?? null;
   const activeRunName = state.activeRun?.name;
@@ -115,6 +120,7 @@ export function MainWindow() {
       state.lastCommandError,
     ],
   );
+  useSmallClaimSoundAlert(state.miningClaims, mapPreferences);
 
   return (
     <div className="zml-app-shell">
@@ -227,7 +233,12 @@ export function MainWindow() {
       {!state.error && state.bootstrapped && (
         <main className="zml-main-grid">
           <aside className="zml-left-panel">
-            <ActiveSetupPanel setup={activeSetup} activeTools={state.activeMiningTools} />
+            <ActiveSetupPanel
+              setup={activeSetup}
+              activeTools={state.activeMiningTools}
+              tools={state.miningTools}
+              pending={state.toolCommandPending}
+            />
             <RunSummaryPanel stats={runStats} activeRunName={state.activeRun?.name ?? null} />
           </aside>
 
@@ -271,6 +282,7 @@ export function MainWindow() {
                 pending={state.toolCommandPending}
               />
             )}
+            {view === "map" && <MapSettingsView position={position ?? null} />}
             {view === "overlay" && <OverlaySettingsView />}
             {view === "debug" && (
               <DebugView
@@ -290,10 +302,14 @@ export function MainWindow() {
       )}
 
       <footer className="zml-footer">
-        <span>{position?.planetName || "Unknown planet"}</span>
-        <span>{formatPosition(position)}</span>
-        <span>Seq: {state.positionEvent?.seq ?? "-"}</span>
-        <span>{state.lastCommandError ?? state.agent.lastError ?? "Ready"}</span>
+        <div className="zml-footer-position">
+          <span>{position?.planetName || "Unknown planet"}</span>
+          <strong>{formatPosition(position)}</strong>
+          <span>Seq {state.positionEvent?.seq ?? "-"}</span>
+        </div>
+        <span className="zml-footer-message">
+          {state.lastCommandError ?? state.agent.lastError ?? "Ready"}
+        </span>
       </footer>
     </div>
   );
@@ -311,15 +327,48 @@ function StatusPill({ label, ok }: { label: string; ok: boolean }) {
 function ActiveSetupPanel({
   setup,
   activeTools,
+  tools,
+  pending,
 }: {
   setup: ActiveSetup;
   activeTools?: ActiveMiningToolsDto;
+  tools: MiningToolProfileDto[];
+  pending: boolean;
 }) {
+  const finderTools = tools.filter((tool) => tool.kind === "finder");
+
+  const handleFinderChange = (value: string) => {
+    void setActiveMiningTools({
+      finderId: emptyStringToNull(value),
+      ampId: activeTools?.ampId ?? null,
+      extractorId: activeTools?.extractorId ?? null,
+      finderRangeEnhancerCount: activeTools?.finderRangeEnhancerCount ?? 0,
+    });
+  };
+
   return (
     <section className="zml-panel">
       <PanelTitle title="Active Setup" />
       <div className="zml-setup-list">
-        <SetupLine label="Finder" value={setup.finder} badge={formatMeters(activeTools?.effectiveFinderRadiusM)} />
+        <label className="zml-quick-finder">
+          <span>Finder</span>
+          <select
+            value={activeTools?.finderId ?? ""}
+            onChange={(event) => {
+              const { value } = event.currentTarget;
+              handleFinderChange(value);
+            }}
+            disabled={pending}
+          >
+            <option value="">Default finder</option>
+            {finderTools.map((tool) => (
+              <option key={tool.toolId} value={tool.toolId}>
+                {tool.name}
+              </option>
+            ))}
+          </select>
+          <em>{formatMeters(activeTools?.effectiveFinderRadiusM)}</em>
+        </label>
         <SetupLine label="Amplifier" value={setup.amp} />
         <SetupLine label="Extractor" value={setup.extractor} badge={formatPedFromMpec(activeTools?.extractionCostMpec)} />
       </div>
@@ -812,6 +861,198 @@ function ClaimsView({ claims }: { claims: MiningClaimDto[] }) {
   );
 }
 
+const CLAIM_SIZE_ALERT_OPTIONS: Array<{ value: number; label: string }> = [
+  { value: 0, label: "Disabled" },
+  { value: 1, label: "Minimal I" },
+  { value: 2, label: "Tiny II" },
+  { value: 3, label: "Very Poor III" },
+  { value: 4, label: "Poor IV" },
+  { value: 5, label: "Small V" },
+  { value: 6, label: "Modest VI" },
+  { value: 7, label: "Average VII" },
+  { value: 8, label: "Medium VIII" },
+  { value: 9, label: "Ample IX" },
+  { value: 10, label: "Considerable X" },
+  { value: 11, label: "Sizable XI" },
+  { value: 12, label: "Large XII" },
+  { value: 13, label: "Abundant XIII" },
+  { value: 14, label: "Great XIV" },
+  { value: 15, label: "Substantial XV" },
+  { value: 16, label: "Significant XVI" },
+  { value: 17, label: "Plentiful XVII" },
+  { value: 18, label: "Huge XVIII" },
+  { value: 19, label: "Extremely Large XIX" },
+  { value: 20, label: "Massive XX" },
+  { value: 21, label: "Vast XXI" },
+  { value: 22, label: "Enormous XXII" },
+  { value: 23, label: "Rich XXIII" },
+  { value: 24, label: "Gigantic XXIV" },
+  { value: 25, label: "Mammoth XXV" },
+  { value: 26, label: "Colossal XXVI" },
+  { value: 27, label: "Immense XXVII" },
+];
+
+function MapSettingsView({ position }: { position: WorldPosDTO | null }) {
+  const [preferences, setPreferences] = useMapPreferences();
+  const currentAnchorLabel = preferences.hexGridAnchor === "player-offset"
+    ? formatAnchorPoint(preferences.hexGridAnchorPoint)
+    : "Fixed map origin";
+
+  return (
+    <section className="zml-work-panel">
+      <div className="zml-section-head">
+        <div>
+          <h2>Map</h2>
+          <span>Hexgrid, map markers, and claim alerts</span>
+        </div>
+      </div>
+
+      <div className="zml-overlay-settings">
+        <div className="zml-setting-row">
+          <div>
+            <strong>Drop circles TTL</strong>
+            <span>{formatMinutesPreference(preferences.dropRadiusTtlMinutes)}</span>
+          </div>
+          <select
+            value={String(preferences.dropRadiusTtlMinutes)}
+            onChange={(event) => {
+              const value = Number(event.currentTarget.value);
+              setPreferences((current) => ({ ...current, dropRadiusTtlMinutes: value }));
+            }}
+          >
+            <option value="15">15 minutes</option>
+            <option value="30">30 minutes</option>
+            <option value="60">60 minutes</option>
+            <option value="120">2 hours</option>
+            <option value="0">Always</option>
+          </select>
+        </div>
+
+        <div className="zml-setting-row">
+          <div>
+            <strong>Hexgrid mode</strong>
+            <span>{preferences.hexGridEnabled ? formatHexGridMode(preferences.hexGridMode) : "Hidden"}</span>
+          </div>
+          <div className="zml-settings-stack">
+            <SettingsCheckbox
+              label="Show hexgrid"
+              checked={preferences.hexGridEnabled}
+              onChange={(checked) =>
+                setPreferences((current) => ({ ...current, hexGridEnabled: checked }))
+              }
+            />
+            <select
+              value={preferences.hexGridMode}
+              onChange={(event) => {
+                const value = event.currentTarget.value === "no-overlap"
+                  ? "no-overlap"
+                  : "max-coverage";
+                setPreferences((current) => ({ ...current, hexGridMode: value }));
+              }}
+            >
+              <option value="max-coverage">Max coverage</option>
+              <option value="no-overlap">No overlap</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="zml-setting-row">
+          <div>
+            <strong>Hexgrid anchor</strong>
+            <span>{currentAnchorLabel}</span>
+          </div>
+          <div className="zml-settings-stack">
+            <button
+              type="button"
+              className="zml-button"
+              onClick={() => {
+                if (position === null) return;
+                setPreferences((current) => ({
+                  ...current,
+                  hexGridEnabled: true,
+                  hexGridAnchor: "player-offset",
+                  hexGridAnchorPoint: {
+                    planetName: position.planetName,
+                    x: position.x,
+                    y: position.y,
+                  },
+                }));
+              }}
+              disabled={position === null}
+            >
+              Set offset from current player position
+            </button>
+            <button
+              type="button"
+              className="zml-button"
+              onClick={() => {
+                setPreferences((current) => ({
+                  ...current,
+                  hexGridAnchor: "map",
+                  hexGridAnchorPoint: null,
+                }));
+              }}
+            >
+              Use map origin
+            </button>
+          </div>
+        </div>
+
+        <div className="zml-setting-row">
+          <div>
+            <strong>Hexgrid orientation</strong>
+            <span>{preferences.hexGridOrientation === "vertical" ? "Vertical" : "Horizontal"}</span>
+          </div>
+          <select
+            value={preferences.hexGridOrientation}
+            onChange={(event) => {
+              const value = event.currentTarget.value === "horizontal"
+                ? "horizontal"
+                : "vertical";
+              setPreferences((current) => ({ ...current, hexGridOrientation: value }));
+            }}
+          >
+            <option value="vertical">Vertical</option>
+            <option value="horizontal">Horizontal</option>
+          </select>
+        </div>
+
+        <div className="zml-setting-row">
+          <div>
+            <strong>Small claim sound</strong>
+            <span>{preferences.smallClaimSoundEnabled ? "Enabled" : "Muted"}</span>
+          </div>
+          <div className="zml-settings-stack">
+            <SettingsCheckbox
+              label="Play alert"
+              checked={preferences.smallClaimSoundEnabled}
+              onChange={(checked) =>
+                setPreferences((current) => ({ ...current, smallClaimSoundEnabled: checked }))
+              }
+            />
+            <select
+              value={String(preferences.smallClaimSizeThreshold)}
+              onChange={(event) => {
+                const value = Number(event.currentTarget.value);
+                setPreferences((current) => ({ ...current, smallClaimSizeThreshold: value }));
+              }}
+            >
+              {CLAIM_SIZE_ALERT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <button type="button" className="zml-button" onClick={playSmallClaimSound}>
+              Test sound
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 const OVERLAY_METRICS: Array<{ key: OverlayMetricKey; label: string }> = [
   { key: "cost", label: "Cost" },
   { key: "return", label: "Return" },
@@ -852,14 +1093,14 @@ function OverlaySettingsView() {
         </div>
 
         <div className="zml-toggle-list">
-          <OverlayCheckbox
+          <SettingsCheckbox
             label="Run name"
             checked={preferences.showRunName}
             onChange={(checked) =>
               setPreferences((current) => ({ ...current, showRunName: checked }))
             }
           />
-          <OverlayCheckbox
+          <SettingsCheckbox
             label="Live status"
             checked={preferences.showStatus}
             onChange={(checked) =>
@@ -867,7 +1108,7 @@ function OverlaySettingsView() {
             }
           />
           {OVERLAY_METRICS.map((metric) => (
-            <OverlayCheckbox
+            <SettingsCheckbox
               key={metric.key}
               label={metric.label}
               checked={preferences.metrics[metric.key]}
@@ -888,7 +1129,7 @@ function OverlaySettingsView() {
   );
 }
 
-function OverlayCheckbox({
+function SettingsCheckbox({
   label,
   checked,
   onChange,
@@ -1012,6 +1253,84 @@ function MetricRow({
 
 function EmptyState({ text, compact = false }: { text: string; compact?: boolean }) {
   return <div className={compact ? "zml-empty is-compact" : "zml-empty"}>{text}</div>;
+}
+
+function useSmallClaimSoundAlert(
+  claims: readonly MiningClaimDto[],
+  preferences: MapPreferences,
+): void {
+  const initializedRef = useRef(false);
+  const seenClaimIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!initializedRef.current) {
+      for (const claim of claims) {
+        seenClaimIdsRef.current.add(claim.claimId);
+      }
+      initializedRef.current = true;
+      return;
+    }
+
+    let shouldPlay = false;
+    for (const claim of claims) {
+      if (seenClaimIdsRef.current.has(claim.claimId)) continue;
+      seenClaimIdsRef.current.add(claim.claimId);
+      if (shouldPlaySmallClaimSound(claim, preferences)) {
+        shouldPlay = true;
+      }
+    }
+
+    if (shouldPlay) {
+      playSmallClaimSound();
+    }
+  }, [
+    claims,
+    preferences.smallClaimSizeThreshold,
+    preferences.smallClaimSoundEnabled,
+  ]);
+}
+
+function shouldPlaySmallClaimSound(
+  claim: MiningClaimDto,
+  preferences: MapPreferences,
+): boolean {
+  return (
+    preferences.smallClaimSoundEnabled &&
+    preferences.smallClaimSizeThreshold > 0 &&
+    claim.status === "active" &&
+    claim.sizeIndex !== null &&
+    claim.sizeIndex <= preferences.smallClaimSizeThreshold
+  );
+}
+
+function playSmallClaimSound(): void {
+  const AudioContextCtor =
+    window.AudioContext ??
+    (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AudioContextCtor) return;
+
+  try {
+    const context = new AudioContextCtor();
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    const startedAt = context.currentTime;
+
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(880, startedAt);
+    oscillator.frequency.exponentialRampToValueAtTime(660, startedAt + 0.18);
+    gain.gain.setValueAtTime(0.0001, startedAt);
+    gain.gain.exponentialRampToValueAtTime(0.65, startedAt + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startedAt + 0.22);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start(startedAt);
+    oscillator.stop(startedAt + 0.24);
+    oscillator.onended = () => {
+      void context.close();
+    };
+  } catch {
+    // Browser audio can be blocked until the first user interaction.
+  }
 }
 
 type ActiveSetup = {
@@ -1142,6 +1461,10 @@ function findToolName(
 ): string {
   if (!toolId) return fallback;
   return tools.find((tool) => tool.kind === kind && tool.toolId === toolId)?.name ?? fallback;
+}
+
+function emptyStringToNull(value: string): string | null {
+  return value === "" ? null : value;
 }
 
 function getRunStats(drops: MiningDropDto[], claims: MiningClaimDto[], loot: MiningLootItemDto[]): RunStats {
@@ -1309,6 +1632,23 @@ function formatPosition(position?: { x: number; y: number } | null): string {
 function formatMeters(value: number | null | undefined): string {
   if (value === null || value === undefined) return "-";
   return `${value.toFixed(1)} m`;
+}
+
+function formatMinutesPreference(minutes: number): string {
+  if (minutes <= 0) return "Always visible";
+  if (minutes < 60) return `${minutes}m`;
+  const hours = minutes / 60;
+  return Number.isInteger(hours) ? `${hours}h` : `${minutes}m`;
+}
+
+function formatHexGridMode(value: "no-overlap" | "max-coverage"): string {
+  return value === "no-overlap" ? "No overlap" : "Max coverage";
+}
+
+function formatAnchorPoint(point: { planetName?: string; x: number; y: number } | null): string {
+  if (point === null) return "Player offset not set";
+  const planet = point.planetName ? `${point.planetName} ` : "";
+  return `${planet}${point.x}, ${point.y}`;
 }
 
 function formatSegmentRef(segmentId: string | null): string {

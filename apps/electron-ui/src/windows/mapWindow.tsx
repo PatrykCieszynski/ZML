@@ -20,7 +20,7 @@ export function MapWindow() {
   }, [state.position]);
 
   // hardcoded planet for now
-  const planetId = "calypso" as const;
+  const planetId = "arkadia" as const;
 
   return (
     <div className="zml-map-window">
@@ -72,6 +72,11 @@ export function MapWindow() {
           miningDrops={state.miningDrops}
           playerRadiusM={state.activeMiningTools?.effectiveFinderRadiusM}
           dropRadiusTtlMinutes={preferences.dropRadiusTtlMinutes}
+          hexGridEnabled={preferences.hexGridEnabled}
+          hexGridMode={preferences.hexGridMode}
+          hexGridAnchor={preferences.hexGridAnchor}
+          hexGridAnchorPoint={preferences.hexGridAnchorPoint}
+          hexGridOrientation={preferences.hexGridOrientation}
           followPlayer={followPlayer}
           onFollowPlayerChange={setFollowPlayer}
         />
