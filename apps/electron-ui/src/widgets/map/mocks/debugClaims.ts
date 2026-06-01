@@ -25,6 +25,9 @@ export function createDebugClaims(planetId: PlanetId, seedSec: number): MapClaim
       y,
       position: entropiaToDeckPosition(planetId, { x, y }),
       resourceKind: resources[index % resources.length],
+      resourceName: resources[index % resources.length].split("_").join(" "),
+      sizeLabel: "Debug",
+      sizeIndex: (index % 5) + 1,
       expiresAtSec: seedSec + 90 + index * 11,
     };
   });

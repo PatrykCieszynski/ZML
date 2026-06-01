@@ -112,3 +112,58 @@
   background: #2a0f0f;
   color: #ffdada;
 }
+
+.zml-map-context-menu {
+  position: absolute;
+  z-index: 20;
+  width: 184px;
+  display: grid;
+  gap: 6px;
+  padding: 9px;
+  border: 1px solid #303846;
+  border-radius: 6px;
+  background: rgba(13, 17, 24, 0.96);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  color: #e6eefb;
+}
+
+.zml-map-context-menu strong,
+.zml-map-context-menu span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zml-map-context-menu strong {
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.zml-map-context-menu span {
+  color: #9fb0c7;
+  font-family: "Cascadia Mono", "Consolas", monospace;
+  font-size: 11px;
+}
+
+.zml-map-context-menu button {
+  min-height: 28px;
+  border: 1px solid #305846;
+  border-radius: 6px;
+  background: #11251b;
+  color: #bff5d3;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.zml-map-context-menu button + button {
+  border-color: #6f2f35;
+  background: #251117;
+  color: #ffdce0;
+}
+
+.zml-map-context-menu button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

@@ -13,6 +13,9 @@ export type MapClaim = EntropiaMapPoint & {
   id: string;
   position: DeckPosition;
   resourceKind: ClaimResourceKind;
+  resourceName: string | null;
+  sizeLabel: string | null;
+  sizeIndex: number | null;
   expiresAtSec: number | null;
 };
 

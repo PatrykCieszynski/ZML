@@ -76,6 +76,9 @@ let initializedFor: WindowType | null = null;
 let positionUnsubscribe: (() => void) | null = null;
 let statePatchUnsubscribe: (() => void) | null = null;
 let bootstrapRequestId = 0;
+let lastMainPositionUpdateTsMs = 0;
+
+const MAIN_POSITION_UPDATE_INTERVAL_MS = 1_000;
 
 const listeners = new Set<() => void>();
 
@@ -138,6 +141,7 @@ export function initZmlRendererStore(windowType: WindowType): void {
 
   initializedFor = windowType;
   const requestId = ++bootstrapRequestId;
+  lastMainPositionUpdateTsMs = 0;
 
   let api;
   try {
@@ -172,6 +176,20 @@ export function initZmlRendererStore(windowType: WindowType): void {
     });
 
   positionUnsubscribe = api.onPosition((event) => {
+    const nowTsMs = Date.now();
+    const isMainWindow = initializedFor === "main";
+    if (
+      isMainWindow &&
+      state.position !== undefined &&
+      nowTsMs - lastMainPositionUpdateTsMs < MAIN_POSITION_UPDATE_INTERVAL_MS
+    ) {
+      return;
+    }
+
+    if (isMainWindow) {
+      lastMainPositionUpdateTsMs = nowTsMs;
+    }
+
     setState({
       positionEvent: event,
       position: event.payload,
@@ -320,6 +338,58 @@ export async function stopRun(): Promise<void> {
   } catch (error) {
     setState({
       runCommandPending: false,
+      lastCommandError: errorToMessage(error),
+    });
+  }
+}
+
+export async function ignoreMiningClaim(claimId: string): Promise<void> {
+  let api;
+  try {
+    api = getZml();
+  } catch (error) {
+    setState({
+      lastCommandError: errorToMessage(error),
+    });
+    return;
+  }
+
+  setState({ lastCommandError: null });
+
+  try {
+    const claim = await api.ignoreMiningClaim(claimId);
+    setState({
+      miningClaims: upsertMiningClaim(state.miningClaims, claim),
+      lastCommandError: null,
+    });
+  } catch (error) {
+    setState({
+      lastCommandError: errorToMessage(error),
+    });
+  }
+}
+
+export async function markMiningClaimDepleted(claimId: string): Promise<void> {
+  let api;
+  try {
+    api = getZml();
+  } catch (error) {
+    setState({
+      lastCommandError: errorToMessage(error),
+    });
+    return;
+  }
+
+  setState({ lastCommandError: null });
+
+  try {
+    const claim = await api.markMiningClaimDepleted(claimId);
+    setState({
+      miningClaims: upsertMiningClaim(state.miningClaims, claim),
+      lastCommandError: null,
+    });
+  } catch (error) {
+    setState({
       lastCommandError: errorToMessage(error),
     });
   }
@@ -652,6 +722,16 @@ function upsertMiningTool(
     ...tools.filter((tool) => tool.toolId !== profile.toolId),
     profile,
   ]);
+}
+
+function upsertMiningClaim(
+  claims: readonly MiningClaimDto[],
+  claim: MiningClaimDto,
+): MiningClaimDto[] {
+  return [
+    claim,
+    ...claims.filter((item) => item.claimId !== claim.claimId),
+  ].sort((a, b) => b.observedTsMs - a.observedTsMs);
 }
 
 export function useZmlRendererStore(windowType: WindowType): ZmlRendererState {

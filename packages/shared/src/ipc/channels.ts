@@ -14,6 +14,8 @@ export const IPC_CMD = {
     TOGGLE_OVERLAY_WINDOW: `${IPC_NAMESPACE}:cmd:toggle_overlay_window`,
     START_RUN: `${IPC_NAMESPACE}:cmd:start_run`,
     STOP_RUN: `${IPC_NAMESPACE}:cmd:stop_run`,
+    MARK_MINING_CLAIM_DEPLETED: `${IPC_NAMESPACE}:cmd:mark_mining_claim_depleted`,
+    IGNORE_MINING_CLAIM: `${IPC_NAMESPACE}:cmd:ignore_mining_claim`,
     LIST_MINING_TOOLS: `${IPC_NAMESPACE}:cmd:list_mining_tools`,
     CREATE_MINING_TOOL: `${IPC_NAMESPACE}:cmd:create_mining_tool`,
     DELETE_MINING_TOOL: `${IPC_NAMESPACE}:cmd:delete_mining_tool`,

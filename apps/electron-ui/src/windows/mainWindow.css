@@ -1,5 +1,6 @@
 .zml-app-shell {
   height: 100vh;
+  overflow: hidden;
   display: grid;
   grid-template-rows: auto auto 1fr auto;
   background: #0b0d11;
@@ -364,6 +365,15 @@
   accent-color: #41d486;
 }
 
+.zml-setting-row select {
+  width: 100%;
+}
+
+.zml-settings-stack {
+  display: grid;
+  gap: 8px;
+}
+
 .zml-toggle-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -439,6 +449,46 @@
   border: 1px solid #303846;
   border-radius: 6px;
   background: #0d1118;
+}
+
+.zml-quick-tool {
+  min-height: 54px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "label badge"
+    "select select";
+  gap: 6px 8px;
+  padding: 8px;
+  border: 1px solid #303846;
+  border-radius: 6px;
+  background: #0d1118;
+}
+
+.zml-quick-tool span {
+  grid-area: label;
+  color: #9fb0c7;
+  font-size: 12px;
+}
+
+.zml-quick-tool select {
+  grid-area: select;
+  width: 100%;
+}
+
+.zml-quick-tool em {
+  grid-area: badge;
+  align-self: start;
+  max-width: 112px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: #202938;
+  color: #bcd4ee;
+  font-style: normal;
+  font-size: 12px;
 }
 
 .zml-setup-line span {
@@ -586,6 +636,10 @@
   background: #40d889;
 }
 
+.zml-feed-row.is-ignored .zml-feed-kind {
+  background: #657186;
+}
+
 .zml-feed-row.is-loot .zml-feed-kind {
   background: #7dc8ff;
 }
@@ -596,6 +650,10 @@
 
 .zml-feed-row.is-depleted b {
   color: #40d889;
+}
+
+.zml-feed-row.is-ignored b {
+  color: #9fb0c7;
 }
 
 .zml-feed-row.is-loot b {
@@ -680,6 +738,16 @@
   color: #69e39e;
 }
 
+.zml-tag.is-depleted {
+  background: #173324;
+  color: #40d889;
+}
+
+.zml-tag.is-ignored {
+  background: #252b36;
+  color: #9fb0c7;
+}
+
 .zml-debug-json {
   max-height: calc(100vh - 190px);
   overflow: auto;
@@ -691,6 +759,120 @@
   color: #dbe7f6;
   font-family: "Cascadia Mono", "Consolas", monospace;
   font-size: 12px;
+}
+
+.zml-debug-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.zml-debug-grid.is-wide {
+  grid-template-columns: 1.2fr 1fr 1fr;
+  margin-top: 10px;
+}
+
+.zml-debug-card {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #252d3a;
+  border-radius: 6px;
+  background: #10151e;
+}
+
+.zml-debug-card h3 {
+  margin: 0 0 4px;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.zml-debug-metric,
+.zml-debug-list-row,
+.zml-debug-worker {
+  min-width: 0;
+  display: grid;
+  align-items: center;
+  gap: 8px;
+  color: #b7c7dc;
+  font-size: 12px;
+}
+
+.zml-debug-metric {
+  grid-template-columns: minmax(88px, 0.8fr) minmax(0, 1fr);
+}
+
+.zml-debug-metric strong,
+.zml-debug-list-row strong,
+.zml-debug-worker span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #ffffff;
+  font-family: "Cascadia Mono", "Consolas", monospace;
+  font-size: 12px;
+  text-align: right;
+}
+
+.zml-debug-metric .is-ok,
+.zml-debug-worker .is-ok {
+  color: #40d889;
+}
+
+.zml-debug-metric .is-warn,
+.zml-debug-worker .is-warn {
+  color: #f5a623;
+}
+
+.zml-debug-worker-list,
+.zml-debug-list {
+  display: grid;
+  gap: 6px;
+}
+
+.zml-debug-worker {
+  grid-template-columns: minmax(100px, 1fr) 82px minmax(120px, 1.4fr);
+}
+
+.zml-debug-worker strong,
+.zml-debug-worker small,
+.zml-debug-list-row time,
+.zml-debug-list-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zml-debug-worker small,
+.zml-debug-list-row time,
+.zml-debug-list-row span {
+  color: #8fa2ba;
+  font-family: "Cascadia Mono", "Consolas", monospace;
+}
+
+.zml-debug-list-row {
+  grid-template-columns: 74px minmax(0, 1fr) minmax(80px, auto);
+}
+
+.zml-debug-raw {
+  margin-top: 12px;
+}
+
+.zml-debug-raw summary {
+  cursor: pointer;
+  color: #b7c7dc;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.zml-debug-raw .zml-debug-json {
+  margin-top: 10px;
 }
 
 .zml-empty {
@@ -720,7 +902,19 @@
   font-size: 12px;
 }
 
-.zml-footer span:last-child {
+.zml-footer-position {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.zml-footer-position strong {
+  color: #ffffff;
+  font-weight: 800;
+}
+
+.zml-footer-message {
   margin-left: auto;
   max-width: 45vw;
   overflow: hidden;
@@ -747,6 +941,12 @@
 }
 
 @media (max-width: 860px) {
+  .zml-app-shell {
+    height: 100vh;
+    overflow: auto;
+    display: block;
+  }
+
   .zml-topbar,
   .zml-commandbar,
   .zml-main-grid {
@@ -777,6 +977,26 @@
     border-right: 0;
   }
 
+  .zml-main-grid,
+  .zml-left-panel,
+  .zml-workspace {
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .zml-work-panel {
+    min-height: auto;
+  }
+
+  .zml-table-wrap {
+    max-width: 100%;
+  }
+
+  .zml-debug-grid,
+  .zml-debug-grid.is-wide {
+    grid-template-columns: 1fr;
+  }
+
   .zml-feed-row {
     grid-template-columns: 70px 14px minmax(100px, 1fr);
     min-height: 56px;
@@ -785,5 +1005,19 @@
   .zml-feed-row span:nth-of-type(2),
   .zml-feed-row b {
     grid-column: 3;
+  }
+
+  .zml-footer {
+    position: sticky;
+    bottom: 0;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    padding: 8px 12px;
+  }
+
+  .zml-footer-message {
+    width: 100%;
+    max-width: none;
+    margin-left: 0;
   }
 }

@@ -1,7 +1,12 @@
 import { useMemo, useState } from "react";
 import type { WindowType } from "@zml/shared";
 import { MapViewport } from "../widgets/map/mapViewport.tsx";
-import { toggleMapWindow, useZmlRendererStore } from "../state/zmlRendererStore";
+import {
+  ignoreMiningClaim,
+  markMiningClaimDepleted,
+  toggleMapWindow,
+  useZmlRendererStore,
+} from "../state/zmlRendererStore";
 import { useMapPreferences } from "./mapPreferences";
 import "./mapWindow.css";
 
@@ -72,8 +77,19 @@ export function MapWindow() {
           miningDrops={state.miningDrops}
           playerRadiusM={state.activeMiningTools?.effectiveFinderRadiusM}
           dropRadiusTtlMinutes={preferences.dropRadiusTtlMinutes}
+          hexGridEnabled={preferences.hexGridEnabled}
+          hexGridMode={preferences.hexGridMode}
+          hexGridAnchor={preferences.hexGridAnchor}
+          hexGridAnchorPoint={preferences.hexGridAnchorPoint}
+          hexGridOrientation={preferences.hexGridOrientation}
           followPlayer={followPlayer}
           onFollowPlayerChange={setFollowPlayer}
+          onIgnoreClaim={(claimId) => {
+            void ignoreMiningClaim(claimId);
+          }}
+          onMarkClaimDepleted={(claimId) => {
+            void markMiningClaimDepleted(claimId);
+          }}
         />
       </div>
 

@@ -7,6 +7,10 @@ function isWindow(win: BrowserWindow | undefined): win is BrowserWindow {
   return win !== undefined;
 }
 
+const MAIN_POSITION_PUSH_INTERVAL_MS = 1_000;
+
+let lastMainPositionPushTsMs = 0;
+
 /**
  * Main -> Renderer push. Keep it as a single function to avoid
  * "send from random places" chaos later.
@@ -18,5 +22,12 @@ export function pushPosition(event: OcrPositionEvent): void {
   const targets = [getWindow("map"), getWindow("hud")].filter(isWindow);
   for (const w of targets) {
     w.webContents.send(IPC_PUSH.POSITION, { event } satisfies PushPosition);
+  }
+
+  const mainWindow = getWindow("main");
+  const nowTsMs = Date.now();
+  if (mainWindow && nowTsMs - lastMainPositionPushTsMs >= MAIN_POSITION_PUSH_INTERVAL_MS) {
+    lastMainPositionPushTsMs = nowTsMs;
+    mainWindow.webContents.send(IPC_PUSH.POSITION, { event } satisfies PushPosition);
   }
 }

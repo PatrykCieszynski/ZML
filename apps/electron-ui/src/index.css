@@ -10,6 +10,27 @@
 
 * {
   box-sizing: border-box;
+  scrollbar-color: #3a4558 #11151c;
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #11151c;
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 2px solid #11151c;
+  border-radius: 999px;
+  background: #3a4558;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #4d5d74;
 }
 
 html,

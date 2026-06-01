@@ -6,12 +6,14 @@ from zml_game_bridge.application.position.model import (
     PositionTrackingConfig,
 )
 from zml_game_bridge.application.position.outlier_policy import PositionOutlierPolicy
+from zml_game_bridge.application.position.provider import PositionProvider
 from zml_game_bridge.application.position.tracking import PositionTrackingService
 
 __all__ = [
     "PositionDecision",
     "PositionDecisionKind",
     "PositionOutlierPolicy",
+    "PositionProvider",
     "PositionSnapshot",
     "PositionSource",
     "PositionTrackingConfig",

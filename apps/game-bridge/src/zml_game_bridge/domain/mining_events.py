@@ -120,7 +120,18 @@ class MiningClaimDepletedEvent(EventBase):
     event_dt: datetime
     position: WorldPos
     distance_m: float
-    raw: str
+    raw: str | None = None
+    run_id: int | None = None
+    segment_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class MiningClaimIgnoredEvent(EventBase):
+    claim_id: str
+    ignored_ts_ms: int
+    reason: str | None = None
+    drop_id: str | None = None
+    hit_id: str | None = None
     run_id: int | None = None
     segment_id: str | None = None
 

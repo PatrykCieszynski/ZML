@@ -3,15 +3,24 @@ from __future__ import annotations
 import sqlite3
 from datetime import datetime
 from pathlib import Path
+from typing import cast
 
 from zml_game_bridge.api.routes.mining import (
+    ignore_mining_claim,
     list_mining_claims,
     list_mining_drops,
     list_mining_loot,
+    mark_mining_claim_depleted,
+)
+from zml_game_bridge.application.mining.claims.commands import (
+    IgnoreMiningClaimCommand,
+    MarkMiningClaimDepletedCommand,
 )
 from zml_game_bridge.domain.mining_cost import DropCostBreakdown, DropUnitCost
 from zml_game_bridge.domain.mining_events import (
     MiningClaimCreatedEvent,
+    MiningClaimDepletedEvent,
+    MiningClaimIgnoredEvent,
     MiningDropEvent,
     MiningItemReceivedEvent,
 )
@@ -25,6 +34,7 @@ from zml_game_bridge.persistence.mining_loot import MiningLootProjector
 from zml_game_bridge.persistence.runs import RunStore
 from zml_game_bridge.persistence.schema import ensure_schema
 from zml_game_bridge.persistence.sqlite import open_sqlite
+from zml_game_bridge.runtime.runtime import AppRuntime
 
 
 def _open_test_db(tmp_path: Path) -> sqlite3.Connection:
@@ -118,6 +128,58 @@ def test_list_mining_claims_returns_active_unexpired_claims(
         conn.close()
 
 
+def test_ignore_mining_claim_queues_runtime_command(monkeypatch, tmp_path: Path) -> None:
+    conn = _open_test_db(tmp_path)
+    try:
+        writer = EventWriter(
+            conn,
+            projector=CompositeEventProjector([MiningClaimProjector()]),
+        )
+        writer.write(_claim_created_event(claim_id="claim-1", expected_expires_ts_ms=None))
+        runtime = _RuntimeStub(conn)
+        monkeypatch.setattr("zml_game_bridge.api.routes.mining._now_ms", lambda: 2_500)
+
+        claim = ignore_mining_claim("claim-1", cast(AppRuntime, runtime), conn)
+
+        assert claim.status == "ignored"
+        assert len(runtime.commands) == 1
+        command = runtime.commands[0]
+        assert isinstance(command, IgnoreMiningClaimCommand)
+        assert command.claim_id == "claim-1"
+        assert command.ignored_ts_ms == 2_500
+        assert command.drop_id == "claim-1-drop"
+        assert command.hit_id == "claim-1-hit"
+    finally:
+        conn.close()
+
+
+def test_mark_mining_claim_depleted_queues_runtime_command(monkeypatch, tmp_path: Path) -> None:
+    conn = _open_test_db(tmp_path)
+    try:
+        writer = EventWriter(
+            conn,
+            projector=CompositeEventProjector([MiningClaimProjector()]),
+        )
+        writer.write(_claim_created_event(claim_id="claim-1", expected_expires_ts_ms=None))
+        runtime = _RuntimeStub(conn)
+        event_dt = datetime(2026, 1, 10, 12, 37, 50)
+        monkeypatch.setattr("zml_game_bridge.api.routes.mining._now_dt", lambda: event_dt)
+
+        claim = mark_mining_claim_depleted("claim-1", cast(AppRuntime, runtime), conn)
+
+        assert claim.status == "depleted"
+        assert claim.depleted_event_dt == event_dt.isoformat()
+        assert len(runtime.commands) == 1
+        command = runtime.commands[0]
+        assert isinstance(command, MarkMiningClaimDepletedCommand)
+        assert command.claim_id == "claim-1"
+        assert command.position == WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None)
+        assert command.drop_id == "claim-1-drop"
+        assert command.hit_id == "claim-1-hit"
+    finally:
+        conn.close()
+
+
 def test_list_mining_loot_returns_items_for_run(tmp_path: Path) -> None:
     conn = _open_test_db(tmp_path)
     try:
@@ -200,3 +262,40 @@ def _loot_event(
         extraction_cost_mpec=Mpec(125),
         run_id=run_id,
     )
+
+
+class _RuntimeStub:
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self.commands: list[object] = []
+        self._writer = EventWriter(
+            conn, projector=CompositeEventProjector([MiningClaimProjector()])
+        )
+
+    def execute_runtime_command(self, command: object) -> None:
+        self.commands.append(command)
+        if isinstance(command, IgnoreMiningClaimCommand):
+            self._writer.write(
+                MiningClaimIgnoredEvent(
+                    claim_id=command.claim_id,
+                    ignored_ts_ms=command.ignored_ts_ms,
+                    reason=command.reason,
+                    drop_id=command.drop_id,
+                    hit_id=command.hit_id,
+                    run_id=command.run_id,
+                    segment_id=command.segment_id,
+                )
+            )
+        elif isinstance(command, MarkMiningClaimDepletedCommand):
+            self._writer.write(
+                MiningClaimDepletedEvent(
+                    claim_id=command.claim_id,
+                    drop_id=command.drop_id,
+                    hit_id=command.hit_id,
+                    event_dt=command.event_dt,
+                    position=command.position,
+                    distance_m=command.distance_m,
+                    raw=command.raw,
+                    run_id=command.run_id,
+                    segment_id=command.segment_id,
+                )
+            )

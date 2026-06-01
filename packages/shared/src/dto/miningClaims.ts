@@ -1,6 +1,6 @@
 import type { WorldPosDTO } from "./worldPos";
 
-export type MiningClaimStatus = "active" | "depleted";
+export type MiningClaimStatus = "active" | "depleted" | "ignored";
 export type MiningResourceType = "ore" | "enmatter" | "treasure" | "other" | "unknown";
 
 export type MiningClaimPositionDto = WorldPosDTO;
@@ -86,6 +86,16 @@ export type MiningClaimDepletedEventWire = {
     distance_m: number;
 };
 
+export type MiningClaimIgnoredEventWire = {
+    claim_id: string;
+    ignored_ts_ms: number;
+    reason?: string | null;
+    drop_id?: string | null;
+    hit_id?: string | null;
+    run_id?: number | null;
+    segment_id?: string | null;
+};
+
 export function isMiningClaimWire(value: unknown): value is MiningClaimWire {
     if (!isRecord(value)) return false;
     return (
@@ -146,6 +156,21 @@ export function isMiningClaimDepletedEventWire(
         isNullableString(value.hit_id) &&
         isPositionWire(value.position) &&
         isFiniteNumber(value.distance_m)
+    );
+}
+
+export function isMiningClaimIgnoredEventWire(
+    value: unknown,
+): value is MiningClaimIgnoredEventWire {
+    if (!isRecord(value)) return false;
+    return (
+        typeof value.claim_id === "string" &&
+        isFiniteNumber(value.ignored_ts_ms) &&
+        (value.reason === undefined || isNullableString(value.reason)) &&
+        (value.drop_id === undefined || isNullableString(value.drop_id)) &&
+        (value.hit_id === undefined || isNullableString(value.hit_id)) &&
+        (value.run_id === undefined || isNullableNumber(value.run_id)) &&
+        (value.segment_id === undefined || isNullableString(value.segment_id))
     );
 }
 
@@ -214,7 +239,7 @@ function wireToPositionDto(wire: MiningClaimPositionWire): MiningClaimPositionDt
 }
 
 function isMiningClaimStatus(value: unknown): value is MiningClaimStatus {
-    return value === "active" || value === "depleted";
+    return value === "active" || value === "depleted" || value === "ignored";
 }
 
 function isNullableMiningResourceType(value: unknown): value is MiningResourceType | null {

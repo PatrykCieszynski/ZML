@@ -8,13 +8,14 @@ from typing import Any, Literal, cast
 from zml_game_bridge.domain.mining_events import (
     MiningClaimCreatedEvent,
     MiningClaimDepletedEvent,
+    MiningClaimIgnoredEvent,
 )
 from zml_game_bridge.domain.position import WorldPos
 from zml_game_bridge.events.base import EventBase
 from zml_game_bridge.events.envelope import EventEnvelope
 from zml_game_bridge.persistence.event_projector import EventProjector
 
-MiningClaimStatus = Literal["active", "depleted"]
+MiningClaimStatus = Literal["active", "depleted", "ignored"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +41,9 @@ class MiningClaimRow:
     depleted_event_dt: datetime | None
     depleted_position: WorldPos | None
     depleted_distance_m: float | None
+    ignored_event_id: int | None
+    ignored_ts_ms: int | None
+    ignored_reason: str | None
 
 
 class MiningClaimReader:
@@ -64,7 +68,7 @@ class MiningClaimReader:
         now_ts_ms: int | None = None,
         run_id: int | None = None,
     ) -> list[MiningClaimRow]:
-        filters = ["status = 'active'"]
+        filters = ["status = 'active'", "ignored_event_id IS NULL"]
         params: list[int] = []
         if now_ts_ms is not None:
             filters.append("(expected_expires_ts_ms IS NULL OR expected_expires_ts_ms > ?)")
@@ -111,6 +115,8 @@ class MiningClaimProjector(EventProjector):
             writer.upsert_claim(event=event, event_id=envelope.event_id)
         elif isinstance(event, MiningClaimDepletedEvent):
             writer.mark_depleted(event=event, event_id=envelope.event_id)
+        elif isinstance(event, MiningClaimIgnoredEvent):
+            writer.mark_ignored(event=event, event_id=envelope.event_id)
 
 
 class _MiningClaimProjectionWriter:
@@ -154,7 +160,10 @@ class _MiningClaimProjectionWriter:
                 depleted_x = NULL,
                 depleted_y = NULL,
                 depleted_z = NULL,
-                depleted_distance_m = NULL
+                depleted_distance_m = NULL,
+                ignored_event_id = NULL,
+                ignored_ts_ms = NULL,
+                ignored_reason = NULL
             """,
             (
                 event.claim_id,
@@ -206,6 +215,23 @@ class _MiningClaimProjectionWriter:
             ),
         )
 
+    def mark_ignored(self, *, event: MiningClaimIgnoredEvent, event_id: int) -> None:
+        self._conn.execute(
+            """
+            UPDATE mining_claims
+            SET ignored_event_id = ?,
+                ignored_ts_ms = ?,
+                ignored_reason = ?
+            WHERE claim_id = ?
+            """,
+            (
+                event_id,
+                event.ignored_ts_ms,
+                event.reason,
+                event.claim_id,
+            ),
+        )
+
 
 def _row_to_mining_claim(row: sqlite3.Row) -> MiningClaimRow:
     return MiningClaimRow(
@@ -225,12 +251,21 @@ def _row_to_mining_claim(row: sqlite3.Row) -> MiningClaimRow:
         expected_expires_ts_ms=_optional_int(row["expected_expires_ts_ms"]),
         range_m=_optional_float(row["range_m"]),
         depth_m=_optional_float(row["depth_m"]),
-        status=cast(MiningClaimStatus, row["status"]),
+        status=_claim_status_from_row(row),
         depleted_event_id=_optional_int(row["depleted_event_id"]),
         depleted_event_dt=_optional_datetime(row["depleted_event_dt"]),
         depleted_position=_position_from_row(row, "depleted_", "depleted_planet_name"),
         depleted_distance_m=_optional_float(row["depleted_distance_m"]),
+        ignored_event_id=_optional_int(row["ignored_event_id"]),
+        ignored_ts_ms=_optional_int(row["ignored_ts_ms"]),
+        ignored_reason=row["ignored_reason"],
     )
+
+
+def _claim_status_from_row(row: sqlite3.Row) -> MiningClaimStatus:
+    if row["ignored_event_id"] is not None:
+        return "ignored"
+    return cast(MiningClaimStatus, row["status"])
 
 
 def _position_from_row(

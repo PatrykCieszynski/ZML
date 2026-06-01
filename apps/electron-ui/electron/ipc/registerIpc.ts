@@ -198,6 +198,30 @@ export function registerIpc({ agentRestClient, toggleMapWindow, toggleOverlayWin
         return stoppedRun;
     });
 
+    ipcMain.handle(IPC_CMD.IGNORE_MINING_CLAIM, async (_evt, claimId: unknown) => {
+        if (typeof claimId !== "string" || claimId.trim() === "") {
+            throw new Error("Invalid ignore mining claim request");
+        }
+        const claim = await agentRestClient.ignoreMiningClaim(claimId);
+        runtime.miningClaims = runtime.miningClaims.map((item) =>
+            item.claimId === claim.claimId ? claim : item,
+        );
+        pushStatePatch({ miningClaims: runtime.miningClaims });
+        return claim;
+    });
+
+    ipcMain.handle(IPC_CMD.MARK_MINING_CLAIM_DEPLETED, async (_evt, claimId: unknown) => {
+        if (typeof claimId !== "string" || claimId.trim() === "") {
+            throw new Error("Invalid mark mining claim depleted request");
+        }
+        const claim = await agentRestClient.markMiningClaimDepleted(claimId);
+        runtime.miningClaims = runtime.miningClaims.map((item) =>
+            item.claimId === claim.claimId ? claim : item,
+        );
+        pushStatePatch({ miningClaims: runtime.miningClaims });
+        return claim;
+    });
+
     ipcMain.handle(IPC_CMD.LIST_MINING_TOOLS, async () => {
         const miningTools = await agentRestClient.listMiningTools();
         runtime.miningTools = miningTools;

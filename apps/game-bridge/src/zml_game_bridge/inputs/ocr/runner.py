@@ -129,9 +129,7 @@ def start_ocr_input(
     finder_every_n = 5  # 10Hz/5 = 2Hz
     deeds_every_n = 10  # 1Hz
     tick = 0
-    latest_position: OcrPosition | None = None
     finder_future: Future[list[MiningFinderSignal]] | None = None
-    finder_position: OcrPosition | None = None
     finder_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="zml-finder-ocr")
 
     try:
@@ -157,7 +155,6 @@ def start_ocr_input(
             if compass is not None:
                 pos = position_pipeline.step(compass, ts_ms)
                 if pos is not None:
-                    latest_position = pos
                     position_sink(pos)
 
             if finder_future is not None and finder_future.done():
@@ -180,7 +177,6 @@ def start_ocr_input(
                                 signal_sink(
                                     _to_finder_signal(
                                         signal,
-                                        finder_position,
                                         roi_name=roi_profile.screen_rois.finder.name,
                                     )
                                 )
@@ -188,13 +184,11 @@ def start_ocr_input(
                             profiler.record_elapsed("emit.signal", emit_started_at)
                 finally:
                     finder_future = None
-                    finder_position = None
 
             if tick % finder_every_n == 0 and finder_future is None:
                 with profiler.measure("finder.screen_crop"):
                     finder = roi_profile.screen_rois.finder.crop(frame)
                 if finder is not None:
-                    finder_position = latest_position
                     finder_future = finder_executor.submit(
                         _run_finder_step,
                         finder_pipeline,
@@ -255,7 +249,6 @@ def _run_finder_step(
 
 def _to_finder_signal(
     signal: MiningFinderSignal,
-    latest_position: OcrPosition | None,
     *,
     roi_name: str,
 ):
@@ -263,7 +256,8 @@ def _to_finder_signal(
         case "probe_fired":
             return ProbeFiredSignal(
                 ts_ms=signal.ts_ms,
-                position=latest_position.position if latest_position is not None else None,
+                # The runtime coordinator snapshots current position through PositionProvider.
+                position=None,
                 modes_mask=signal.modes_mask,
                 probes_per_drop=signal.probes_per_drop,
                 ammo_per_drop=signal.ammo_per_drop,

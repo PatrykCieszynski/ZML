@@ -35,7 +35,7 @@ typecheck:
     uv run pyright
 
 test:
-    uv run pytest --basetemp .pytest-tmp -o cache_dir=.pytest-cache-local
+    uv run pytest --basetemp .pytest-tmp -p no:cacheprovider
 
 verify: lint format-check typecheck test
 
