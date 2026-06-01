@@ -59,6 +59,8 @@ class MiningHitHintEvent(EventBase):
     depth_m: float | None = None
     raw_status_text: str | None = None
     raw_details_text: str | None = None
+    run_id: int | None = None
+    segment_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +69,8 @@ class MiningNoResourcesEvent(EventBase):
     observed_ts_ms: int
     position: WorldPos | None
     raw_status_text: str | None = None
+    run_id: int | None = None
+    segment_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,6 +114,8 @@ class MiningClaimDeedReceivedEvent(EventBase):
     raw: str
     received_raw: str | None = None
     claimed_raw: str | None = None
+    run_id: int | None = None
+    segment_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

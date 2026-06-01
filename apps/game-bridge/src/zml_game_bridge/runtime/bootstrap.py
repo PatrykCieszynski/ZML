@@ -63,12 +63,16 @@ def build_runtime_components(settings: Settings) -> RuntimeComponents:
     def current_run_id() -> int | None:
         return run_session_service.current_run_id()
 
+    def current_segment_id() -> str | None:
+        return run_session_service.current_segment_id()
+
     mining_coordinator = MiningCoordinator(
         profile_provider=mining_equipment_service.get_equipment_profile,
         position_provider=position_service.get_latest_world_pos,
         resource_catalog=resource_catalog,
         run_context_provider=run_context_for_drop,
         run_id_provider=current_run_id,
+        segment_id_provider=current_segment_id,
         db_command_executor=pending_db_commands.execute,
         mining_equipment_service=mining_equipment_service,
     )

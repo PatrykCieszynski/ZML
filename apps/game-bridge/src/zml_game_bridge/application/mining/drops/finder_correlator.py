@@ -228,6 +228,8 @@ class FinderDropCorrelator:
             depth_m=signal.depth_m,
             raw_status_text=signal.raw_status_text,
             raw_details_text=signal.raw_details_text,
+            run_id=linked_drop.run_id if linked_drop is not None else None,
+            segment_id=linked_drop.segment_id if linked_drop is not None else None,
         )
         logger.debug(
             "hit_hint_recorded event_type=%s hit_id=%s drop_id=%s ts=%s resource=%r size=%s(%s)",
@@ -257,6 +259,8 @@ class FinderDropCorrelator:
             observed_ts_ms=signal.ts_ms,
             position=linked_drop.position if linked_drop is not None else None,
             raw_status_text=signal.raw_status_text,
+            run_id=linked_drop.run_id if linked_drop is not None else None,
+            segment_id=linked_drop.segment_id if linked_drop is not None else None,
         )
         logger.debug(
             "no_resources_recorded event_type=%s drop_id=%s ts=%s position=%s",

@@ -64,6 +64,7 @@ class RunSessionService:
         self._lock = threading.RLock()
         self._active_run_id: int | None = None
         self._segments_by_setup_hash: dict[str, ActiveSegmentState] = {}
+        self._last_segment_id: str | None = None
         self._next_segment_index = 1
 
     def context_for_drop(
@@ -116,6 +117,7 @@ class RunSessionService:
                     setup_hash,
                 )
 
+            self._last_segment_id = segment.segment_id
             return DropRunContext(
                 run_id=run_id,
                 segment_id=segment.segment_id,
@@ -129,9 +131,23 @@ class RunSessionService:
                 self._reset_run_segments()
             return run_id
 
+    def current_segment_id(self) -> str | None:
+        with self._lock:
+            run_id = self._load_active_run_id()
+            if run_id is None:
+                self._reset_run_segments()
+                return None
+            if run_id != self._active_run_id:
+                self._active_run_id = run_id
+                self._segments_by_setup_hash = self._load_segments_by_setup_hash(run_id)
+                self._last_segment_id = None
+                self._next_segment_index = self._load_next_segment_index(run_id)
+            return self._last_segment_id
+
     def _reset_run_segments(self) -> None:
         self._active_run_id = None
         self._segments_by_setup_hash = {}
+        self._last_segment_id = None
         self._next_segment_index = 1
 
     def _load_active_run_id(self) -> int | None:

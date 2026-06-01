@@ -24,6 +24,7 @@ from zml_game_bridge.resources.mining_resources import MiningResourceCatalog
 logger = logging.getLogger(__name__)
 ExtractionCostProvider = Callable[[], Mpec | None]
 RunIdProvider = Callable[[], int | None]
+SegmentIdProvider = Callable[[], str | None]
 DEFAULT_PENDING_DEED_LINK_WINDOW_MS = 10_000
 
 
@@ -35,6 +36,8 @@ class PendingClaimDeed:
     qty: int
     value_mpec: Mpec
     raw: str
+    run_id: int | None
+    segment_id: str | None
 
 
 class MiningChatCorrelator:
@@ -44,12 +47,14 @@ class MiningChatCorrelator:
         resource_catalog: MiningResourceCatalog | None = None,
         extraction_cost_provider: ExtractionCostProvider | None = None,
         run_id_provider: RunIdProvider | None = None,
+        segment_id_provider: SegmentIdProvider | None = None,
         pending_deed_link_window_ms: int = DEFAULT_PENDING_DEED_LINK_WINDOW_MS,
     ) -> None:
         self._pending_deeds: list[PendingClaimDeed] = []
         self._resource_catalog = resource_catalog or MiningResourceCatalog()
         self._extraction_cost_provider = extraction_cost_provider or _missing_extraction_cost
         self._run_id_provider = run_id_provider or _missing_run_id
+        self._segment_id_provider = segment_id_provider or _missing_segment_id
         self._pending_deed_link_window = timedelta(milliseconds=pending_deed_link_window_ms)
 
     def process_signal(self, signal: SignalBase) -> list[EventBase]:
@@ -58,7 +63,11 @@ class MiningChatCorrelator:
         self._drop_stale_pending_deeds(now=signal.event_dt)
 
         if isinstance(signal, ItemReceivedSignal):
-            claim_deed = _to_pending_claim_deed(signal)
+            claim_deed = _to_pending_claim_deed(
+                signal,
+                run_id=self._run_id_provider(),
+                segment_id=self._segment_id_provider(),
+            )
             if claim_deed is not None:
                 self._pending_deeds.append(claim_deed)
                 return []
@@ -103,6 +112,8 @@ class MiningChatCorrelator:
             raw=raw,
             received_raw=deed.raw,
             claimed_raw=signal.raw,
+            run_id=deed.run_id,
+            segment_id=deed.segment_id,
         )
         learned = self._resource_catalog.learn_resource(
             name=signal.resource_name,
@@ -111,11 +122,13 @@ class MiningChatCorrelator:
         )
         logger.debug(
             "claim_deed_received_recorded event_type=%s resource=%r mining_type=%s "
-            "learned_source=%s event_dt=%s",
+            "learned_source=%s run_id=%s segment_id=%s event_dt=%s",
             type(event).__name__,
             event.resource_name,
             event.mining_type,
             learned.source,
+            event.run_id,
+            event.segment_id,
             event.event_dt,
         )
         return event
@@ -187,7 +200,12 @@ class MiningChatCorrelator:
         return event
 
 
-def _to_pending_claim_deed(signal: ItemReceivedSignal) -> PendingClaimDeed | None:
+def _to_pending_claim_deed(
+    signal: ItemReceivedSignal,
+    *,
+    run_id: int | None,
+    segment_id: str | None,
+) -> PendingClaimDeed | None:
     mining_type = _mining_type_from_deed_item_name(signal.item_name)
     if mining_type is None:
         return None
@@ -198,6 +216,8 @@ def _to_pending_claim_deed(signal: ItemReceivedSignal) -> PendingClaimDeed | Non
         qty=signal.qty,
         value_mpec=signal.value_mpec,
         raw=signal.raw,
+        run_id=run_id,
+        segment_id=segment_id,
     )
 
 
@@ -219,4 +239,8 @@ def _missing_extraction_cost() -> Mpec | None:
 
 
 def _missing_run_id() -> int | None:
+    return None
+
+
+def _missing_segment_id() -> str | None:
     return None

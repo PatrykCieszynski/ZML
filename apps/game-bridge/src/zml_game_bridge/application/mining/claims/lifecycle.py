@@ -132,8 +132,8 @@ class ClaimLifecycleCorrelator:
         claim_id = self._id_factory()
         position = event.position if event.position is not None else drop.position if drop else None
         search_radius_m = drop.drop_radius_m if drop is not None else None
-        run_id = drop.run_id if drop is not None else None
-        segment_id = drop.segment_id if drop is not None else None
+        run_id = drop.run_id if drop is not None else event.run_id
+        segment_id = drop.segment_id if drop is not None else event.segment_id
 
         created = MiningClaimCreatedEvent(
             claim_id=claim_id,

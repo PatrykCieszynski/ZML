@@ -34,6 +34,10 @@ from zml_game_bridge.inputs.ocr.pipelines.mining_finder.signals import (
 from zml_game_bridge.inputs.ocr.pipelines.mining_finder.vision import VisionFinderFeatureDetector
 from zml_game_bridge.inputs.ocr.pipelines.position.model import OcrPosition
 from zml_game_bridge.inputs.ocr.pipelines.position.pipeline import PositionPipeline
+from zml_game_bridge.inputs.ocr.pipelines.position.recording import (
+    PositionRoiSnapshotRecorder,
+    position_roi_snapshot_config_from_env,
+)
 from zml_game_bridge.inputs.ocr.profiling import (
     OcrProfiler,
     ocr_profiling_config_from_env,
@@ -54,6 +58,9 @@ def start_ocr_input(
     finder_recording_dir: Path | None = None,
     finder_recording_interval_s: float | None = None,
     finder_recording_low_confidence_interval_s: float | None = None,
+    position_roi_snapshot_enabled: bool | None = None,
+    position_roi_snapshot_dir: Path | None = None,
+    position_roi_snapshot_interval_s: float | None = None,
     ocr_profiling_enabled: bool | None = None,
     ocr_profiling_interval_s: float | None = None,
     roi_profile_path: Path | None = None,
@@ -82,10 +89,26 @@ def start_ocr_input(
     if profiler.enabled:
         logger.info("ocr_profiling_enabled interval_s=%s", ocr_profiling_config.interval_s)
 
+    position_rois = roi_profile.position_rois.to_position_rois()
     position_pipeline = PositionPipeline(
-        roi_profile.position_rois.to_position_rois(),
+        position_rois,
         profiler=profiler,
     )
+    position_snapshot_config = position_roi_snapshot_config_from_env(
+        enabled=position_roi_snapshot_enabled,
+        root_dir=position_roi_snapshot_dir,
+        interval_s=position_roi_snapshot_interval_s,
+    )
+    position_snapshot_recorder = PositionRoiSnapshotRecorder(
+        config=position_snapshot_config,
+        rois=position_rois,
+    )
+    if position_snapshot_config.enabled:
+        logger.info(
+            "position_roi_snapshots_enabled dir=%s interval_ms=%s",
+            position_snapshot_config.root_dir,
+            position_snapshot_config.interval_ms,
+        )
     if finder_debug_logging is None:
         finder_debug_logging = _env_bool("ZML_FINDER_DEBUG", default=False)
     if finder_debug_logging:
@@ -153,6 +176,7 @@ def start_ocr_input(
             with profiler.measure("position.screen_crop"):
                 compass = roi_profile.screen_rois.compass.crop(frame)
             if compass is not None:
+                position_snapshot_recorder.record(compass, ts_ms=ts_ms)
                 pos = position_pipeline.step(compass, ts_ms)
                 if pos is not None:
                     position_sink(pos)

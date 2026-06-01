@@ -29,6 +29,7 @@ from zml_game_bridge.runtime.runtime_commands import RuntimeCommand, RuntimeComm
 
 MiningEquipmentProfileProvider = Callable[[], MiningEquipmentProfile]
 RunIdProvider = Callable[[], int | None]
+SegmentIdProvider = Callable[[], str | None]
 
 
 class SignalCorrelator(Protocol):
@@ -61,6 +62,7 @@ class MiningCoordinator:
         resource_catalog: MiningResourceCatalog | None = None,
         run_context_provider: DropRunContextProvider | None = None,
         run_id_provider: RunIdProvider | None = None,
+        segment_id_provider: SegmentIdProvider | None = None,
         db_command_executor: Callable[[DbCommand[Any]], Any] | None = None,
         mining_equipment_service: MiningEquipmentService | None = None,
     ) -> None:
@@ -78,6 +80,7 @@ class MiningCoordinator:
             resource_catalog=resource_catalog,
             extraction_cost_provider=lambda: calculate_extraction_cost(resolved_profile_provider()),
             run_id_provider=run_id_provider,
+            segment_id_provider=segment_id_provider,
         )
         self._claim_lifecycle = ClaimLifecycleCorrelator(
             config=resolved_config,

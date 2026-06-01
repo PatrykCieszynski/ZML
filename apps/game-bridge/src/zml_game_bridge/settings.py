@@ -213,6 +213,23 @@ def _default_finder_recording_low_confidence_interval_s() -> float:
     return _env_float("ZML_FINDER_RECORDING_LOW_CONFIDENCE_INTERVAL_S", default=5.0)
 
 
+def _default_position_roi_snapshot_enabled() -> bool:
+    return _env_bool("ZML_POSITION_ROI_SNAPSHOTS", default=True)
+
+
+def _default_position_roi_snapshot_dir() -> Path:
+    env_path = _env_path("ZML_POSITION_ROI_SNAPSHOT_DIR")
+    if env_path is not None:
+        return env_path
+
+    app_data = os.getenv("LOCALAPPDATA") or os.getenv("APPDATA") or str(Path.home())
+    return Path(app_data) / APP_DATA_DIR_NAME / "ocr" / "position-roi"
+
+
+def _default_position_roi_snapshot_interval_s() -> float:
+    return _env_float("ZML_POSITION_ROI_SNAPSHOT_INTERVAL_S", default=60.0)
+
+
 def _default_ocr_profiling_enabled() -> bool:
     return _env_bool("ZML_OCR_PROFILING", default=False)
 
@@ -306,6 +323,13 @@ class Settings:
     finder_recording_interval_s: float = field(default_factory=_default_finder_recording_interval_s)
     finder_recording_low_confidence_interval_s: float = field(
         default_factory=_default_finder_recording_low_confidence_interval_s
+    )
+    position_roi_snapshot_enabled: bool = field(
+        default_factory=_default_position_roi_snapshot_enabled
+    )
+    position_roi_snapshot_dir: Path = field(default_factory=_default_position_roi_snapshot_dir)
+    position_roi_snapshot_interval_s: float = field(
+        default_factory=_default_position_roi_snapshot_interval_s
     )
     ocr_profiling_enabled: bool = field(default_factory=_default_ocr_profiling_enabled)
     ocr_profiling_interval_s: float = field(default_factory=_default_ocr_profiling_interval_s)

@@ -111,7 +111,7 @@ class AppRuntime:
         logger.info(
             "app_started db_path=%s chat_log_path=%s mining_resource_catalog_path=%s "
             "mining_tools_path=%s ocr_profile_path=%s ocr_enabled=%s mock_inputs_enabled=%s "
-            "finder_recording_modes=%s ocr_profiling_enabled=%s",
+            "finder_recording_modes=%s position_roi_snapshot_enabled=%s ocr_profiling_enabled=%s",
             self._settings.db_path,
             self._settings.chat_log_path,
             self._settings.mining_resource_catalog_path,
@@ -120,6 +120,7 @@ class AppRuntime:
             self._settings.ocr_enabled,
             self._settings.mock_inputs_enabled,
             self._settings.finder_recording_modes,
+            self._settings.position_roi_snapshot_enabled,
             self._settings.ocr_profiling_enabled,
         )
 
@@ -167,6 +168,13 @@ class AppRuntime:
                     "finder_recording_interval_s": self._settings.finder_recording_interval_s,
                     "finder_recording_low_confidence_interval_s": (
                         self._settings.finder_recording_low_confidence_interval_s
+                    ),
+                    "position_roi_snapshot_enabled": (
+                        self._settings.position_roi_snapshot_enabled
+                    ),
+                    "position_roi_snapshot_dir": self._settings.position_roi_snapshot_dir,
+                    "position_roi_snapshot_interval_s": (
+                        self._settings.position_roi_snapshot_interval_s
                     ),
                     "ocr_profiling_enabled": self._settings.ocr_profiling_enabled,
                     "ocr_profiling_interval_s": self._settings.ocr_profiling_interval_s,

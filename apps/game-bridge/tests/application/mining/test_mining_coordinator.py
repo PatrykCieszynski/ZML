@@ -142,6 +142,10 @@ def test_mining_coordinator_carries_drop_run_segment_to_claim() -> None:
         )
     )
 
+    hit = events[0]
+    assert isinstance(hit, MiningHitHintEvent)
+    assert hit.run_id == 7
+    assert hit.segment_id == "segment-1"
     claim = events[1]
     assert isinstance(claim, MiningClaimCreatedEvent)
     assert claim.drop_id == "drop-1"
@@ -354,6 +358,10 @@ def test_mining_coordinator_records_no_resources_linked_to_recent_drop() -> None
     coordinator = MiningCoordinator(
         id_factory=_id_factory("drop-1"),
         position_provider=lambda: position,
+        run_context_provider=lambda _ts, _setup: DropRunContext(
+            run_id=7,
+            segment_id="segment-1",
+        ),
     )
 
     coordinator.process_signal(
@@ -371,6 +379,8 @@ def test_mining_coordinator_records_no_resources_linked_to_recent_drop() -> None
     assert isinstance(no_resources, MiningNoResourcesEvent)
     assert no_resources.drop_id == "drop-1"
     assert no_resources.position == position
+    assert no_resources.run_id == 7
+    assert no_resources.segment_id == "segment-1"
     assert no_resources.raw_status_text == "No resources found. Try again\nsomewhere else-"
 
 
@@ -441,7 +451,11 @@ def test_mining_coordinator_does_not_link_no_resources_to_stale_drop() -> None:
 
 
 def test_mining_coordinator_records_claim_deed_received_chat_event() -> None:
-    coordinator = MiningCoordinator()
+    current_segment_id = ["segment-1"]
+    coordinator = MiningCoordinator(
+        run_id_provider=lambda: 7,
+        segment_id_provider=lambda: current_segment_id[0],
+    )
     event_dt = datetime(2026, 1, 10, 12, 37, 50)
     received_raw = (
         "2026-01-10 12:37:50 [System] [] You received Mineral Resource Deed x (1) Value: 0.0000 PED"
@@ -462,6 +476,7 @@ def test_mining_coordinator_records_claim_deed_received_chat_event() -> None:
         )
         == []
     )
+    current_segment_id[0] = "segment-2"
     events = coordinator.process_signal(
         ResourceClaimedSignal(
             event_dt=event_dt,
@@ -484,6 +499,8 @@ def test_mining_coordinator_records_claim_deed_received_chat_event() -> None:
     assert event.raw == f"{received_raw}\n{claimed_raw}"
     assert event.received_raw == received_raw
     assert event.claimed_raw == claimed_raw
+    assert event.run_id == 7
+    assert event.segment_id == "segment-1"
 
 
 def test_mining_coordinator_learns_claim_deed_resource(tmp_path: Path) -> None:

@@ -65,6 +65,21 @@ def test_run_session_reuses_segment_bucket_when_setup_returns(tmp_path: Path) ->
     assert fourth.lifecycle_events == ()
 
 
+def test_run_session_exposes_last_drop_segment_for_chat_context(tmp_path: Path) -> None:
+    db_path = tmp_path / "run-session.sqlite3"
+    _create_active_run(db_path)
+    service = RunSessionService(db_path=db_path, id_factory=_id_factory("segment-1", "segment-2"))
+
+    assert service.current_segment_id() is None
+    service.context_for_drop(observed_ts_ms=1_000, setup=_setup("Finder A"))
+
+    assert service.current_segment_id() == "segment-1"
+
+    service.context_for_drop(observed_ts_ms=2_000, setup=_setup("Finder B"))
+
+    assert service.current_segment_id() == "segment-2"
+
+
 def test_run_session_starts_new_segment_when_drop_modes_change(tmp_path: Path) -> None:
     db_path = tmp_path / "run-session.sqlite3"
     _create_active_run(db_path)
