@@ -225,7 +225,6 @@ export class MockAgentRestClient implements AgentClient {
 
     async ignoreMiningClaim(
         claimId: string,
-        _request: IgnoreMiningClaimRequest = {},
     ): Promise<MiningClaimDto> {
         const current = this.miningClaims.find((claim) => claim.claimId === claimId);
         if (!current) {
@@ -238,7 +237,6 @@ export class MockAgentRestClient implements AgentClient {
 
     async markMiningClaimDepleted(
         claimId: string,
-        _request: MarkMiningClaimDepletedRequest = {},
     ): Promise<MiningClaimDto> {
         const current = this.miningClaims.find((claim) => claim.claimId === claimId);
         if (!current) {
