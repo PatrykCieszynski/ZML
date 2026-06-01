@@ -17,11 +17,9 @@ import type {
 
 import type {
     AgentClient,
-    IgnoreMiningClaimRequest,
     ListMiningClaimsRequest,
     ListMiningDropsRequest,
     ListMiningLootRequest,
-    MarkMiningClaimDepletedRequest,
 } from "../agent/restClient.ts";
 
 const MOCK_MINING_CLAIMS: MiningClaimDto[] = [

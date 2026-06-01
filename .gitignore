@@ -215,6 +215,8 @@ cython_debug/
 
 # uv local cache
 .uv-cache/
+.corepack/
+.tmp/
 
 # PyPI configuration file
 .pypirc

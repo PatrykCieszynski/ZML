@@ -650,7 +650,8 @@ function createHexGuideLines({
     anchorPosition[1] + centerOffsetY,
     0,
   ];
-  const corner: DeckPosition = [center[0], marker.position[1], 0];
+  const xTarget: DeckPosition = [center[0], marker.position[1], 0];
+  const yTarget: DeckPosition = [marker.position[0], center[1], 0];
   const centerPoint = deckToEntropiaPoint(planetId, center);
   const offsetX = point.x - centerPoint.x;
   const offsetY = point.y - centerPoint.y;
@@ -659,19 +660,61 @@ function createHexGuideLines({
     {
       id: "hex-guide-x",
       axis: "x",
-      path: [marker.position, corner],
+      path: [marker.position, xTarget],
       label: `X ${formatSignedCoordOffset(offsetX)}`,
-      labelPosition: midpoint(marker.position, corner),
+      labelPosition: midpoint(marker.position, xTarget),
       labelPixelOffset: [offsetX >= 0 ? 18 : -18, -10],
     },
     {
       id: "hex-guide-y",
       axis: "y",
-      path: [corner, center],
+      path: [marker.position, yTarget],
       label: `Y ${formatSignedCoordOffset(offsetY)}`,
-      labelPosition: midpoint(corner, center),
+      labelPosition: midpoint(marker.position, yTarget),
       labelPixelOffset: [12, offsetY >= 0 ? -16 : 16],
     },
+    ...createDashedGuideLine("hex-guide-diagonal", marker.position, center),
+  ];
+}
+
+function createDashedGuideLine(
+  id: string,
+  start: DeckPosition,
+  end: DeckPosition,
+): MapHexGuideLine[] {
+  const dashLengthPx = 18;
+  const gapLengthPx = 10;
+  const distancePx = Math.hypot(end[0] - start[0], end[1] - start[1]);
+  if (distancePx <= 0) return [];
+
+  const segments: MapHexGuideLine[] = [];
+  for (
+    let segmentStartPx = 0, index = 0;
+    segmentStartPx < distancePx;
+    segmentStartPx += dashLengthPx + gapLengthPx, index += 1
+  ) {
+    const segmentEndPx = Math.min(segmentStartPx + dashLengthPx, distancePx);
+    segments.push({
+      id: `${id}-${index}`,
+      axis: "diagonal",
+      path: [
+        interpolateDeckPosition(start, end, segmentStartPx / distancePx),
+        interpolateDeckPosition(start, end, segmentEndPx / distancePx),
+      ],
+    });
+  }
+  return segments;
+}
+
+function interpolateDeckPosition(
+  start: DeckPosition,
+  end: DeckPosition,
+  ratio: number,
+): DeckPosition {
+  return [
+    start[0] + (end[0] - start[0]) * ratio,
+    start[1] + (end[1] - start[1]) * ratio,
+    start[2] + (end[2] - start[2]) * ratio,
   ];
 }
 

@@ -40,8 +40,19 @@ apps/
 packages/
   shared/           Shared TypeScript DTOs and IPC contracts
 
+docs/
+  architecture.md   Current backend/UI/runtime architecture
+  current-state.md  Compact handoff for future work
+  decisions/        Short architecture decision records
+
 ZML.pdf             Early project notes; partly outdated
 ```
+
+## Agent Handoff
+
+Start with `AGENTS.md` when continuing this project in a new agent session.
+It links to the architecture notes, current state, and decision records that
+capture the important runtime/persistence/UI choices.
 
 ## Architecture Snapshot
 

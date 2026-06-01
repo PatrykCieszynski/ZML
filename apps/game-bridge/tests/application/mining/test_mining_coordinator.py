@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from datetime import datetime
 from pathlib import Path
 
@@ -52,11 +53,13 @@ from zml_game_bridge.resources.mining_resources import MiningResourceCatalog
 
 
 def test_mining_coordinator_records_probe_drop_with_current_units() -> None:
+    position = WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None)
     coordinator = MiningCoordinator(
         profile=MiningEquipmentProfile(
             finder=MiningToolProfile(name="Finder", decay_mpec=Mpec(100), radius_m=55.2),
         ),
         id_factory=_id_factory("drop-1"),
+        position_provider=lambda: position,
     )
 
     coordinator.process_signal(
@@ -65,7 +68,7 @@ def test_mining_coordinator_records_probe_drop_with_current_units() -> None:
     events = coordinator.process_signal(
         ProbeFiredSignal(
             ts_ms=1_000,
-            position=WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None),
+            position=None,
             modes_mask=int(MiningMode.ORE),
             raw_status_text="Sending probe...",
         )
@@ -76,7 +79,7 @@ def test_mining_coordinator_records_probe_drop_with_current_units() -> None:
     assert isinstance(drop, MiningDropEvent)
     assert drop.drop_id == "drop-1"
     assert drop.observed_ts_ms == 1_000
-    assert drop.position == WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None)
+    assert drop.position == position
     assert drop.modes_mask == int(MiningMode.ORE)
     assert drop.ammo_per_drop == 1_000
     assert drop.probes_per_drop is None
@@ -236,10 +239,13 @@ def test_mining_coordinator_prefers_probe_signal_units_over_cached_units() -> No
 
 def test_mining_coordinator_records_hit_hint_linked_to_recent_drop() -> None:
     position = WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None)
-    coordinator = MiningCoordinator(id_factory=_id_factory("drop-1", "hit-1", "claim-1"))
+    coordinator = MiningCoordinator(
+        id_factory=_id_factory("drop-1", "hit-1", "claim-1"),
+        position_provider=lambda: position,
+    )
 
     coordinator.process_signal(
-        ProbeFiredSignal(ts_ms=1_000, position=position, modes_mask=1, ammo_per_drop=1_000)
+        ProbeFiredSignal(ts_ms=1_000, position=None, modes_mask=1, ammo_per_drop=1_000)
     )
     events = coordinator.process_signal(
         FinderHitHintSignal(
@@ -302,10 +308,13 @@ def test_mining_coordinator_records_non_expiring_hit_hint() -> None:
 
 def test_mining_coordinator_records_no_resources_linked_to_recent_drop() -> None:
     position = WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None)
-    coordinator = MiningCoordinator(id_factory=_id_factory("drop-1"))
+    coordinator = MiningCoordinator(
+        id_factory=_id_factory("drop-1"),
+        position_provider=lambda: position,
+    )
 
     coordinator.process_signal(
-        ProbeFiredSignal(ts_ms=1_000, position=position, modes_mask=1, ammo_per_drop=1_000)
+        ProbeFiredSignal(ts_ms=1_000, position=None, modes_mask=1, ammo_per_drop=1_000)
     )
     events = coordinator.process_signal(
         FinderNoResourcesSignal(
@@ -589,17 +598,18 @@ def test_mining_coordinator_defers_resource_depleted_until_claim_lifecycle_can_l
 
 
 def test_mining_coordinator_depletes_nearest_active_claim() -> None:
+    drop_position = WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None)
     current_position = WorldPos(planet_name="Calypso", x=58_894, y=84_642, z=None)
     coordinator = MiningCoordinator(
         id_factory=_id_factory("drop-1", "hit-1", "claim-1"),
-        position_provider=lambda: current_position,
+        position_provider=_position_provider(drop_position, current_position),
     )
     event_dt = datetime(2026, 1, 10, 12, 37, 50)
 
     coordinator.process_signal(
         ProbeFiredSignal(
             ts_ms=1_000,
-            position=WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None),
+            position=None,
             modes_mask=1,
             ammo_per_drop=1_000,
         )
@@ -633,16 +643,18 @@ def test_mining_coordinator_depletes_nearest_active_claim() -> None:
 
 
 def test_mining_coordinator_does_not_deplete_far_claim() -> None:
+    drop_position = WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None)
+    far_position = WorldPos(planet_name="Calypso", x=59_500, y=85_500, z=None)
     coordinator = MiningCoordinator(
         config=MiningCoordinatorConfig(claim_depletion_link_max_distance_m=20.0),
         id_factory=_id_factory("drop-1", "hit-1", "claim-1"),
-        position_provider=lambda: WorldPos(planet_name="Calypso", x=59_500, y=85_500, z=None),
+        position_provider=_position_provider(drop_position, far_position),
     )
 
     coordinator.process_signal(
         ProbeFiredSignal(
             ts_ms=1_000,
-            position=WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None),
+            position=None,
             modes_mask=1,
             ammo_per_drop=1_000,
         )
@@ -922,3 +934,16 @@ def _id_factory(*ids: str):
         return next(iterator)
 
     return next_id
+
+
+def _position_provider(*positions: WorldPos):
+    iterator = iter(positions)
+    last_position: WorldPos | None = None
+
+    def next_position() -> WorldPos | None:
+        nonlocal last_position
+        with contextlib.suppress(StopIteration):
+            last_position = next(iterator)
+        return last_position
+
+    return next_position

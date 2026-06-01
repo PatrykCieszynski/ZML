@@ -10,8 +10,14 @@ export type MapHexCell = {
 
 export type MapHexGuideLine = {
   id: string;
-  axis: "x" | "y";
+  axis: "x" | "y" | "diagonal";
   path: DeckPosition[];
+  label?: string;
+  labelPosition?: DeckPosition;
+  labelPixelOffset?: [number, number];
+};
+
+type MapHexGuideLabelLine = MapHexGuideLine & {
   label: string;
   labelPosition: DeckPosition;
   labelPixelOffset: [number, number];
@@ -21,6 +27,7 @@ const HEX_LINE_COLOR: Color = [112, 178, 255, 90];
 const GUIDE_LINE_COLORS: Record<MapHexGuideLine["axis"], Color> = {
   x: [255, 215, 82, 230],
   y: [94, 220, 255, 230],
+  diagonal: [255, 255, 255, 170],
 };
 
 export function createHexGridLayer(cells: readonly MapHexCell[]): PathLayer<MapHexCell> | null {
@@ -49,18 +56,19 @@ export function createHexGuideLineLayer(
     widthUnits: "pixels",
     getPath: (line) => line.path,
     getColor: (line) => GUIDE_LINE_COLORS[line.axis],
-    getWidth: () => 2,
+    getWidth: (line) => (line.axis === "diagonal" ? 1.5 : 2),
   });
 }
 
 export function createHexGuideLabelLayer(
   lines: readonly MapHexGuideLine[],
-): TextLayer<MapHexGuideLine> | null {
-  if (lines.length === 0) return null;
+): TextLayer<MapHexGuideLabelLine> | null {
+  const labeledLines = lines.filter(hasGuideLabel);
+  if (labeledLines.length === 0) return null;
 
-  return new TextLayer<MapHexGuideLine>({
+  return new TextLayer<MapHexGuideLabelLine>({
     id: "mining-hex-guide-labels",
-    data: lines,
+    data: labeledLines,
     coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
     billboard: true,
     characterSet: "XY+-0123456789 ",
@@ -79,4 +87,8 @@ export function createHexGuideLabelLayer(
       buffer: 2,
     },
   });
+}
+
+function hasGuideLabel(line: MapHexGuideLine): line is MapHexGuideLabelLine {
+  return Boolean(line.label && line.labelPosition && line.labelPixelOffset);
 }
