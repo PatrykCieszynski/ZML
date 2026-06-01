@@ -36,7 +36,7 @@ type MainView = "dashboard" | "runs" | "segments" | "loot" | "claims" | "setup" 
 type FeedItem = {
   id: string;
   tsMs: number;
-  kind: "drop" | "hit" | "miss" | "claim" | "depleted" | "ignored" | "loot";
+  kind: "drop" | "hit" | "miss" | "claim" | "depleted" | "ignored" | "expired" | "loot";
   title: string;
   detail: string;
   amount?: string;
@@ -761,6 +761,10 @@ function ClaimsView({ claims }: { claims: MiningClaimDto[] }) {
     () => claims.filter((claim) => claim.status === "ignored"),
     [claims],
   );
+  const expiredClaims = useMemo(
+    () => claims.filter((claim) => claim.status === "expired"),
+    [claims],
+  );
   const countedClaims = useMemo(
     () => claims.filter((claim) => claim.status !== "ignored"),
     [claims],
@@ -801,6 +805,7 @@ function ClaimsView({ claims }: { claims: MiningClaimDto[] }) {
         <ClaimSummaryCard label="Total" value={String(countedClaims.length)} />
         <ClaimSummaryCard label="Active" value={String(activeClaims.length)} />
         <ClaimSummaryCard label="Extracted" value={String(depletedClaims.length)} />
+        <ClaimSummaryCard label="Expired" value={String(expiredClaims.length)} />
         <ClaimSummaryCard label="Ignored" value={String(ignoredClaims.length)} />
         <ClaimSummaryCard label="Visible Active" value={String(visibleTotal)} />
       </div>
@@ -1700,17 +1705,26 @@ function buildFeed(
   for (const claim of claims) {
     const isDepleted = claim.status === "depleted";
     const isIgnored = claim.status === "ignored";
+    const isExpired = claim.status === "expired";
     items.push({
       id: `${claim.claimId}:claim:${claim.status}`,
       tsMs: claimActivityTsMs(claim),
-      kind: isIgnored ? "ignored" : isDepleted ? "depleted" : "claim",
-      title: isIgnored ? "Claim Ignored" : isDepleted ? "Claim Extracted" : "Claim Recorded",
+      kind: isIgnored ? "ignored" : isExpired ? "expired" : isDepleted ? "depleted" : "claim",
+      title: isIgnored
+        ? "Claim Ignored"
+        : isExpired
+          ? "Claim Expired"
+          : isDepleted
+            ? "Claim Extracted"
+            : "Claim Recorded",
       detail: `${claim.resourceName ?? "Unknown resource"} ${formatSize(claim.sizeLabel, claim.sizeIndex)}`,
       amount: isIgnored
         ? "hidden"
-        : isDepleted
-          ? formatMeters(claim.depletedDistanceM)
-          : formatExpires(claim.expectedExpiresTsMs),
+        : isExpired
+          ? "expired"
+          : isDepleted
+            ? formatMeters(claim.depletedDistanceM)
+            : formatExpires(claim.expectedExpiresTsMs),
     });
   }
 
@@ -1747,6 +1761,7 @@ function filterFeed(feed: FeedItem[], filter: DashboardFeedFilter): FeedItem[] {
           item.kind === "hit" ||
           item.kind === "claim" ||
           item.kind === "depleted" ||
+          item.kind === "expired" ||
           item.kind === "ignored",
       )
       .slice(0, MAX_DASHBOARD_FEED_ITEMS);
@@ -1847,16 +1862,21 @@ function formatClaimDepletion(claim: MiningClaimDto): string {
 function claimStatusClassName(claim: MiningClaimDto): string {
   if (claim.status === "active") return "zml-tag is-active";
   if (claim.status === "depleted") return "zml-tag is-depleted";
+  if (claim.status === "expired") return "zml-tag is-expired";
   return "zml-tag is-ignored";
 }
 
 function formatClaimStatus(claim: MiningClaimDto): string {
   if (claim.status === "active") return "active";
   if (claim.status === "depleted") return "extracted";
+  if (claim.status === "expired") return "expired";
   return "ignored";
 }
 
 function claimActivityTsMs(claim: MiningClaimDto): number {
+  if (claim.status === "expired" && claim.expectedExpiresTsMs !== null) {
+    return claim.expectedExpiresTsMs;
+  }
   if (claim.status !== "depleted" || claim.depletedEventDt === null) {
     return claim.observedTsMs;
   }

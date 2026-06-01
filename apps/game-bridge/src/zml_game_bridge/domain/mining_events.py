@@ -143,6 +143,17 @@ class MiningClaimIgnoredEvent(EventBase):
 
 
 @dataclass(frozen=True, slots=True)
+class MiningClaimExpiredEvent(EventBase):
+    claim_id: str
+    expired_ts_ms: int
+    expected_expires_ts_ms: int
+    drop_id: str | None = None
+    hit_id: str | None = None
+    run_id: int | None = None
+    segment_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class MiningEnhancerBrokeEvent(EventBase):
     event_dt: datetime
     enhancer_name: str

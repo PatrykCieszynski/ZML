@@ -4,6 +4,7 @@ from collections.abc import Callable
 from typing import Any, TypeVar, cast
 
 from zml_game_bridge.application.mining.claims.commands import (
+    ExpireMiningClaimsCommand,
     IgnoreMiningClaimCommand,
     MarkMiningClaimDepletedCommand,
 )
@@ -74,6 +75,14 @@ class MiningCommandService:
             return cast(
                 RuntimeCommandResult[T],
                 RuntimeCommandResult[None](value=None, events=(event,)),
+            )
+
+        if isinstance(command, ExpireMiningClaimsCommand):
+            claim_lifecycle = self._require_claim_lifecycle(command)
+            events = claim_lifecycle.expire_claims(command)
+            return cast(
+                RuntimeCommandResult[T],
+                RuntimeCommandResult[int](value=len(events), events=tuple(events)),
             )
 
         if isinstance(command, CreateMiningToolProfileCommand):

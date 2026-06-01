@@ -6,6 +6,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from zml_game_bridge.application.mining.claims.commands import (
+    ExpireMiningClaimsCommand,
     IgnoreMiningClaimCommand,
     MarkMiningClaimDepletedCommand,
 )
@@ -14,6 +15,7 @@ from zml_game_bridge.application.position.provider import PositionProvider
 from zml_game_bridge.domain.mining_events import (
     MiningClaimCreatedEvent,
     MiningClaimDepletedEvent,
+    MiningClaimExpiredEvent,
     MiningClaimIgnoredEvent,
     MiningDropEvent,
     MiningHitHintEvent,
@@ -36,6 +38,7 @@ class ActiveClaim:
     segment_id: str | None
     position: WorldPos | None
     search_radius_m: float | None
+    expected_expires_ts_ms: int | None
 
 
 class ClaimLifecycleCorrelator:
@@ -122,6 +125,34 @@ class ClaimLifecycleCorrelator:
         )
         return event
 
+    def expire_claims(self, command: ExpireMiningClaimsCommand) -> list[MiningClaimExpiredEvent]:
+        events: list[MiningClaimExpiredEvent] = []
+        for claim in list(self._active_claims.values()):
+            expected_expires_ts_ms = claim.expected_expires_ts_ms
+            if expected_expires_ts_ms is None or expected_expires_ts_ms > command.now_ts_ms:
+                continue
+
+            del self._active_claims[claim.claim_id]
+            events.append(
+                MiningClaimExpiredEvent(
+                    claim_id=claim.claim_id,
+                    expired_ts_ms=command.now_ts_ms,
+                    expected_expires_ts_ms=expected_expires_ts_ms,
+                    drop_id=claim.drop_id,
+                    hit_id=claim.hit_id,
+                    run_id=claim.run_id,
+                    segment_id=claim.segment_id,
+                )
+            )
+
+        if events:
+            logger.info(
+                "claim_lifecycle_expired_claims count=%s now_ts_ms=%s",
+                len(events),
+                command.now_ts_ms,
+            )
+        return events
+
     def _create_claim(self, event: MiningHitHintEvent) -> MiningClaimCreatedEvent:
         drop = self._drops_by_id.get(event.drop_id) if event.drop_id is not None else None
         if event.drop_id is not None:
@@ -160,6 +191,7 @@ class ClaimLifecycleCorrelator:
             segment_id=segment_id,
             position=position,
             search_radius_m=search_radius_m,
+            expected_expires_ts_ms=event.expected_expires_ts_ms,
         )
         logger.debug(
             "claim_created event_type=%s claim_id=%s hit_id=%s drop_id=%s resource=%r",

@@ -9,6 +9,7 @@ from zml_game_bridge.application.mining import (
     MiningCoordinatorConfig,
 )
 from zml_game_bridge.application.mining.claims.commands import (
+    ExpireMiningClaimsCommand,
     IgnoreMiningClaimCommand,
     MarkMiningClaimDepletedCommand,
 )
@@ -24,6 +25,7 @@ from zml_game_bridge.domain.mining_events import (
     MiningClaimCreatedEvent,
     MiningClaimDeedReceivedEvent,
     MiningClaimDepletedEvent,
+    MiningClaimExpiredEvent,
     MiningClaimIgnoredEvent,
     MiningDropEvent,
     MiningEnhancerBrokeEvent,
@@ -752,6 +754,7 @@ def test_mining_coordinator_depletes_restored_active_claim() -> None:
                 segment_id="segment-1",
                 position=WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None),
                 search_radius_m=55.0,
+                expected_expires_ts_ms=None,
             )
         ]
     )
@@ -788,6 +791,7 @@ def test_mining_coordinator_ignores_active_claim_by_command() -> None:
                 segment_id="segment-1",
                 position=WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None),
                 search_radius_m=55.0,
+                expected_expires_ts_ms=None,
             )
         ]
     )
@@ -827,6 +831,7 @@ def test_mining_coordinator_marks_active_claim_depleted_by_command() -> None:
                 segment_id="segment-1",
                 position=WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None),
                 search_radius_m=55.0,
+                expected_expires_ts_ms=None,
             )
         ]
     )
@@ -857,6 +862,62 @@ def test_mining_coordinator_marks_active_claim_depleted_by_command() -> None:
     assert event.run_id == 7
     assert event.segment_id == "segment-1"
     assert event.position == position
+
+
+def test_mining_coordinator_expires_active_claims_by_command() -> None:
+    coordinator = MiningCoordinator()
+    coordinator.restore_active_claims(
+        [
+            ActiveClaim(
+                claim_id="expired-claim",
+                drop_id="drop-1",
+                hit_id="hit-1",
+                run_id=7,
+                segment_id="segment-1",
+                position=WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None),
+                search_radius_m=55.0,
+                expected_expires_ts_ms=2_000,
+            ),
+            ActiveClaim(
+                claim_id="active-claim",
+                drop_id="drop-2",
+                hit_id="hit-2",
+                run_id=7,
+                segment_id="segment-2",
+                position=WorldPos(planet_name="Calypso", x=58_900, y=84_650, z=None),
+                search_radius_m=55.0,
+                expected_expires_ts_ms=5_000,
+            ),
+            ActiveClaim(
+                claim_id="non-expiring-claim",
+                drop_id="drop-3",
+                hit_id="hit-3",
+                run_id=7,
+                segment_id="segment-3",
+                position=WorldPos(planet_name="Calypso", x=58_910, y=84_660, z=None),
+                search_radius_m=55.0,
+                expected_expires_ts_ms=None,
+            ),
+        ]
+    )
+
+    result = coordinator.process_command(ExpireMiningClaimsCommand(now_ts_ms=3_000))
+
+    assert result.value == 1
+    assert len(result.events) == 1
+    event = result.events[0]
+    assert isinstance(event, MiningClaimExpiredEvent)
+    assert event.claim_id == "expired-claim"
+    assert event.drop_id == "drop-1"
+    assert event.hit_id == "hit-1"
+    assert event.run_id == 7
+    assert event.segment_id == "segment-1"
+    assert event.expected_expires_ts_ms == 2_000
+    assert event.expired_ts_ms == 3_000
+
+    second_result = coordinator.process_command(ExpireMiningClaimsCommand(now_ts_ms=3_000))
+    assert second_result.value == 0
+    assert second_result.events == ()
 
 
 def test_mining_coordinator_records_item_received_chat_event() -> None:

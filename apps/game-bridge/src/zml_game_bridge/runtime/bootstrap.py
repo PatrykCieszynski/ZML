@@ -119,6 +119,10 @@ def build_worker_supervisor(settings: Settings) -> WorkerSupervisor:
     supervisor = WorkerSupervisor()
     supervisor.register("db_writer", enabled=True)
     supervisor.register("input_coordinator", enabled=True)
+    supervisor.register(
+        "claim_expiration_maintenance",
+        enabled=settings.claim_expiration_maintenance_enabled,
+    )
     supervisor.register("chat_tail", enabled=True)
     supervisor.register("ocr_worker", enabled=settings.ocr_enabled)
     supervisor.register("mock_mining_input", enabled=settings.mock_inputs_enabled)

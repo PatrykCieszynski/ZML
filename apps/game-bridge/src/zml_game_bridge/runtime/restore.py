@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import time
 from pathlib import Path
 
 from zml_game_bridge.application.mining import MiningCoordinator
@@ -26,7 +25,7 @@ class MiningLifecycleRestorer:
 
         conn = open_read_connection(self._db_path)
         try:
-            rows = MiningClaimReader(conn).list_active(now_ts_ms=_now_ms())
+            rows = MiningClaimReader(conn).list_active()
         finally:
             conn.close()
 
@@ -39,10 +38,7 @@ class MiningLifecycleRestorer:
                 segment_id=row.segment_id,
                 position=row.position,
                 search_radius_m=row.search_radius_m,
+                expected_expires_ts_ms=row.expected_expires_ts_ms,
             )
             for row in rows
         )
-
-
-def _now_ms() -> int:
-    return time.time_ns() // 1_000_000

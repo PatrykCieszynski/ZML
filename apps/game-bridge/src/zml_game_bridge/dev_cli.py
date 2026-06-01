@@ -130,6 +130,14 @@ def _settings_table(settings: Settings) -> Table:
     table.add_row("ocr_enabled", _format_bool(settings.ocr_enabled))
     table.add_row("mock_inputs_enabled", _format_bool(settings.mock_inputs_enabled))
     table.add_row("mock_mining_interval_ms", str(settings.mock_mining_interval_ms))
+    table.add_row(
+        "claim_expiration_maintenance_enabled",
+        _format_bool(settings.claim_expiration_maintenance_enabled),
+    )
+    table.add_row(
+        "claim_expiration_maintenance_interval_s",
+        str(settings.claim_expiration_maintenance_interval_s),
+    )
     table.add_row("finder_recording_modes", settings.finder_recording_modes or "[dim]<off>[/]")
     table.add_row("finder_recording_dir", str(settings.finder_recording_dir))
     table.add_row("finder_recording_interval_s", str(settings.finder_recording_interval_s))

@@ -640,6 +640,10 @@
   background: #657186;
 }
 
+.zml-feed-row.is-expired .zml-feed-kind {
+  background: #c6863a;
+}
+
 .zml-feed-row.is-loot .zml-feed-kind {
   background: #7dc8ff;
 }
@@ -654,6 +658,10 @@
 
 .zml-feed-row.is-ignored b {
   color: #9fb0c7;
+}
+
+.zml-feed-row.is-expired b {
+  color: #e7b56f;
 }
 
 .zml-feed-row.is-loot b {
@@ -746,6 +754,11 @@
 .zml-tag.is-ignored {
   background: #252b36;
   color: #9fb0c7;
+}
+
+.zml-tag.is-expired {
+  background: #3b2a16;
+  color: #e7b56f;
 }
 
 .zml-debug-json {

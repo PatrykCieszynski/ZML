@@ -192,6 +192,14 @@ def _default_mock_mining_interval_ms() -> int:
     return _env_int("ZML_MOCK_MINING_INTERVAL_MS", default=3_000)
 
 
+def _default_claim_expiration_maintenance_enabled() -> bool:
+    return _env_bool("ZML_CLAIM_EXPIRATION_MAINTENANCE", default=True)
+
+
+def _default_claim_expiration_maintenance_interval_s() -> float:
+    return _env_float("ZML_CLAIM_EXPIRATION_MAINTENANCE_INTERVAL_S", default=60.0)
+
+
 def _default_finder_recording_modes() -> str:
     return os.getenv("ZML_FINDER_RECORDING", "").strip()
 
@@ -318,6 +326,12 @@ class Settings:
     ocr_enabled: bool = field(default_factory=_default_ocr_enabled)
     mock_inputs_enabled: bool = field(default_factory=_default_mock_inputs_enabled)
     mock_mining_interval_ms: int = field(default_factory=_default_mock_mining_interval_ms)
+    claim_expiration_maintenance_enabled: bool = field(
+        default_factory=_default_claim_expiration_maintenance_enabled
+    )
+    claim_expiration_maintenance_interval_s: float = field(
+        default_factory=_default_claim_expiration_maintenance_interval_s
+    )
     finder_recording_modes: str = field(default_factory=_default_finder_recording_modes)
     finder_recording_dir: Path = field(default_factory=_default_finder_recording_dir)
     finder_recording_interval_s: float = field(default_factory=_default_finder_recording_interval_s)

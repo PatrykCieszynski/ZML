@@ -8,6 +8,7 @@ from typing import Any, Literal, cast
 from zml_game_bridge.domain.mining_events import (
     MiningClaimCreatedEvent,
     MiningClaimDepletedEvent,
+    MiningClaimExpiredEvent,
     MiningClaimIgnoredEvent,
 )
 from zml_game_bridge.domain.position import WorldPos
@@ -15,7 +16,7 @@ from zml_game_bridge.events.base import EventBase
 from zml_game_bridge.events.envelope import EventEnvelope
 from zml_game_bridge.persistence.event_projector import EventProjector
 
-MiningClaimStatus = Literal["active", "depleted", "ignored"]
+MiningClaimStatus = Literal["active", "depleted", "ignored", "expired"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +45,8 @@ class MiningClaimRow:
     ignored_event_id: int | None
     ignored_ts_ms: int | None
     ignored_reason: str | None
+    expired_event_id: int | None
+    expired_ts_ms: int | None
 
 
 class MiningClaimReader:
@@ -68,7 +71,11 @@ class MiningClaimReader:
         now_ts_ms: int | None = None,
         run_id: int | None = None,
     ) -> list[MiningClaimRow]:
-        filters = ["status = 'active'", "ignored_event_id IS NULL"]
+        filters = [
+            "status = 'active'",
+            "ignored_event_id IS NULL",
+            "expired_event_id IS NULL",
+        ]
         params: list[int] = []
         if now_ts_ms is not None:
             filters.append("(expected_expires_ts_ms IS NULL OR expected_expires_ts_ms > ?)")
@@ -117,6 +124,8 @@ class MiningClaimProjector(EventProjector):
             writer.mark_depleted(event=event, event_id=envelope.event_id)
         elif isinstance(event, MiningClaimIgnoredEvent):
             writer.mark_ignored(event=event, event_id=envelope.event_id)
+        elif isinstance(event, MiningClaimExpiredEvent):
+            writer.mark_expired(event=event, event_id=envelope.event_id)
 
 
 class _MiningClaimProjectionWriter:
@@ -163,7 +172,9 @@ class _MiningClaimProjectionWriter:
                 depleted_distance_m = NULL,
                 ignored_event_id = NULL,
                 ignored_ts_ms = NULL,
-                ignored_reason = NULL
+                ignored_reason = NULL,
+                expired_event_id = NULL,
+                expired_ts_ms = NULL
             """,
             (
                 event.claim_id,
@@ -232,6 +243,24 @@ class _MiningClaimProjectionWriter:
             ),
         )
 
+    def mark_expired(self, *, event: MiningClaimExpiredEvent, event_id: int) -> None:
+        self._conn.execute(
+            """
+            UPDATE mining_claims
+            SET expired_event_id = ?,
+                expired_ts_ms = ?
+            WHERE claim_id = ?
+              AND status = 'active'
+              AND ignored_event_id IS NULL
+              AND expired_event_id IS NULL
+            """,
+            (
+                event_id,
+                event.expired_ts_ms,
+                event.claim_id,
+            ),
+        )
+
 
 def _row_to_mining_claim(row: sqlite3.Row) -> MiningClaimRow:
     return MiningClaimRow(
@@ -259,12 +288,16 @@ def _row_to_mining_claim(row: sqlite3.Row) -> MiningClaimRow:
         ignored_event_id=_optional_int(row["ignored_event_id"]),
         ignored_ts_ms=_optional_int(row["ignored_ts_ms"]),
         ignored_reason=row["ignored_reason"],
+        expired_event_id=_optional_int(row["expired_event_id"]),
+        expired_ts_ms=_optional_int(row["expired_ts_ms"]),
     )
 
 
 def _claim_status_from_row(row: sqlite3.Row) -> MiningClaimStatus:
     if row["ignored_event_id"] is not None:
         return "ignored"
+    if row["expired_event_id"] is not None:
+        return "expired"
     return cast(MiningClaimStatus, row["status"])
 
 

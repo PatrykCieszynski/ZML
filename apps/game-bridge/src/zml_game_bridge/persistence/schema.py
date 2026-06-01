@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 
 SCHEMA_DDL = """
 -- =========================
@@ -146,6 +146,8 @@ CREATE TABLE IF NOT EXISTS mining_claims (
     ignored_event_id        INTEGER REFERENCES events(event_id) ON DELETE SET NULL,
     ignored_ts_ms           INTEGER,
     ignored_reason          TEXT,
+    expired_event_id        INTEGER REFERENCES events(event_id) ON DELETE SET NULL,
+    expired_ts_ms           INTEGER,
 
     CHECK (status IN ('active', 'depleted'))
 );
@@ -154,6 +156,7 @@ CREATE INDEX IF NOT EXISTS idx_mining_claims_status ON mining_claims(status);
 CREATE INDEX IF NOT EXISTS idx_mining_claims_observed_ts_ms ON mining_claims(observed_ts_ms);
 CREATE INDEX IF NOT EXISTS idx_mining_claims_expires ON mining_claims(expected_expires_ts_ms);
 CREATE INDEX IF NOT EXISTS idx_mining_claims_ignored ON mining_claims(ignored_event_id);
+CREATE INDEX IF NOT EXISTS idx_mining_claims_expired ON mining_claims(expired_event_id);
 
 CREATE TABLE IF NOT EXISTS mining_loot_items (
     event_id                INTEGER PRIMARY KEY REFERENCES events(event_id) ON DELETE CASCADE,
@@ -238,6 +241,16 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE mining_claims ADD COLUMN ignored_reason TEXT")
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_mining_claims_ignored ON mining_claims(ignored_event_id)"
+    )
+    if user_version < 12:
+        if not _column_exists(conn, "mining_claims", "expired_event_id"):
+            conn.execute(
+                "ALTER TABLE mining_claims ADD COLUMN expired_event_id INTEGER REFERENCES events(event_id) ON DELETE SET NULL"
+            )
+        if not _column_exists(conn, "mining_claims", "expired_ts_ms"):
+            conn.execute("ALTER TABLE mining_claims ADD COLUMN expired_ts_ms INTEGER")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_mining_claims_expired ON mining_claims(expired_event_id)"
     )
     if user_version < SCHEMA_VERSION:
         conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")

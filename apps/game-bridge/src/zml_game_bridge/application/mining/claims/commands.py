@@ -29,3 +29,8 @@ class IgnoreMiningClaimCommand(RuntimeCommand[None]):
     hit_id: str | None = None
     run_id: int | None = None
     segment_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ExpireMiningClaimsCommand(RuntimeCommand[int]):
+    now_ts_ms: int
