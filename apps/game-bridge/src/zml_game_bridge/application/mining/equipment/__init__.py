@@ -1,6 +1,3 @@
-from zml_game_bridge.application.mining.equipment.command_handler import (
-    MiningEquipmentCommandHandler,
-)
 from zml_game_bridge.application.mining.equipment.commands import (
     CreateMiningToolProfileCommand,
     DeleteMiningToolProfileCommand,
@@ -19,7 +16,6 @@ __all__ = [
     "ActiveMiningTools",
     "CreateMiningToolProfileCommand",
     "DeleteMiningToolProfileCommand",
-    "MiningEquipmentCommandHandler",
     "MiningEquipmentService",
     "MiningToolCommandError",
     "MiningToolKind",

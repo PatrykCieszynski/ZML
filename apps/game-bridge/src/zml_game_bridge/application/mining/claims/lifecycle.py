@@ -4,7 +4,6 @@ import logging
 import math
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import cast
 
 from zml_game_bridge.application.mining.claims.commands import (
     IgnoreMiningClaimCommand,
@@ -24,11 +23,6 @@ from zml_game_bridge.domain.position import WorldPos
 from zml_game_bridge.events.base import EventBase, SignalBase
 from zml_game_bridge.inputs.chat.signals import ResourceDepletedSignal
 from zml_game_bridge.resources.mining_resources import MiningResourceCatalog
-from zml_game_bridge.runtime.runtime_commands import (
-    RuntimeCommand,
-    RuntimeCommandResult,
-    UnsupportedRuntimeCommandError,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -87,22 +81,46 @@ class ClaimLifecycleCorrelator:
 
         return []
 
-    def process_command[T](self, command: RuntimeCommand[T]) -> RuntimeCommandResult[T]:
-        if isinstance(command, MarkMiningClaimDepletedCommand):
-            event = self._deplete_claim(command)
-            return cast(
-                RuntimeCommandResult[T],
-                RuntimeCommandResult[None](value=None, events=(event,)),
-            )
+    def deplete_claim(self, command: MarkMiningClaimDepletedCommand) -> MiningClaimDepletedEvent:
+        claim = self._active_claims.pop(command.claim_id, None)
+        event = MiningClaimDepletedEvent(
+            claim_id=command.claim_id,
+            drop_id=claim.drop_id if claim is not None else command.drop_id,
+            hit_id=claim.hit_id if claim is not None else command.hit_id,
+            event_dt=command.event_dt,
+            position=command.position,
+            distance_m=command.distance_m,
+            raw=command.raw,
+            run_id=claim.run_id if claim is not None else command.run_id,
+            segment_id=claim.segment_id if claim is not None else command.segment_id,
+        )
+        logger.debug(
+            "claim_depleted_manual event_type=%s claim_id=%s distance_m=%.2f event_dt=%s",
+            type(event).__name__,
+            event.claim_id,
+            event.distance_m,
+            event.event_dt,
+        )
+        return event
 
-        if isinstance(command, IgnoreMiningClaimCommand):
-            event = self._ignore_claim(command)
-            return cast(
-                RuntimeCommandResult[T],
-                RuntimeCommandResult[None](value=None, events=(event,)),
-            )
-
-        raise UnsupportedRuntimeCommandError(type(command).__name__)
+    def ignore_claim(self, command: IgnoreMiningClaimCommand) -> MiningClaimIgnoredEvent:
+        claim = self._active_claims.pop(command.claim_id, None)
+        event = MiningClaimIgnoredEvent(
+            claim_id=command.claim_id,
+            ignored_ts_ms=command.ignored_ts_ms,
+            reason=command.reason,
+            drop_id=claim.drop_id if claim is not None else command.drop_id,
+            hit_id=claim.hit_id if claim is not None else command.hit_id,
+            run_id=claim.run_id if claim is not None else command.run_id,
+            segment_id=claim.segment_id if claim is not None else command.segment_id,
+        )
+        logger.debug(
+            "claim_ignored event_type=%s claim_id=%s reason=%r",
+            type(event).__name__,
+            event.claim_id,
+            event.reason,
+        )
+        return event
 
     def _create_claim(self, event: MiningHitHintEvent) -> MiningClaimCreatedEvent:
         drop = self._drops_by_id.get(event.drop_id) if event.drop_id is not None else None
@@ -208,47 +226,6 @@ class ClaimLifecycleCorrelator:
             event.claim_id,
             event.distance_m,
             event.event_dt,
-        )
-        return event
-
-    def _deplete_claim(self, command: MarkMiningClaimDepletedCommand) -> MiningClaimDepletedEvent:
-        claim = self._active_claims.pop(command.claim_id, None)
-        event = MiningClaimDepletedEvent(
-            claim_id=command.claim_id,
-            drop_id=claim.drop_id if claim is not None else command.drop_id,
-            hit_id=claim.hit_id if claim is not None else command.hit_id,
-            event_dt=command.event_dt,
-            position=command.position,
-            distance_m=command.distance_m,
-            raw=command.raw,
-            run_id=claim.run_id if claim is not None else command.run_id,
-            segment_id=claim.segment_id if claim is not None else command.segment_id,
-        )
-        logger.debug(
-            "claim_depleted_manual event_type=%s claim_id=%s distance_m=%.2f event_dt=%s",
-            type(event).__name__,
-            event.claim_id,
-            event.distance_m,
-            event.event_dt,
-        )
-        return event
-
-    def _ignore_claim(self, command: IgnoreMiningClaimCommand) -> MiningClaimIgnoredEvent:
-        claim = self._active_claims.pop(command.claim_id, None)
-        event = MiningClaimIgnoredEvent(
-            claim_id=command.claim_id,
-            ignored_ts_ms=command.ignored_ts_ms,
-            reason=command.reason,
-            drop_id=claim.drop_id if claim is not None else command.drop_id,
-            hit_id=claim.hit_id if claim is not None else command.hit_id,
-            run_id=claim.run_id if claim is not None else command.run_id,
-            segment_id=claim.segment_id if claim is not None else command.segment_id,
-        )
-        logger.debug(
-            "claim_ignored event_type=%s claim_id=%s reason=%r",
-            type(event).__name__,
-            event.claim_id,
-            event.reason,
         )
         return event
 

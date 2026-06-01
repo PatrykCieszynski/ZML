@@ -356,6 +356,19 @@ class RunSegmentStore:
         )
         return int(cur.rowcount)
 
+    def reactivate_for_run(self, run_id: int, *, ts_ms: int) -> int:
+        cur = self._conn.execute(
+            """
+            UPDATE run_segments
+            SET status = 'active',
+                ended_ts_ms = NULL,
+                updated_ts_ms = ?
+            WHERE run_id = ? AND status = 'ended'
+            """,
+            (ts_ms, run_id),
+        )
+        return int(cur.rowcount)
+
     def clone_to_run(
         self,
         segment_id: str,

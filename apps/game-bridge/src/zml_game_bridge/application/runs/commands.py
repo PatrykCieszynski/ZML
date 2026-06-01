@@ -107,6 +107,7 @@ class ResumeRunCommand(RuntimeCommand[RunRow], DbCommand[RunRow]):
             )
 
         store.set_run_status(self.run_id, status="running", ts_ms=ts_ms)
+        RunSegmentStore(conn).reactivate_for_run(self.run_id, ts_ms=ts_ms)
         state.set_active_run(self.run_id)
         resumed = store.get_run(self.run_id)
 

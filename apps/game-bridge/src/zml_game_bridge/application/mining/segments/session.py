@@ -18,8 +18,6 @@ from zml_game_bridge.persistence.sqlite import open_read_connection
 logger = logging.getLogger(__name__)
 
 ACTIVE_RUN_ID_KEY = "active_run_id"
-SETUP_CHANGED_REASON = "setup_changed"
-STALE_ACTIVE_SEGMENT_REASON = "stale_active_segment"
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,7 +44,7 @@ class ActiveSegmentState:
 
 class RunSessionService:
     """
-    Tracks the current runtime segment for mining drops.
+    Assigns mining drops to setup buckets inside the active run.
 
     The service reads the active run pointer from SQLite, but segment creation is
     emitted as durable events. The DB writer persists those events and projects
@@ -65,8 +63,7 @@ class RunSessionService:
         self._connect = connect or _default_connect
         self._lock = threading.RLock()
         self._active_run_id: int | None = None
-        self._active_segment_id: str | None = None
-        self._active_setup_hash: str | None = None
+        self._segments_by_setup_hash: dict[str, ActiveSegmentState] = {}
         self._next_segment_index = 1
 
     def context_for_drop(
@@ -82,42 +79,28 @@ class RunSessionService:
         with self._lock:
             run_id = self._load_active_run_id()
             if run_id is None:
-                self._reset_active_segment()
+                self._reset_run_segments()
                 return DropRunContext(run_id=None, segment_id=None)
 
             lifecycle_events: list[RunSegmentEndedEvent | RunSegmentStartedEvent] = []
             if run_id != self._active_run_id:
                 self._active_run_id = run_id
                 self._next_segment_index = self._load_next_segment_index(run_id)
-                lifecycle_events.extend(
-                    self._restore_active_segment_from_db(
-                        run_id=run_id,
-                        setup_hash=setup_hash,
-                        observed_ts_ms=observed_ts_ms,
-                    )
-                )
+                self._segments_by_setup_hash = self._load_segments_by_setup_hash(run_id)
 
-            if self._active_segment_id is not None and self._active_setup_hash != setup_hash:
-                lifecycle_events.append(
-                    RunSegmentEndedEvent(
-                        segment_id=self._active_segment_id,
-                        run_id=run_id,
-                        ended_ts_ms=observed_ts_ms,
-                        reason=SETUP_CHANGED_REASON,
-                    )
+            segment = self._segments_by_setup_hash.get(setup_hash)
+            if segment is None:
+                segment = ActiveSegmentState(
+                    segment_id=self._id_factory(),
+                    segment_index=self._next_segment_index,
+                    setup_hash=setup_hash,
                 )
-                self._active_segment_id = None
-                self._active_setup_hash = None
-
-            if self._active_segment_id is None:
-                segment_id = self._id_factory()
                 segment_index = self._next_segment_index
                 self._next_segment_index += 1
-                self._active_segment_id = segment_id
-                self._active_setup_hash = setup_hash
+                self._segments_by_setup_hash[setup_hash] = segment
                 lifecycle_events.append(
                     RunSegmentStartedEvent(
-                        segment_id=segment_id,
+                        segment_id=segment.segment_id,
                         run_id=run_id,
                         segment_index=segment_index,
                         started_ts_ms=observed_ts_ms,
@@ -127,7 +110,7 @@ class RunSessionService:
                 )
                 logger.info(
                     "run_segment_started segment_id=%s run_id=%s segment_index=%s setup_hash=%s",
-                    segment_id,
+                    segment.segment_id,
                     run_id,
                     segment_index,
                     setup_hash,
@@ -135,7 +118,7 @@ class RunSessionService:
 
             return DropRunContext(
                 run_id=run_id,
-                segment_id=self._active_segment_id,
+                segment_id=segment.segment_id,
                 lifecycle_events=tuple(lifecycle_events),
             )
 
@@ -143,13 +126,12 @@ class RunSessionService:
         with self._lock:
             run_id = self._load_active_run_id()
             if run_id is None:
-                self._reset_active_segment()
+                self._reset_run_segments()
             return run_id
 
-    def _reset_active_segment(self) -> None:
+    def _reset_run_segments(self) -> None:
         self._active_run_id = None
-        self._active_segment_id = None
-        self._active_setup_hash = None
+        self._segments_by_setup_hash = {}
         self._next_segment_index = 1
 
     def _load_active_run_id(self) -> int | None:
@@ -181,69 +163,27 @@ class RunSessionService:
         finally:
             conn.close()
 
-    def _restore_active_segment_from_db(
-        self,
-        *,
-        run_id: int,
-        setup_hash: str,
-        observed_ts_ms: int,
-    ) -> list[RunSegmentEndedEvent]:
-        active_segments = self._load_active_segments(run_id)
-        reusable_segment = _select_reusable_active_segment(active_segments, setup_hash)
-        self._active_segment_id = (
-            reusable_segment.segment_id if reusable_segment is not None else None
-        )
-        self._active_setup_hash = (
-            reusable_segment.setup_hash if reusable_segment is not None else None
-        )
-
-        reusable_segment_id = reusable_segment.segment_id if reusable_segment is not None else None
-        stale_segments = [
-            segment for segment in active_segments if segment.segment_id != reusable_segment_id
-        ]
-        if not stale_segments:
-            return []
-
-        reason = (
-            STALE_ACTIVE_SEGMENT_REASON if reusable_segment is not None else SETUP_CHANGED_REASON
-        )
-        logger.info(
-            "run_segment_reconciled run_id=%s reused_segment_id=%s ended_segment_count=%s reason=%s",
-            run_id,
-            reusable_segment_id,
-            len(stale_segments),
-            reason,
-        )
-        return [
-            RunSegmentEndedEvent(
-                segment_id=segment.segment_id,
-                run_id=run_id,
-                ended_ts_ms=observed_ts_ms,
-                reason=reason,
-            )
-            for segment in stale_segments
-        ]
-
-    def _load_active_segments(self, run_id: int) -> list[ActiveSegmentState]:
+    def _load_segments_by_setup_hash(self, run_id: int) -> dict[str, ActiveSegmentState]:
         conn = self._connect(self._db_path)
         try:
             cur = conn.execute(
                 """
                 SELECT segment_id, segment_index, setup_hash
                 FROM run_segments
-                WHERE run_id = ? AND status = 'active'
+                WHERE run_id = ?
                 ORDER BY segment_index ASC, started_ts_ms ASC, segment_id ASC
                 """,
                 (run_id,),
             )
-            return [
-                ActiveSegmentState(
+            segments: dict[str, ActiveSegmentState] = {}
+            for row in cur.fetchall():
+                segment = ActiveSegmentState(
                     segment_id=str(row["segment_id"]),
                     segment_index=int(row["segment_index"]),
                     setup_hash=str(row["setup_hash"]),
                 )
-                for row in cur.fetchall()
-            ]
+                segments[segment.setup_hash] = segment
+            return segments
         finally:
             conn.close()
 
@@ -288,16 +228,6 @@ def _stable_json(value: dict[str, object]) -> str:
 
 def _setup_hash(setup_json: str) -> str:
     return hashlib.sha256(setup_json.encode("utf-8")).hexdigest()[:16]
-
-
-def _select_reusable_active_segment(
-    active_segments: list[ActiveSegmentState],
-    setup_hash: str,
-) -> ActiveSegmentState | None:
-    for segment in reversed(active_segments):
-        if segment.setup_hash == setup_hash:
-            return segment
-    return None
 
 
 def _default_connect(path: Path) -> sqlite3.Connection:

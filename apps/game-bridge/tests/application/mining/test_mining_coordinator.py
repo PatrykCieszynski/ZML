@@ -237,6 +237,49 @@ def test_mining_coordinator_prefers_probe_signal_units_over_cached_units() -> No
     assert mpec_to_int(drop.cost.total_mpec) == 10_000
 
 
+def test_mining_coordinator_uses_cached_units_when_probe_reports_zero() -> None:
+    coordinator = MiningCoordinator(id_factory=_id_factory("drop-1", "drop-2"))
+
+    coordinator.process_signal(
+        FinderUnitsChangedSignal(ts_ms=900, probes_per_drop=None, ammo_per_drop=1_000)
+    )
+    first_events = coordinator.process_signal(
+        ProbeFiredSignal(ts_ms=1_000, position=None, modes_mask=1, ammo_per_drop=0)
+    )
+    second_events = coordinator.process_signal(
+        ProbeFiredSignal(ts_ms=2_000, position=None, modes_mask=1, ammo_per_drop=None)
+    )
+
+    first = first_events[0]
+    second = second_events[0]
+    assert isinstance(first, MiningDropEvent)
+    assert isinstance(second, MiningDropEvent)
+    assert first.ammo_per_drop == 1_000
+    assert second.ammo_per_drop == 1_000
+    assert mpec_to_int(first.cost.total_mpec) == 10_000
+    assert mpec_to_int(second.cost.total_mpec) == 10_000
+
+
+def test_mining_coordinator_skips_drop_when_units_are_invalid_without_fallback() -> None:
+    captured_setups: list[MiningSegmentSetup] = []
+
+    def context_provider(_observed_ts_ms: int, setup: MiningSegmentSetup) -> DropRunContext:
+        captured_setups.append(setup)
+        return DropRunContext(run_id=7, segment_id="segment-1")
+
+    coordinator = MiningCoordinator(
+        id_factory=_id_factory("drop-1"),
+        run_context_provider=context_provider,
+    )
+
+    events = coordinator.process_signal(
+        ProbeFiredSignal(ts_ms=1_000, position=None, modes_mask=1, ammo_per_drop=0)
+    )
+
+    assert events == []
+    assert captured_setups == []
+
+
 def test_mining_coordinator_records_hit_hint_linked_to_recent_drop() -> None:
     position = WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None)
     coordinator = MiningCoordinator(

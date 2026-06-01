@@ -8,12 +8,10 @@ from zml_game_bridge.application.mining.claims.lifecycle import (
     ActiveClaim,
     ClaimLifecycleCorrelator,
 )
+from zml_game_bridge.application.mining.command_service import MiningCommandService
 from zml_game_bridge.application.mining.drops.finder_correlator import (
     DropRunContextProvider,
     FinderDropCorrelator,
-)
-from zml_game_bridge.application.mining.equipment.command_handler import (
-    MiningEquipmentCommandHandler,
 )
 from zml_game_bridge.application.mining.equipment.service import MiningEquipmentService
 from zml_game_bridge.application.mining.settings import (
@@ -23,16 +21,11 @@ from zml_game_bridge.application.mining.settings import (
     default_mining_equipment_profile,
 )
 from zml_game_bridge.application.position.provider import PositionProvider
-from zml_game_bridge.application.runs.command_handler import RunCommandHandler
 from zml_game_bridge.domain.mining_cost import MiningEquipmentProfile, calculate_extraction_cost
 from zml_game_bridge.events.base import EventBase, SignalBase
 from zml_game_bridge.resources.mining_resources import MiningResourceCatalog
 from zml_game_bridge.runtime.db_commands import DbCommand
-from zml_game_bridge.runtime.runtime_commands import (
-    RuntimeCommand,
-    RuntimeCommandResult,
-    UnsupportedRuntimeCommandError,
-)
+from zml_game_bridge.runtime.runtime_commands import RuntimeCommand, RuntimeCommandResult
 
 MiningEquipmentProfileProvider = Callable[[], MiningEquipmentProfile]
 RunIdProvider = Callable[[], int | None]
@@ -53,12 +46,6 @@ class DerivedEventHandler(Protocol):
 class SignalHandler(Protocol):
     def process_signal(self, signal: SignalBase) -> Iterable[EventBase]:
         """React directly to an input signal without producing an upstream event first."""
-        ...
-
-
-class CommandHandler(Protocol):
-    def process_command[T](self, command: RuntimeCommand[T]) -> RuntimeCommandResult[T]:
-        """Handle one runtime command type or raise UnsupportedRuntimeCommandError."""
         ...
 
 
@@ -102,20 +89,10 @@ class MiningCoordinator:
         self._derived_event_handlers: tuple[DerivedEventHandler, ...] = (self._claim_lifecycle,)
         self._direct_signal_handlers: tuple[SignalHandler, ...] = (self._claim_lifecycle,)
 
-        run_commands = (
-            RunCommandHandler(db_command_executor=db_command_executor)
-            if db_command_executor is not None
-            else None
-        )
-        equipment_commands = (
-            MiningEquipmentCommandHandler(equipment_service=mining_equipment_service)
-            if mining_equipment_service is not None
-            else None
-        )
-        self._command_handlers: tuple[CommandHandler, ...] = tuple(
-            handler
-            for handler in (run_commands, equipment_commands, self._claim_lifecycle)
-            if handler is not None
+        self._commands = MiningCommandService(
+            claim_lifecycle=self._claim_lifecycle,
+            db_command_executor=db_command_executor,
+            mining_equipment_service=mining_equipment_service,
         )
 
     def restore_active_claims(self, claims: Iterable[ActiveClaim]) -> None:
@@ -137,10 +114,4 @@ class MiningCoordinator:
         return derived_events
 
     def process_command[T](self, command: RuntimeCommand[T]) -> RuntimeCommandResult[T]:
-        last_error: UnsupportedRuntimeCommandError | None = None
-        for processor in self._command_handlers:
-            try:
-                return processor.process_command(command)
-            except UnsupportedRuntimeCommandError as exc:
-                last_error = exc
-        raise last_error or UnsupportedRuntimeCommandError(type(command).__name__)
+        return self._commands.process_command(command)

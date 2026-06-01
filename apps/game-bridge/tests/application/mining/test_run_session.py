@@ -42,7 +42,7 @@ def test_run_session_starts_segment_on_first_drop(tmp_path: Path) -> None:
     assert started.setup_snapshot["probes_per_drop"] is None
 
 
-def test_run_session_reuses_segment_until_setup_changes(tmp_path: Path) -> None:
+def test_run_session_reuses_segment_bucket_when_setup_returns(tmp_path: Path) -> None:
     db_path = tmp_path / "run-session.sqlite3"
     _create_active_run(db_path)
     service = RunSessionService(db_path=db_path, id_factory=_id_factory("segment-1", "segment-2"))
@@ -50,20 +50,19 @@ def test_run_session_reuses_segment_until_setup_changes(tmp_path: Path) -> None:
     first = service.context_for_drop(observed_ts_ms=1_000, setup=_setup("Finder A"))
     second = service.context_for_drop(observed_ts_ms=2_000, setup=_setup("Finder A"))
     third = service.context_for_drop(observed_ts_ms=3_000, setup=_setup("Finder B"))
+    fourth = service.context_for_drop(observed_ts_ms=4_000, setup=_setup("Finder A"))
 
     assert first.segment_id == "segment-1"
     assert second.segment_id == "segment-1"
     assert second.lifecycle_events == ()
     assert third.segment_id == "segment-2"
-    assert len(third.lifecycle_events) == 2
-    ended = third.lifecycle_events[0]
-    started = third.lifecycle_events[1]
-    assert isinstance(ended, RunSegmentEndedEvent)
-    assert ended.segment_id == "segment-1"
-    assert ended.reason == "setup_changed"
+    assert len(third.lifecycle_events) == 1
+    started = third.lifecycle_events[0]
     assert isinstance(started, RunSegmentStartedEvent)
     assert started.segment_id == "segment-2"
     assert started.segment_index == 2
+    assert fourth.segment_id == "segment-1"
+    assert fourth.lifecycle_events == ()
 
 
 def test_run_session_starts_new_segment_when_drop_modes_change(tmp_path: Path) -> None:
@@ -76,8 +75,8 @@ def test_run_session_starts_new_segment_when_drop_modes_change(tmp_path: Path) -
 
     assert first.segment_id == "segment-1"
     assert second.segment_id == "segment-2"
-    assert len(second.lifecycle_events) == 2
-    started = second.lifecycle_events[1]
+    assert len(second.lifecycle_events) == 1
+    started = second.lifecycle_events[0]
     assert isinstance(started, RunSegmentStartedEvent)
     assert started.setup_snapshot["modes_mask"] == 3
 
@@ -98,8 +97,8 @@ def test_run_session_starts_new_segment_when_drop_units_change(tmp_path: Path) -
 
     assert first.segment_id == "segment-1"
     assert second.segment_id == "segment-2"
-    assert len(second.lifecycle_events) == 2
-    started = second.lifecycle_events[1]
+    assert len(second.lifecycle_events) == 1
+    started = second.lifecycle_events[0]
     assert isinstance(started, RunSegmentStartedEvent)
     assert started.setup_snapshot["ammo_per_drop"] == 2_000
 
@@ -120,8 +119,8 @@ def test_run_session_starts_new_segment_when_probe_count_changes(tmp_path: Path)
 
     assert first.segment_id == "segment-1"
     assert second.segment_id == "segment-2"
-    assert len(second.lifecycle_events) == 2
-    started = second.lifecycle_events[1]
+    assert len(second.lifecycle_events) == 1
+    started = second.lifecycle_events[0]
     assert isinstance(started, RunSegmentStartedEvent)
     assert started.setup_snapshot["probes_per_drop"] == 2
 
@@ -145,7 +144,7 @@ def test_run_session_does_not_split_segment_when_only_extractor_changes(tmp_path
     assert second.lifecycle_events == ()
 
 
-def test_run_session_reuses_persisted_active_segment_after_restart(tmp_path: Path) -> None:
+def test_run_session_reuses_persisted_bucket_after_restart(tmp_path: Path) -> None:
     db_path = tmp_path / "run-session.sqlite3"
     _create_active_run(db_path)
     first_service = RunSessionService(db_path=db_path, id_factory=_id_factory("segment-1"))
@@ -159,7 +158,7 @@ def test_run_session_reuses_persisted_active_segment_after_restart(tmp_path: Pat
     assert restored.lifecycle_events == ()
 
 
-def test_run_session_ends_persisted_active_segment_after_restart_when_setup_changes(
+def test_run_session_starts_new_bucket_after_restart_when_setup_is_new(
     tmp_path: Path,
 ) -> None:
     db_path = tmp_path / "run-session.sqlite3"
@@ -172,18 +171,16 @@ def test_run_session_ends_persisted_active_segment_after_restart_when_setup_chan
     changed = restarted_service.context_for_drop(observed_ts_ms=2_000, setup=_setup("Finder B"))
 
     assert changed.segment_id == "segment-2"
-    assert len(changed.lifecycle_events) == 2
-    ended = changed.lifecycle_events[0]
-    started = changed.lifecycle_events[1]
-    assert isinstance(ended, RunSegmentEndedEvent)
-    assert ended.segment_id == "segment-1"
-    assert ended.reason == "setup_changed"
+    assert len(changed.lifecycle_events) == 1
+    started = changed.lifecycle_events[0]
     assert isinstance(started, RunSegmentStartedEvent)
     assert started.segment_id == "segment-2"
     assert started.segment_index == 2
 
 
-def test_run_session_closes_duplicate_active_segments_after_restart(tmp_path: Path) -> None:
+def test_run_session_reuses_persisted_bucket_after_restart_when_setup_returns(
+    tmp_path: Path,
+) -> None:
     db_path = tmp_path / "run-session.sqlite3"
     _create_active_run(db_path)
     first_service = RunSessionService(
@@ -196,14 +193,10 @@ def test_run_session_closes_duplicate_active_segments_after_restart(tmp_path: Pa
     _persist_started_segment(db_path, _started_event(second.lifecycle_events))
     restarted_service = RunSessionService(db_path=db_path, id_factory=_id_factory("segment-3"))
 
-    restored = restarted_service.context_for_drop(observed_ts_ms=3_000, setup=_setup("Finder B"))
+    restored = restarted_service.context_for_drop(observed_ts_ms=3_000, setup=_setup("Finder A"))
 
-    assert restored.segment_id == "segment-2"
-    assert len(restored.lifecycle_events) == 1
-    ended = restored.lifecycle_events[0]
-    assert isinstance(ended, RunSegmentEndedEvent)
-    assert ended.segment_id == "segment-1"
-    assert ended.reason == "stale_active_segment"
+    assert restored.segment_id == "segment-1"
+    assert restored.lifecycle_events == ()
 
 
 def test_run_session_returns_no_context_without_active_run(tmp_path: Path) -> None:

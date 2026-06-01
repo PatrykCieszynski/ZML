@@ -151,6 +151,8 @@ def _resolve_drop_unit_costs(
     ocr_probes_per_drop: int | None,
 ) -> tuple[DropUnitCost, DropUnitCost]:
     missing = DropUnitCost(quantity=None, cost_mpec=Mpec(0), source="missing")
+    ocr_ammo_per_drop = _positive_unit_or_none(ocr_ammo_per_drop)
+    ocr_probes_per_drop = _positive_unit_or_none(ocr_probes_per_drop)
 
     if ocr_ammo_per_drop is not None:
         return (
@@ -189,3 +191,9 @@ def _resolve_drop_unit_costs(
             ),
         )
     return missing, missing
+
+
+def _positive_unit_or_none(value: int | None) -> int | None:
+    if value is None or value <= 0:
+        return None
+    return value
