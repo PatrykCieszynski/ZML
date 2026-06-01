@@ -343,6 +343,58 @@ export async function stopRun(): Promise<void> {
   }
 }
 
+export async function ignoreMiningClaim(claimId: string): Promise<void> {
+  let api;
+  try {
+    api = getZml();
+  } catch (error) {
+    setState({
+      lastCommandError: errorToMessage(error),
+    });
+    return;
+  }
+
+  setState({ lastCommandError: null });
+
+  try {
+    const claim = await api.ignoreMiningClaim(claimId);
+    setState({
+      miningClaims: upsertMiningClaim(state.miningClaims, claim),
+      lastCommandError: null,
+    });
+  } catch (error) {
+    setState({
+      lastCommandError: errorToMessage(error),
+    });
+  }
+}
+
+export async function markMiningClaimDepleted(claimId: string): Promise<void> {
+  let api;
+  try {
+    api = getZml();
+  } catch (error) {
+    setState({
+      lastCommandError: errorToMessage(error),
+    });
+    return;
+  }
+
+  setState({ lastCommandError: null });
+
+  try {
+    const claim = await api.markMiningClaimDepleted(claimId);
+    setState({
+      miningClaims: upsertMiningClaim(state.miningClaims, claim),
+      lastCommandError: null,
+    });
+  } catch (error) {
+    setState({
+      lastCommandError: errorToMessage(error),
+    });
+  }
+}
+
 export async function refreshMiningTools(): Promise<void> {
   let api;
   try {
@@ -670,6 +722,16 @@ function upsertMiningTool(
     ...tools.filter((tool) => tool.toolId !== profile.toolId),
     profile,
   ]);
+}
+
+function upsertMiningClaim(
+  claims: readonly MiningClaimDto[],
+  claim: MiningClaimDto,
+): MiningClaimDto[] {
+  return [
+    claim,
+    ...claims.filter((item) => item.claimId !== claim.claimId),
+  ].sort((a, b) => b.observedTsMs - a.observedTsMs);
 }
 
 export function useZmlRendererStore(windowType: WindowType): ZmlRendererState {

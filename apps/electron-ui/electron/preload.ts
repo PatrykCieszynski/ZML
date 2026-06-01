@@ -5,6 +5,7 @@ import type {
   BootstrapState,
   CreateMiningToolProfileRequest,
   GetBootstrapStateReq,
+  MiningClaimDto,
   MiningToolProfileDto,
   OcrPositionEvent,
   PushPosition,
@@ -36,6 +37,8 @@ type ZmlApi = {
   toggleOverlayWindow: () => Promise<boolean>;
   startRun: (request: StartRunRequest) => Promise<RunDto>;
   stopRun: (request?: StopRunRequest) => Promise<RunDto>;
+  markMiningClaimDepleted: (claimId: string) => Promise<MiningClaimDto>;
+  ignoreMiningClaim: (claimId: string) => Promise<MiningClaimDto>;
   listMiningTools: () => Promise<MiningToolProfileDto[]>;
   createMiningTool: (request: CreateMiningToolProfileRequest) => Promise<MiningToolProfileDto>;
   deleteMiningTool: (toolId: string) => Promise<void>;
@@ -97,6 +100,14 @@ const api: ZmlApi = {
 
   async stopRun(request = {}) {
     return ipcRenderer.invoke(IPC_CMD.STOP_RUN, request) as Promise<RunDto>;
+  },
+
+  async ignoreMiningClaim(claimId) {
+    return ipcRenderer.invoke(IPC_CMD.IGNORE_MINING_CLAIM, claimId) as Promise<MiningClaimDto>;
+  },
+
+  async markMiningClaimDepleted(claimId) {
+    return ipcRenderer.invoke(IPC_CMD.MARK_MINING_CLAIM_DEPLETED, claimId) as Promise<MiningClaimDto>;
   },
 
   async listMiningTools() {

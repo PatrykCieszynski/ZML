@@ -3,6 +3,7 @@ import type {
   ActiveMiningToolsDto,
   BootstrapState,
   CreateMiningToolProfileRequest,
+  MiningClaimDto,
   MiningToolProfileDto,
   OcrPositionEvent,
   RuntimeStatePatch,
@@ -31,6 +32,8 @@ declare global {
       toggleOverlayWindow: () => Promise<boolean>;
       startRun: (request: StartRunRequest) => Promise<RunDto>;
       stopRun: (request?: StopRunRequest) => Promise<RunDto>;
+      markMiningClaimDepleted: (claimId: string) => Promise<MiningClaimDto>;
+      ignoreMiningClaim: (claimId: string) => Promise<MiningClaimDto>;
       listMiningTools: () => Promise<MiningToolProfileDto[]>;
       createMiningTool: (request: CreateMiningToolProfileRequest) => Promise<MiningToolProfileDto>;
       deleteMiningTool: (toolId: string) => Promise<void>;

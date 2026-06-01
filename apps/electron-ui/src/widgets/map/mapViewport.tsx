@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type MouseEvent,
 } from "react";
 import DeckGL from "@deck.gl/react";
 import {
@@ -87,6 +88,8 @@ export function MapViewport({
   hexGridOrientation = "vertical",
   followPlayer,
   onFollowPlayerChange,
+  onIgnoreClaim,
+  onMarkClaimDepleted,
 }: {
   planetId: PlanetId;
   point: EntropiaMapPoint | null;
@@ -101,6 +104,8 @@ export function MapViewport({
   hexGridOrientation?: HexGridOrientation;
   followPlayer: boolean;
   onFollowPlayerChange: (followPlayer: boolean) => void;
+  onIgnoreClaim?: (claimId: string) => void | Promise<void>;
+  onMarkClaimDepleted?: (claimId: string) => void | Promise<void>;
 }) {
   const [viewState, setViewState] = useState<OrthographicViewState>(() =>
     createInitialMapViewState(planetId),
@@ -113,6 +118,11 @@ export function MapViewport({
   const markerRef = useRef<DeckPoint | null>(null);
   const [currentSec, setCurrentSec] = useState(nowSec);
   const [debugClaimSeedSec] = useState(nowSec);
+  const [claimMenu, setClaimMenu] = useState<{
+    claim: MapClaim;
+    x: number;
+    y: number;
+  } | null>(null);
 
   useEffect(() => {
     viewStateRef.current = viewState;
@@ -236,6 +246,9 @@ export function MapViewport({
             y: claim.position.y,
             position: entropiaToDeckPosition(planetId, claim.position),
             resourceKind: resourceKindFromName(claim.resourceName),
+            resourceName: claim.resourceName,
+            sizeLabel: claim.sizeLabel,
+            sizeIndex: claim.sizeIndex,
             expiresAtSec,
           },
         ];
@@ -455,9 +468,41 @@ export function MapViewport({
     });
   };
 
+  const handleContextMenu = (event: MouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    if (activeClaims.length === 0) return;
+    const element = mapRootRef.current;
+    if (element === null) return;
+
+    const claim = findNearestClaimAtScreenPoint({
+      claims: activeClaims,
+      element,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      viewState: viewStateRef.current,
+    });
+    if (claim === null) {
+      setClaimMenu(null);
+      return;
+    }
+
+    const rect = element.getBoundingClientRect();
+    setClaimMenu({
+      claim,
+      x: clamp(event.clientX - rect.left, 8, Math.max(8, rect.width - 192)),
+      y: clamp(event.clientY - rect.top, 8, Math.max(8, rect.height - 144)),
+    });
+  };
+
+  const closeClaimMenu = () => setClaimMenu(null);
+
   return (
     <div
       ref={mapRootRef}
+      onContextMenu={handleContextMenu}
+      onPointerDown={(event) => {
+        if (event.button !== 2) closeClaimMenu();
+      }}
       style={{
         width: "100%",
         height: "100%",
@@ -473,6 +518,41 @@ export function MapViewport({
         onViewStateChange={handleViewStateChange}
         style={{ position: "absolute", inset: "0" }}
       />
+      {claimMenu !== null && (
+        <div
+          className="zml-map-context-menu"
+          style={{ left: claimMenu.x, top: claimMenu.y }}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <strong>{claimMenu.claim.resourceName ?? "Unknown claim"}</strong>
+          <span>
+            {formatClaimMenuSize(claimMenu.claim)} at {Math.round(claimMenu.claim.x)},{" "}
+            {Math.round(claimMenu.claim.y)}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              const claimId = claimMenu.claim.id;
+              closeClaimMenu();
+              void onMarkClaimDepleted?.(claimId);
+            }}
+            disabled={onMarkClaimDepleted === undefined || claimMenu.claim.id.startsWith("debug-")}
+          >
+            Mark extracted
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const claimId = claimMenu.claim.id;
+              closeClaimMenu();
+              void onIgnoreClaim?.(claimId);
+            }}
+            disabled={onIgnoreClaim === undefined || claimMenu.claim.id.startsWith("debug-")}
+          >
+            Ignore false claim
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -582,6 +662,7 @@ function createHexGuideLines({
       path: [marker.position, corner],
       label: `X ${formatSignedCoordOffset(offsetX)}`,
       labelPosition: midpoint(marker.position, corner),
+      labelPixelOffset: [offsetX >= 0 ? 18 : -18, -10],
     },
     {
       id: "hex-guide-y",
@@ -589,6 +670,7 @@ function createHexGuideLines({
       path: [corner, center],
       label: `Y ${formatSignedCoordOffset(offsetY)}`,
       labelPosition: midpoint(corner, center),
+      labelPixelOffset: [12, offsetY >= 0 ? -16 : 16],
     },
   ];
 }
@@ -694,6 +776,48 @@ function midpoint(left: DeckPosition, right: DeckPosition): DeckPosition {
     (left[1] + right[1]) / 2,
     0,
   ];
+}
+
+function findNearestClaimAtScreenPoint({
+  claims,
+  element,
+  clientX,
+  clientY,
+  viewState,
+}: {
+  claims: readonly MapClaim[];
+  element: HTMLElement;
+  clientX: number;
+  clientY: number;
+  viewState: OrthographicViewState;
+}): MapClaim | null {
+  const rect = element.getBoundingClientRect();
+  const scale = 2 ** readZoom(viewState.zoom);
+  const target = Array.isArray(viewState.target)
+    ? viewState.target
+    : [0, 0, 0];
+  const worldX = target[0] + (clientX - rect.left - rect.width / 2) / scale;
+  const worldY = target[1] + (clientY - rect.top - rect.height / 2) / scale;
+  const maxDistancePx = 14;
+  let nearest: { claim: MapClaim; distancePx: number } | null = null;
+
+  for (const claim of claims) {
+    const distanceWorld = Math.hypot(claim.position[0] - worldX, claim.position[1] - worldY);
+    const distancePx = distanceWorld * scale;
+    if (distancePx > maxDistancePx) continue;
+    if (nearest === null || distancePx < nearest.distancePx) {
+      nearest = { claim, distancePx };
+    }
+  }
+
+  return nearest?.claim ?? null;
+}
+
+function formatClaimMenuSize(claim: MapClaim): string {
+  if (claim.sizeLabel === null && claim.sizeIndex === null) return "Claim";
+  if (claim.sizeLabel === null) return `Size ${claim.sizeIndex}`;
+  if (claim.sizeIndex === null) return claim.sizeLabel;
+  return `${claim.sizeLabel} ${claim.sizeIndex}`;
 }
 
 function formatSignedCoordOffset(value: number): string {

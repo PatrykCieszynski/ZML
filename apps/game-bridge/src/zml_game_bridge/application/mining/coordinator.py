@@ -7,7 +7,6 @@ from zml_game_bridge.application.mining.chat.correlator import MiningChatCorrela
 from zml_game_bridge.application.mining.claims.lifecycle import (
     ActiveClaim,
     ClaimLifecycleCorrelator,
-    PositionProvider,
 )
 from zml_game_bridge.application.mining.drops.finder_correlator import (
     DropRunContextProvider,
@@ -23,6 +22,7 @@ from zml_game_bridge.application.mining.settings import (
     default_id_factory,
     default_mining_equipment_profile,
 )
+from zml_game_bridge.application.position.provider import PositionProvider
 from zml_game_bridge.application.runs.command_handler import RunCommandHandler
 from zml_game_bridge.domain.mining_cost import MiningEquipmentProfile, calculate_extraction_cost
 from zml_game_bridge.events.base import EventBase, SignalBase
@@ -83,6 +83,7 @@ class MiningCoordinator:
         self._finder = FinderDropCorrelator(
             profile_provider=resolved_profile_provider,
             run_context_provider=run_context_provider,
+            position_provider=position_provider,
             config=resolved_config,
             id_factory=id_factory,
         )
@@ -112,7 +113,9 @@ class MiningCoordinator:
             else None
         )
         self._command_handlers: tuple[CommandHandler, ...] = tuple(
-            handler for handler in (run_commands, equipment_commands) if handler is not None
+            handler
+            for handler in (run_commands, equipment_commands, self._claim_lifecycle)
+            if handler is not None
         )
 
     def restore_active_claims(self, claims: Iterable[ActiveClaim]) -> None:

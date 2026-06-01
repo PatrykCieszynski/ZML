@@ -14,6 +14,7 @@ export type MapHexGuideLine = {
   path: DeckPosition[];
   label: string;
   labelPosition: DeckPosition;
+  labelPixelOffset: [number, number];
 };
 
 const HEX_LINE_COLOR: Color = [112, 178, 255, 90];
@@ -69,7 +70,7 @@ export function createHexGuideLabelLayer(
     getText: (line) => line.label,
     getSize: () => 12,
     getColor: (line) => GUIDE_LINE_COLORS[line.axis],
-    getPixelOffset: (line) => (line.axis === "x" ? [0, -12] : [12, 0]),
+    getPixelOffset: (line) => line.labelPixelOffset,
     getTextAnchor: () => "middle",
     getAlignmentBaseline: () => "center",
     fontSettings: {

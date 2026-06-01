@@ -17,9 +17,11 @@ import type {
 
 import type {
     AgentClient,
+    IgnoreMiningClaimRequest,
     ListMiningClaimsRequest,
     ListMiningDropsRequest,
     ListMiningLootRequest,
+    MarkMiningClaimDepletedRequest,
 } from "../agent/restClient.ts";
 
 const MOCK_MINING_CLAIMS: MiningClaimDto[] = [
@@ -46,6 +48,7 @@ export class MockAgentRestClient implements AgentClient {
     private activeRun: RunDto | null = null;
     private runs: RunDto[] = [];
     private runSegments: RunSegmentDto[] = [];
+    private miningClaims: MiningClaimDto[] = [...MOCK_MINING_CLAIMS];
     private miningTools: MiningToolProfileDto[] = [
         createMockMiningTool("mock-finder-1", "finder", "Ziplex Z20", 0, "100", 55),
         createMockMiningTool("mock-amp-1", "amp", "Level 2 Amp", 4200, "108", null),
@@ -214,10 +217,42 @@ export class MockAgentRestClient implements AgentClient {
         if (request.activeRun && this.activeRun === null) return [];
         const runId = request.activeRun ? this.activeRun?.runId ?? null : request.runId ?? null;
         const claims = runId === null
-            ? MOCK_MINING_CLAIMS
-            : MOCK_MINING_CLAIMS.filter((claim) => claim.runId === runId);
+            ? this.miningClaims
+            : this.miningClaims.filter((claim) => claim.runId === runId);
         if (request.active === false) return claims;
         return claims.filter((claim) => claim.status === "active");
+    }
+
+    async ignoreMiningClaim(
+        claimId: string,
+        _request: IgnoreMiningClaimRequest = {},
+    ): Promise<MiningClaimDto> {
+        const current = this.miningClaims.find((claim) => claim.claimId === claimId);
+        if (!current) {
+            throw new Error(`Mock claim not found: ${claimId}`);
+        }
+        const updated: MiningClaimDto = { ...current, status: "ignored" };
+        this.miningClaims = [updated, ...this.miningClaims.filter((claim) => claim.claimId !== claimId)];
+        return updated;
+    }
+
+    async markMiningClaimDepleted(
+        claimId: string,
+        _request: MarkMiningClaimDepletedRequest = {},
+    ): Promise<MiningClaimDto> {
+        const current = this.miningClaims.find((claim) => claim.claimId === claimId);
+        if (!current) {
+            throw new Error(`Mock claim not found: ${claimId}`);
+        }
+        const updated: MiningClaimDto = {
+            ...current,
+            status: "depleted",
+            depletedEventDt: new Date().toISOString(),
+            depletedPosition: current.position,
+            depletedDistanceM: 0,
+        };
+        this.miningClaims = [updated, ...this.miningClaims.filter((claim) => claim.claimId !== claimId)];
+        return updated;
     }
 
     async listMiningDrops(request: ListMiningDropsRequest = {}): Promise<MiningDropDto[]> {

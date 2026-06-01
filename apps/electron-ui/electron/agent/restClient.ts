@@ -56,6 +56,11 @@ export type AgentClient = {
   startRun: (request: StartRunRequest) => Promise<RunDto>;
   stopRun: (request: StopRunRequest) => Promise<RunDto>;
   listMiningClaims: (request?: ListMiningClaimsRequest) => Promise<MiningClaimDto[]>;
+  markMiningClaimDepleted: (
+    claimId: string,
+    request?: MarkMiningClaimDepletedRequest,
+  ) => Promise<MiningClaimDto>;
+  ignoreMiningClaim: (claimId: string, request?: IgnoreMiningClaimRequest) => Promise<MiningClaimDto>;
   listMiningDrops: (request?: ListMiningDropsRequest) => Promise<MiningDropDto[]>;
   listMiningLoot: (request?: ListMiningLootRequest) => Promise<MiningLootItemDto[]>;
   listMiningTools: () => Promise<MiningToolProfileDto[]>;
@@ -69,6 +74,14 @@ export type ListMiningClaimsRequest = {
   active?: boolean;
   runId?: number;
   activeRun?: boolean;
+};
+
+export type IgnoreMiningClaimRequest = {
+  reason?: string | null;
+};
+
+export type MarkMiningClaimDepletedRequest = {
+  reason?: string | null;
 };
 
 export type ListMiningDropsRequest = {
@@ -195,6 +208,34 @@ export class AgentRestClient implements AgentClient {
       throw new Error("Agent mining claims returned an invalid payload");
     }
     return data.map(wireToMiningClaimDto);
+  }
+
+  async ignoreMiningClaim(
+    claimId: string,
+    request: IgnoreMiningClaimRequest = {},
+  ): Promise<MiningClaimDto> {
+    const data = await this.postJson(
+      `/api/v1/mining/claims/${encodeURIComponent(claimId)}/ignore`,
+      { reason: request.reason ?? null },
+    );
+    if (!isMiningClaimWire(data)) {
+      throw new Error("Agent ignore mining claim returned an invalid payload");
+    }
+    return wireToMiningClaimDto(data);
+  }
+
+  async markMiningClaimDepleted(
+    claimId: string,
+    request: MarkMiningClaimDepletedRequest = {},
+  ): Promise<MiningClaimDto> {
+    const data = await this.postJson(
+      `/api/v1/mining/claims/${encodeURIComponent(claimId)}/deplete`,
+      { reason: request.reason ?? null },
+    );
+    if (!isMiningClaimWire(data)) {
+      throw new Error("Agent mark mining claim depleted returned an invalid payload");
+    }
+    return wireToMiningClaimDto(data);
   }
 
   async listMiningDrops(request: ListMiningDropsRequest = {}): Promise<MiningDropDto[]> {

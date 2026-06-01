@@ -39,10 +39,10 @@ export function createPlayerMarkerLayer(marker: DeckPoint | null): ScatterplotLa
     stroked: true,
     filled: true,
     getPosition: (item) => item.position,
-    getRadius: () => 6,
+    getRadius: () => 4,
     getFillColor: () => [246, 248, 255, 255],
     getLineColor: () => [36, 235, 113, 255],
-    getLineWidth: () => 2,
+    getLineWidth: () => 1.5,
   });
 }
 

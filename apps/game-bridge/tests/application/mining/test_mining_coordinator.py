@@ -7,6 +7,10 @@ from zml_game_bridge.application.mining import (
     MiningCoordinator,
     MiningCoordinatorConfig,
 )
+from zml_game_bridge.application.mining.claims.commands import (
+    IgnoreMiningClaimCommand,
+    MarkMiningClaimDepletedCommand,
+)
 from zml_game_bridge.application.mining.claims.lifecycle import ActiveClaim
 from zml_game_bridge.application.mining.segments.session import DropRunContext, MiningSegmentSetup
 from zml_game_bridge.domain.mining import MiningMode
@@ -19,6 +23,7 @@ from zml_game_bridge.domain.mining_events import (
     MiningClaimCreatedEvent,
     MiningClaimDeedReceivedEvent,
     MiningClaimDepletedEvent,
+    MiningClaimIgnoredEvent,
     MiningDropEvent,
     MiningEnhancerBrokeEvent,
     MiningHitHintEvent,
@@ -697,6 +702,89 @@ def test_mining_coordinator_depletes_restored_active_claim() -> None:
     assert event.hit_id == "hit-1"
     assert event.run_id == 7
     assert event.segment_id == "segment-1"
+
+
+def test_mining_coordinator_ignores_active_claim_by_command() -> None:
+    coordinator = MiningCoordinator()
+    coordinator.restore_active_claims(
+        [
+            ActiveClaim(
+                claim_id="claim-1",
+                drop_id="drop-1",
+                hit_id="hit-1",
+                run_id=7,
+                segment_id="segment-1",
+                position=WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None),
+                search_radius_m=55.0,
+            )
+        ]
+    )
+
+    result = coordinator.process_command(
+        IgnoreMiningClaimCommand(
+            claim_id="claim-1",
+            ignored_ts_ms=2_500,
+            reason="manual map action",
+            drop_id=None,
+            hit_id=None,
+            run_id=None,
+            segment_id=None,
+        )
+    )
+
+    assert result.value is None
+    assert len(result.events) == 1
+    event = result.events[0]
+    assert isinstance(event, MiningClaimIgnoredEvent)
+    assert event.claim_id == "claim-1"
+    assert event.drop_id == "drop-1"
+    assert event.hit_id == "hit-1"
+    assert event.run_id == 7
+    assert event.segment_id == "segment-1"
+
+
+def test_mining_coordinator_marks_active_claim_depleted_by_command() -> None:
+    coordinator = MiningCoordinator()
+    coordinator.restore_active_claims(
+        [
+            ActiveClaim(
+                claim_id="claim-1",
+                drop_id="drop-1",
+                hit_id="hit-1",
+                run_id=7,
+                segment_id="segment-1",
+                position=WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None),
+                search_radius_m=55.0,
+            )
+        ]
+    )
+    event_dt = datetime(2026, 1, 10, 12, 37, 50)
+    position = WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None)
+
+    result = coordinator.process_command(
+        MarkMiningClaimDepletedCommand(
+            claim_id="claim-1",
+            event_dt=event_dt,
+            position=position,
+            distance_m=0.0,
+            raw="manual map action",
+            drop_id=None,
+            hit_id=None,
+            run_id=None,
+            segment_id=None,
+        )
+    )
+
+    assert result.value is None
+    assert len(result.events) == 1
+    event = result.events[0]
+    assert isinstance(event, MiningClaimDepletedEvent)
+    assert event.claim_id == "claim-1"
+    assert event.drop_id == "drop-1"
+    assert event.hit_id == "hit-1"
+    assert event.run_id == 7
+    assert event.segment_id == "segment-1"
+    assert event.position == position
 
 
 def test_mining_coordinator_records_item_received_chat_event() -> None:

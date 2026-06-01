@@ -9,6 +9,7 @@ from zml_game_bridge.application.mining.settings import (
     IdFactory,
     MiningCoordinatorConfig,
 )
+from zml_game_bridge.application.position.provider import PositionProvider
 from zml_game_bridge.domain.claim_size import expected_claim_expires_ts_ms
 from zml_game_bridge.domain.mining_cost import (
     MiningEquipmentProfile,
@@ -20,6 +21,7 @@ from zml_game_bridge.domain.mining_events import (
     MiningHitHintEvent,
     MiningNoResourcesEvent,
 )
+from zml_game_bridge.domain.position import WorldPos
 from zml_game_bridge.events.base import EventBase, SignalBase
 from zml_game_bridge.inputs.ocr.pipelines.mining_finder.signals import (
     FinderHitHintSignal,
@@ -44,11 +46,13 @@ class FinderDropCorrelator:
         *,
         profile_provider: MiningEquipmentProfileProvider,
         run_context_provider: DropRunContextProvider | None = None,
+        position_provider: PositionProvider | None = None,
         config: MiningCoordinatorConfig,
         id_factory: IdFactory,
     ) -> None:
         self._profile_provider = profile_provider
         self._run_context_provider = run_context_provider
+        self._position_provider = position_provider or _none_position_provider
         self._config = config
         self._id_factory = id_factory
         self._modes_mask: int | None = None
@@ -95,6 +99,10 @@ class FinderDropCorrelator:
         return []
 
     def _record_drop(self, signal: ProbeFiredSignal) -> list[EventBase]:
+        position = self._position_provider()
+        if position is None:
+            logger.warning("drop_without_position signal=%s", signal)
+
         modes_mask = signal.modes_mask if signal.modes_mask is not None else self._modes_mask
         probes_per_drop = (
             signal.probes_per_drop if signal.probes_per_drop is not None else self._probes_per_drop
@@ -128,7 +136,7 @@ class FinderDropCorrelator:
         event = MiningDropEvent(
             drop_id=self._id_factory(),
             observed_ts_ms=signal.ts_ms,
-            position=signal.position,
+            position=position,
             modes_mask=modes_mask,
             probes_per_drop=probes_per_drop,
             ammo_per_drop=ammo_per_drop,
@@ -248,3 +256,7 @@ class FinderDropCorrelator:
             self._config.result_link_window_ms,
         )
         return None
+
+
+def _none_position_provider() -> WorldPos | None:
+    return None

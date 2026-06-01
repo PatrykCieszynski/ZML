@@ -1,6 +1,7 @@
 import {
     isMiningClaimCreatedEventWire,
     isMiningClaimDepletedEventWire,
+    isMiningClaimIgnoredEventWire,
     isMiningDropEventWire,
     isMiningHitHintEventWire,
     isMiningNoResourcesEventWire,
@@ -51,6 +52,11 @@ export function applyMiningEvent(event: AgentEventEnvelope<string, unknown>): vo
         return;
     }
 
+    if (event.type === "MiningClaimIgnoredEvent" && isMiningClaimIgnoredEventWire(event.payload)) {
+        markMiningClaimIgnored(event.payload.claim_id);
+        return;
+    }
+
     if (event.type === "MiningNoResourcesEvent" && isMiningNoResourcesEventWire(event.payload)) {
         const payload = event.payload;
         updateMiningDrop(payload.drop_id, (drop) => miningDropDtoWithNoResources(drop, payload, event.eventId));
@@ -80,6 +86,20 @@ function markMiningClaimDepleted(
             depletedEventDt: eventDt,
             depletedPosition: wireToClaimPosition(payload.position),
             depletedDistanceM: payload.distance_m,
+        };
+    }));
+    pushStatePatch({ miningClaims: runtime.miningClaims });
+}
+
+function markMiningClaimIgnored(claimId: string): void {
+    const hasClaim = runtime.miningClaims.some((claim) => claim.claimId === claimId);
+    if (!hasClaim) return;
+
+    runtime.miningClaims = sortClaims(runtime.miningClaims.map((claim) => {
+        if (claim.claimId !== claimId) return claim;
+        return {
+            ...claim,
+            status: "ignored",
         };
     }));
     pushStatePatch({ miningClaims: runtime.miningClaims });

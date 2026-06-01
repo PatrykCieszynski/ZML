@@ -7,6 +7,7 @@ from pathlib import Path
 from zml_game_bridge.domain.mining_events import (
     MiningClaimCreatedEvent,
     MiningClaimDepletedEvent,
+    MiningClaimIgnoredEvent,
 )
 from zml_game_bridge.domain.position import WorldPos
 from zml_game_bridge.persistence.event_writer import EventWriter
@@ -98,6 +99,34 @@ def test_mining_claim_reader_lists_active_unexpired_claims(tmp_path: Path) -> No
         claims = MiningClaimReader(conn).list_active(now_ts_ms=1_500)
 
         assert [claim.claim_id for claim in claims] == ["active", "non-expiring"]
+    finally:
+        conn.close()
+
+
+def test_mining_claim_projector_marks_claim_ignored(tmp_path: Path) -> None:
+    conn = _open_test_db(tmp_path)
+    try:
+        writer = EventWriter(conn, projector=MiningClaimProjector())
+        writer.write(_claim_created_event())
+        ignored_env = writer.write(
+            MiningClaimIgnoredEvent(
+                claim_id="claim-1",
+                ignored_ts_ms=2_500,
+                reason="manual map action",
+                drop_id="drop-1",
+                hit_id="hit-1",
+                run_id=1,
+                segment_id="segment-1",
+            )
+        )
+
+        row = MiningClaimReader(conn).get("claim-1")
+        assert row is not None
+        assert row.status == "ignored"
+        assert row.ignored_event_id == ignored_env.event_id
+        assert row.ignored_ts_ms == 2_500
+        assert row.ignored_reason == "manual map action"
+        assert MiningClaimReader(conn).list_active(now_ts_ms=3_000) == []
     finally:
         conn.close()
 

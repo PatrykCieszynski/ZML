@@ -234,7 +234,5 @@ apps/game-bridge/dist/
 apps/game-bridge/*.spec
 
 # Python bridge local pytest/cache artifacts
-apps/game-bridge/.pytest-cache/
-apps/game-bridge/.pytest-cache-local/
-apps/game-bridge/.pytest-tmp/
-apps/game-bridge/.pytest-tmp-*/
+apps/game-bridge/.pytest-*/
+apps/game-bridge/pytest-*/

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type {
   ActiveMiningToolsDto,
   MiningClaimDto,
@@ -24,6 +24,7 @@ import {
   toggleOverlayWindow,
   updateRunName,
   useZmlRendererStore,
+  type ZmlRendererState,
 } from "../state/zmlRendererStore";
 import { MiningToolsPanel } from "./miningToolsPanel";
 import { useMapPreferences, type MapPreferences } from "./mapPreferences";
@@ -35,7 +36,7 @@ type MainView = "dashboard" | "runs" | "segments" | "loot" | "claims" | "setup" 
 type FeedItem = {
   id: string;
   tsMs: number;
-  kind: "drop" | "hit" | "miss" | "claim" | "depleted" | "loot";
+  kind: "drop" | "hit" | "miss" | "claim" | "depleted" | "ignored" | "loot";
   title: string;
   detail: string;
   amount?: string;
@@ -336,6 +337,7 @@ function ActiveSetupPanel({
   pending: boolean;
 }) {
   const finderTools = tools.filter((tool) => tool.kind === "finder");
+  const ampTools = tools.filter((tool) => tool.kind === "amp");
 
   const handleFinderChange = (value: string) => {
     void setActiveMiningTools({
@@ -346,11 +348,20 @@ function ActiveSetupPanel({
     });
   };
 
+  const handleAmpChange = (value: string) => {
+    void setActiveMiningTools({
+      finderId: activeTools?.finderId ?? null,
+      ampId: emptyStringToNull(value),
+      extractorId: activeTools?.extractorId ?? null,
+      finderRangeEnhancerCount: activeTools?.finderRangeEnhancerCount ?? 0,
+    });
+  };
+
   return (
     <section className="zml-panel">
       <PanelTitle title="Active Setup" />
       <div className="zml-setup-list">
-        <label className="zml-quick-finder">
+        <label className="zml-quick-tool">
           <span>Finder</span>
           <select
             value={activeTools?.finderId ?? ""}
@@ -369,7 +380,25 @@ function ActiveSetupPanel({
           </select>
           <em>{formatMeters(activeTools?.effectiveFinderRadiusM)}</em>
         </label>
-        <SetupLine label="Amplifier" value={setup.amp} />
+        <label className="zml-quick-tool">
+          <span>Amplifier</span>
+          <select
+            value={activeTools?.ampId ?? ""}
+            onChange={(event) => {
+              const { value } = event.currentTarget;
+              handleAmpChange(value);
+            }}
+            disabled={pending}
+          >
+            <option value="">No amp</option>
+            {ampTools.map((tool) => (
+              <option key={tool.toolId} value={tool.toolId}>
+                {tool.name}
+              </option>
+            ))}
+          </select>
+          <em>{setup.amp}</em>
+        </label>
         <SetupLine label="Extractor" value={setup.extractor} badge={formatPedFromMpec(activeTools?.extractionCostMpec)} />
       </div>
       <div className="zml-divider" />
@@ -728,6 +757,14 @@ function ClaimsView({ claims }: { claims: MiningClaimDto[] }) {
     () => claims.filter((claim) => claim.status === "depleted"),
     [claims],
   );
+  const ignoredClaims = useMemo(
+    () => claims.filter((claim) => claim.status === "ignored"),
+    [claims],
+  );
+  const countedClaims = useMemo(
+    () => claims.filter((claim) => claim.status !== "ignored"),
+    [claims],
+  );
   const filteredHistory = useMemo(
     () => sortClaimHistory(
       filter === "all" ? claims : claims.filter((claim) => claim.miningType === filter),
@@ -761,9 +798,10 @@ function ClaimsView({ claims }: { claims: MiningClaimDto[] }) {
         ))}
       </div>
       <div className="zml-claim-summary-grid">
-        <ClaimSummaryCard label="Total" value={String(claims.length)} />
+        <ClaimSummaryCard label="Total" value={String(countedClaims.length)} />
         <ClaimSummaryCard label="Active" value={String(activeClaims.length)} />
         <ClaimSummaryCard label="Extracted" value={String(depletedClaims.length)} />
+        <ClaimSummaryCard label="Ignored" value={String(ignoredClaims.length)} />
         <ClaimSummaryCard label="Visible Active" value={String(visibleTotal)} />
       </div>
 
@@ -845,9 +883,7 @@ function ClaimsView({ claims }: { claims: MiningClaimDto[] }) {
                   <td>{formatMiningType(claim.miningType)}</td>
                   <td>{formatSize(claim.sizeLabel, claim.sizeIndex)}</td>
                   <td>
-                    <span className={claim.status === "active" ? "zml-tag is-active" : "zml-tag"}>
-                      {claim.status === "active" ? "active" : "extracted"}
-                    </span>
+                    <span className={claimStatusClassName(claim)}>{formatClaimStatus(claim)}</span>
                   </td>
                   <td>{formatSegmentRef(claim.segmentId)}</td>
                   <td>{formatClaimDepletion(claim)}</td>
@@ -1163,22 +1199,153 @@ function DebugView({
   stateSnapshot,
   onCheckHealth,
 }: {
-  stateSnapshot: unknown;
+  stateSnapshot: ZmlRendererState;
   onCheckHealth: () => void;
 }) {
+  const health = stateSnapshot.agentHealth;
+  const workers = health ? Object.entries(health.workers) : [];
+  const latestDrops = stateSnapshot.miningDrops.slice(0, 5);
+  const latestClaims = stateSnapshot.miningClaims.slice(0, 5);
+
   return (
     <section className="zml-work-panel">
       <div className="zml-section-head">
         <div>
           <h2>Debug</h2>
-          <span>Runtime snapshot</span>
+          <span>Operational state without the JSON wall first</span>
         </div>
         <button type="button" className="zml-button" onClick={onCheckHealth}>
-          Check Health
+          {stateSnapshot.agentHealthChecking ? "Checking..." : "Check Health"}
         </button>
       </div>
-      <pre className="zml-debug-json">{JSON.stringify(stateSnapshot, null, 2)}</pre>
+
+      <div className="zml-debug-grid">
+        <DebugCard title="Streams">
+          <DebugMetric label="Agent" value={stateSnapshot.agent.status} tone={stateSnapshot.agent.status === "connected" ? "ok" : "warn"} />
+          <DebugMetric label="WS" value={stateSnapshot.streams.ws ? "connected" : "offline"} tone={stateSnapshot.streams.ws ? "ok" : "warn"} />
+          <DebugMetric label="SSE" value={stateSnapshot.streams.sse ? "connected" : "offline"} tone={stateSnapshot.streams.sse ? "ok" : "warn"} />
+          <DebugMetric label="Last error" value={stateSnapshot.lastCommandError ?? stateSnapshot.agent.lastError ?? "-"} />
+        </DebugCard>
+
+        <DebugCard title="Run">
+          <DebugMetric label="Active run" value={stateSnapshot.activeRun?.name ?? "-"} />
+          <DebugMetric label="Run status" value={stateSnapshot.activeRun?.status ?? "idle"} />
+          <DebugMetric label="Segments" value={String(stateSnapshot.runSegments.length)} />
+          <DebugMetric label="Runs cached" value={String(stateSnapshot.runs.length)} />
+        </DebugCard>
+
+        <DebugCard title="Mining Cache">
+          <DebugMetric label="Drops" value={String(stateSnapshot.miningDrops.length)} />
+          <DebugMetric label="Claims" value={String(stateSnapshot.miningClaims.length)} />
+          <DebugMetric label="Active claims" value={String(stateSnapshot.miningClaims.filter((claim) => claim.status === "active").length)} tone="ok" />
+          <DebugMetric label="Loot rows" value={String(stateSnapshot.miningLoot.length)} />
+        </DebugCard>
+
+        <DebugCard title="Position">
+          <DebugMetric label="Planet" value={stateSnapshot.position?.position.planetName || "-"} />
+          <DebugMetric label="Coords" value={formatPosition(stateSnapshot.position?.position)} />
+          <DebugMetric label="Seq" value={stateSnapshot.positionEvent?.seq === undefined ? "-" : String(stateSnapshot.positionEvent.seq)} />
+          <DebugMetric label="Position ts" value={stateSnapshot.position?.tsMs === undefined ? "-" : formatTime(stateSnapshot.position.tsMs)} />
+        </DebugCard>
+      </div>
+
+      <div className="zml-debug-grid is-wide">
+        <DebugCard title="Workers">
+          {workers.length === 0 ? (
+            <EmptyState text="No health snapshot yet" compact />
+          ) : (
+            <div className="zml-debug-worker-list">
+              {workers.map(([name, worker]) => (
+                <div key={name} className="zml-debug-worker">
+                  <strong>{name}</strong>
+                  <span className={worker.state === "running" ? "is-ok" : "is-warn"}>
+                    {worker.enabled ? worker.state : "disabled"}
+                  </span>
+                  <small>{worker.lastError ?? formatTime(worker.lastSeenTsMs)}</small>
+                </div>
+              ))}
+            </div>
+          )}
+        </DebugCard>
+
+        <DebugCard title="Recent Drops">
+          <DebugList
+            rows={latestDrops.map((drop) => ({
+              id: drop.dropId,
+              left: formatTime(drop.observedTsMs),
+              main: drop.result,
+              right: formatPosition(drop.position),
+            }))}
+            empty="No drops cached"
+          />
+        </DebugCard>
+
+        <DebugCard title="Recent Claims">
+          <DebugList
+            rows={latestClaims.map((claim) => ({
+              id: claim.claimId,
+              left: formatTime(claim.observedTsMs),
+              main: claim.resourceName ?? "Unknown resource",
+              right: claim.status,
+            }))}
+            empty="No claims cached"
+          />
+        </DebugCard>
+      </div>
+
+      <details className="zml-debug-raw">
+        <summary>Raw state snapshot</summary>
+        <pre className="zml-debug-json">{JSON.stringify(stateSnapshot, null, 2)}</pre>
+      </details>
     </section>
+  );
+}
+
+function DebugCard({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="zml-debug-card">
+      <h3>{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+function DebugMetric({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: "ok" | "warn";
+}) {
+  return (
+    <div className="zml-debug-metric">
+      <span>{label}</span>
+      <strong className={tone ? `is-${tone}` : undefined}>{value}</strong>
+    </div>
+  );
+}
+
+function DebugList({
+  rows,
+  empty,
+}: {
+  rows: Array<{ id: string; left: string; main: string; right: string }>;
+  empty: string;
+}) {
+  if (rows.length === 0) return <EmptyState text={empty} compact />;
+
+  return (
+    <div className="zml-debug-list">
+      {rows.map((row) => (
+        <div key={row.id} className="zml-debug-list-row">
+          <time>{row.left}</time>
+          <strong>{row.main}</strong>
+          <span>{row.right}</span>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -1472,6 +1639,7 @@ function getRunStats(drops: MiningDropDto[], claims: MiningClaimDto[], loot: Min
   const noResourceCount = drops.filter((drop) => drop.result === "no_resources").length;
   const activeClaimCount = claims.filter((claim) => claim.status === "active").length;
   const depletedClaimCount = claims.filter((claim) => claim.status === "depleted").length;
+  const totalClaimCount = claims.filter((claim) => claim.status !== "ignored").length;
   const totalCostPed =
     (drops.reduce((sum, drop) => sum + drop.cost.totalMpec, 0) + totalExtractionCostMpec(loot)) /
     100_000;
@@ -1481,7 +1649,7 @@ function getRunStats(drops: MiningDropDto[], claims: MiningClaimDto[], loot: Min
     dropCount: drops.length,
     hitCount,
     noResourceCount,
-    totalClaimCount: claims.length,
+    totalClaimCount,
     activeClaimCount,
     depletedClaimCount,
     hitRate: drops.length === 0 ? null : hitCount / drops.length,
@@ -1531,13 +1699,18 @@ function buildFeed(
 
   for (const claim of claims) {
     const isDepleted = claim.status === "depleted";
+    const isIgnored = claim.status === "ignored";
     items.push({
       id: `${claim.claimId}:claim:${claim.status}`,
       tsMs: claimActivityTsMs(claim),
-      kind: isDepleted ? "depleted" : "claim",
-      title: isDepleted ? "Claim Extracted" : "Claim Recorded",
+      kind: isIgnored ? "ignored" : isDepleted ? "depleted" : "claim",
+      title: isIgnored ? "Claim Ignored" : isDepleted ? "Claim Extracted" : "Claim Recorded",
       detail: `${claim.resourceName ?? "Unknown resource"} ${formatSize(claim.sizeLabel, claim.sizeIndex)}`,
-      amount: isDepleted ? formatMeters(claim.depletedDistanceM) : formatExpires(claim.expectedExpiresTsMs),
+      amount: isIgnored
+        ? "hidden"
+        : isDepleted
+          ? formatMeters(claim.depletedDistanceM)
+          : formatExpires(claim.expectedExpiresTsMs),
     });
   }
 
@@ -1569,7 +1742,13 @@ function filterFeed(feed: FeedItem[], filter: DashboardFeedFilter): FeedItem[] {
   }
   if (filter === "claims") {
     return feed
-      .filter((item) => item.kind === "hit" || item.kind === "claim" || item.kind === "depleted")
+      .filter(
+        (item) =>
+          item.kind === "hit" ||
+          item.kind === "claim" ||
+          item.kind === "depleted" ||
+          item.kind === "ignored",
+      )
       .slice(0, MAX_DASHBOARD_FEED_ITEMS);
   }
   return feed.filter((item) => item.kind === "loot").slice(0, MAX_DASHBOARD_FEED_ITEMS);
@@ -1663,6 +1842,18 @@ function formatClaimDepletion(claim: MiningClaimDto): string {
   const when = formatDateTimeString(claim.depletedEventDt);
   if (distance === "-") return when;
   return `${when} / ${distance}`;
+}
+
+function claimStatusClassName(claim: MiningClaimDto): string {
+  if (claim.status === "active") return "zml-tag is-active";
+  if (claim.status === "depleted") return "zml-tag is-depleted";
+  return "zml-tag is-ignored";
+}
+
+function formatClaimStatus(claim: MiningClaimDto): string {
+  if (claim.status === "active") return "active";
+  if (claim.status === "depleted") return "extracted";
+  return "ignored";
 }
 
 function claimActivityTsMs(claim: MiningClaimDto): number {
