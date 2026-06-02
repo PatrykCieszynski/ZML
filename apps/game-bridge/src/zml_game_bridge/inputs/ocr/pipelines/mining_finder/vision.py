@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Literal, Protocol
 
 import cv2
 import numpy as np
@@ -30,6 +30,7 @@ from zml_game_bridge.inputs.ocr.pipelines.text import clean_ocr_text
 from zml_game_bridge.inputs.ocr.profiling import OcrProfiler
 
 logger = logging.getLogger(__name__)
+ModeIconState = Literal["active", "inactive", "disabled"]
 
 
 class FinderFeatureDetector(Protocol):
@@ -51,8 +52,17 @@ class FinderPanelLayout:
 class VisionFinderFeatureConfig:
     radar_change_threshold: float = 0.015
     radar_center_threshold: float = 0.18
-    mode_active_thresholds: tuple[float, float, float] = (0.31, 0.22, 0.08)
+    mode_active_thresholds: tuple[float, float, float] = (0.31, 0.22, 0.40)
+    mode_enabled_thresholds: tuple[float, float, float] = (0.18, 0.16, 0.08)
     text_ocr_scale: int = 3
+
+
+@dataclass(frozen=True, slots=True)
+class ModeIconDetection:
+    state: ModeIconState
+    active_score: float
+    enabled_score: float
+    disabled_score: float
 
 
 class VisionFinderFeatureDetector:
@@ -89,16 +99,16 @@ class VisionFinderFeatureDetector:
                 radar_active, radar_score, radar_change_score, radar_center_score = (
                     self._detect_radar_signal(radar)
                 )
-                modes_mask, mode_scores = self._detect_modes(modes)
+                modes_mask, mode_detections = self._detect_modes(modes)
             text_features = self._detect_text_features(finder_roi)
 
             debug = {
                 "radar_blue_score": radar_score,
                 "radar_change_score": radar_change_score,
                 "radar_center_blue_score": radar_center_score,
-                "mode_ore_score": mode_scores[0],
-                "mode_enmatter_score": mode_scores[1],
-                "mode_treasure_score": mode_scores[2],
+                **_mode_debug("ore", mode_detections[0]),
+                **_mode_debug("enmatter", mode_detections[1]),
+                **_mode_debug("treasure", mode_detections[2]),
             }
             return FinderFeatures(
                 radar_signal_active=radar_active,
@@ -202,22 +212,37 @@ class VisionFinderFeatureDetector:
         with self._measure("finder.ocr"):
             return self._text_engine.recognize_text(prepared, psm=6)
 
-    def _detect_modes(self, modes_roi: np.ndarray) -> tuple[int, tuple[float, float, float]]:
+    def _detect_modes(
+        self,
+        modes_roi: np.ndarray,
+    ) -> tuple[int, tuple[ModeIconDetection, ModeIconDetection, ModeIconDetection]]:
         parts = np.array_split(modes_roi, 3, axis=1)
-        scores = (
-            _lit_icon_score(parts[0]),
-            _lit_icon_score(parts[1]),
-            _lit_icon_score(parts[2]),
+        detections = (
+            _detect_mode_icon(
+                parts[0],
+                active_threshold=self._cfg.mode_active_thresholds[0],
+                enabled_threshold=self._cfg.mode_enabled_thresholds[0],
+            ),
+            _detect_mode_icon(
+                parts[1],
+                active_threshold=self._cfg.mode_active_thresholds[1],
+                enabled_threshold=self._cfg.mode_enabled_thresholds[1],
+            ),
+            _detect_mode_icon(
+                parts[2],
+                active_threshold=self._cfg.mode_active_thresholds[2],
+                enabled_threshold=self._cfg.mode_enabled_thresholds[2],
+            ),
         )
 
         mask = int(MiningMode.NONE)
-        if scores[0] >= self._cfg.mode_active_thresholds[0]:
+        if detections[0].state == "active":
             mask |= int(MiningMode.ORE)
-        if scores[1] >= self._cfg.mode_active_thresholds[1]:
+        if detections[1].state == "active":
             mask |= int(MiningMode.ENMATTER)
-        if scores[2] >= self._cfg.mode_active_thresholds[2]:
+        if detections[2].state == "active":
             mask |= int(MiningMode.TREASURE)
-        return mask, scores
+        return mask, detections
 
     def _measure(self, name: str):
         if self._profiler is None:
@@ -243,12 +268,51 @@ def _center_score(mask: np.ndarray) -> float:
     return float(np.count_nonzero(center)) / float(center.size)
 
 
-def _lit_icon_score(img: np.ndarray) -> float:
+def _detect_mode_icon(
+    img: np.ndarray,
+    *,
+    active_threshold: float,
+    enabled_threshold: float,
+) -> ModeIconDetection:
     hsv = cv2.cvtColor(to_bgr_u8(img), cv2.COLOR_BGR2HSV)
+    hue = hsv[:, :, 0]
     sat = hsv[:, :, 1]
     val = hsv[:, :, 2]
-    lit = (sat >= 40) & (val >= 90)
-    return float(np.count_nonzero(lit)) / float(lit.size)
+    enabled = (hue >= 40) & (hue <= 95) & (sat >= 35) & (val >= 55)
+    active = enabled & (val >= 110)
+    disabled = (sat <= 45) & (val >= 45)
+    enabled_score = _mask_score(enabled)
+    active_score = _mask_score(active)
+    disabled_score = _mask_score(disabled)
+    if active_score >= active_threshold:
+        state: ModeIconState = "active"
+    elif enabled_score >= enabled_threshold:
+        state = "inactive"
+    else:
+        state = "disabled"
+    return ModeIconDetection(
+        state=state,
+        active_score=active_score,
+        enabled_score=enabled_score,
+        disabled_score=disabled_score,
+    )
+
+
+def _mask_score(mask: np.ndarray) -> float:
+    if mask.size == 0:
+        return 0.0
+    return float(np.count_nonzero(mask)) / float(mask.size)
+
+
+def _mode_debug(prefix: str, detection: ModeIconDetection) -> dict[str, float]:
+    state_code = {"disabled": 0.0, "inactive": 1.0, "active": 2.0}[detection.state]
+    return {
+        f"mode_{prefix}_score": detection.active_score,
+        f"mode_{prefix}_active_score": detection.active_score,
+        f"mode_{prefix}_enabled_score": detection.enabled_score,
+        f"mode_{prefix}_disabled_score": detection.disabled_score,
+        f"mode_{prefix}_state": state_code,
+    }
 
 
 def _prepare_text_ocr_image(img: np.ndarray, scale: int) -> np.ndarray:
