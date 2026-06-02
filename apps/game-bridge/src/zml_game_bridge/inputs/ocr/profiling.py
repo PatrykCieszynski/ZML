@@ -9,6 +9,11 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
+_SCOPED_LOGGERS = {
+    "position": logging.getLogger(f"{__name__}.position"),
+    "finder": logging.getLogger(f"{__name__}.finder"),
+    "deed": logging.getLogger(f"{__name__}.deed"),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,14 +71,17 @@ class OcrProfiler:
             self._window_started_at = now
 
         if not metrics:
-            logger.info("ocr_profile_summary window_s=%.2f empty=true", window_s)
+            logger.info("ocr_profile_summary scope=all window_s=%.2f empty=true", window_s)
             return
 
-        parts = [f"window_s={window_s:.2f}"]
-        for name in sorted(metrics):
-            values = metrics[name]
-            parts.append(_format_metric(name, values))
-        logger.info("ocr_profile_summary %s", " ".join(parts))
+        logger.info("ocr_profile_summary scope=all %s", _format_summary(window_s, metrics))
+        scoped_metrics = _group_metrics_by_scope(metrics)
+        for scope in sorted(scoped_metrics):
+            _SCOPED_LOGGERS[scope].info(
+                "ocr_profile_summary scope=%s %s",
+                scope,
+                _format_summary(window_s, scoped_metrics[scope]),
+            )
 
 
 def ocr_profiling_config_from_env(
@@ -97,7 +105,36 @@ def _format_metric(name: str, values: list[float]) -> str:
     avg = sum(values) / count
     maximum = max(values)
     p95 = _percentile(values, 0.95)
-    return f"{name}_count={count} {name}_avg_ms={avg:.2f} {name}_p95_ms={p95:.2f} {name}_max_ms={maximum:.2f}"
+    return (
+        f"{name}_count={count} "
+        f"{name}_avg_ms={avg:.2f} "
+        f"{name}_p95_ms={p95:.2f} "
+        f"{name}_max_ms={maximum:.2f}"
+    )
+
+
+def _format_summary(window_s: float, metrics: dict[str, list[float]]) -> str:
+    parts = [f"window_s={window_s:.2f}"]
+    for name in sorted(metrics):
+        parts.append(_format_metric(name, metrics[name]))
+    return " ".join(parts)
+
+
+def _group_metrics_by_scope(metrics: dict[str, list[float]]) -> dict[str, dict[str, list[float]]]:
+    grouped: dict[str, dict[str, list[float]]] = {}
+    for name, values in metrics.items():
+        scope = _metric_scope(name)
+        if scope is None:
+            continue
+        grouped.setdefault(scope, {})[name] = values
+    return grouped
+
+
+def _metric_scope(name: str) -> str | None:
+    prefix, _, _ = name.partition(".")
+    if prefix in _SCOPED_LOGGERS:
+        return prefix
+    return None
 
 
 def _percentile(values: list[float], percentile: float) -> float:
