@@ -36,10 +36,11 @@ def _apply_env_overrides(
     finder_recording: str | None = None,
     finder_recording_dir: Path | None = None,
     finder_recording_interval_s: float | None = None,
-    finder_recording_low_confidence_interval_s: float | None = None,
+    finder_recording_max_samples: int | None = None,
     position_roi_snapshots: bool | None = None,
     position_roi_snapshot_dir: Path | None = None,
     position_roi_snapshot_interval_s: float | None = None,
+    position_roi_snapshot_max_samples: int | None = None,
     ocr_profiling: bool = False,
     ocr_profiling_interval_s: float | None = None,
     log_level: str | None,
@@ -77,14 +78,10 @@ def _apply_env_overrides(
         if finder_recording_interval_s <= 0:
             raise typer.BadParameter("finder recording interval must be greater than 0")
         os.environ["ZML_FINDER_RECORDING_INTERVAL_S"] = str(finder_recording_interval_s)
-    if finder_recording_low_confidence_interval_s is not None:
-        if finder_recording_low_confidence_interval_s <= 0:
-            raise typer.BadParameter(
-                "finder recording low confidence interval must be greater than 0"
-            )
-        os.environ["ZML_FINDER_RECORDING_LOW_CONFIDENCE_INTERVAL_S"] = str(
-            finder_recording_low_confidence_interval_s
-        )
+    if finder_recording_max_samples is not None:
+        if finder_recording_max_samples < 0:
+            raise typer.BadParameter("finder recording max samples cannot be negative")
+        os.environ["ZML_FINDER_RECORDING_MAX_SAMPLES"] = str(finder_recording_max_samples)
     if position_roi_snapshots is not None:
         os.environ["ZML_POSITION_ROI_SNAPSHOTS"] = "1" if position_roi_snapshots else "0"
     if position_roi_snapshot_dir is not None:
@@ -93,6 +90,10 @@ def _apply_env_overrides(
         if position_roi_snapshot_interval_s <= 0:
             raise typer.BadParameter("position ROI snapshot interval must be greater than 0")
         os.environ["ZML_POSITION_ROI_SNAPSHOT_INTERVAL_S"] = str(position_roi_snapshot_interval_s)
+    if position_roi_snapshot_max_samples is not None:
+        if position_roi_snapshot_max_samples < 0:
+            raise typer.BadParameter("position ROI snapshot max samples cannot be negative")
+        os.environ["ZML_POSITION_ROI_SNAPSHOT_MAX_SAMPLES"] = str(position_roi_snapshot_max_samples)
     if ocr_profiling:
         os.environ["ZML_OCR_PROFILING"] = "1"
     if ocr_profiling_interval_s is not None:
@@ -139,10 +140,7 @@ def _settings_table(settings: Settings) -> Table:
     table.add_row("finder_recording_modes", settings.finder_recording_modes or "[dim]<off>[/]")
     table.add_row("finder_recording_dir", str(settings.finder_recording_dir))
     table.add_row("finder_recording_interval_s", str(settings.finder_recording_interval_s))
-    table.add_row(
-        "finder_recording_low_confidence_interval_s",
-        str(settings.finder_recording_low_confidence_interval_s),
-    )
+    table.add_row("finder_recording_max_samples", str(settings.finder_recording_max_samples))
     table.add_row(
         "position_roi_snapshot_enabled",
         _format_bool(settings.position_roi_snapshot_enabled),
@@ -151,6 +149,10 @@ def _settings_table(settings: Settings) -> Table:
     table.add_row(
         "position_roi_snapshot_interval_s",
         str(settings.position_roi_snapshot_interval_s),
+    )
+    table.add_row(
+        "position_roi_snapshot_max_samples",
+        str(settings.position_roi_snapshot_max_samples),
     )
     table.add_row("ocr_profiling_enabled", _format_bool(settings.ocr_profiling_enabled))
     table.add_row("ocr_profiling_interval_s", str(settings.ocr_profiling_interval_s))
@@ -193,7 +195,7 @@ def show_config(
         str | None,
         typer.Option(
             "--finder-record",
-            help="Finder crop recording modes: manual,state-change,low-confidence,interval,all.",
+            help="Finder crop recording modes: manual,interval,all.",
         ),
     ] = None,
     finder_recording_dir: Annotated[
@@ -204,11 +206,11 @@ def show_config(
         float | None,
         typer.Option("--finder-record-interval-s", help="Interval recording cadence in seconds."),
     ] = None,
-    finder_recording_low_confidence_interval_s: Annotated[
-        float | None,
+    finder_recording_max_samples: Annotated[
+        int | None,
         typer.Option(
-            "--finder-record-low-confidence-interval-s",
-            help="Minimum seconds between low-confidence samples.",
+            "--finder-record-max-samples",
+            help="Maximum finder crop samples per OCR worker session.",
         ),
     ] = None,
     position_roi_snapshots: Annotated[
@@ -230,6 +232,13 @@ def show_config(
         typer.Option(
             "--position-roi-snapshot-interval-s",
             help="Seconds between overwrites of position ROI snapshots.",
+        ),
+    ] = None,
+    position_roi_snapshot_max_samples: Annotated[
+        int | None,
+        typer.Option(
+            "--position-roi-snapshot-max-samples",
+            help="Maximum position ROI snapshot batches per OCR worker session.",
         ),
     ] = None,
     ocr_profiling: Annotated[
@@ -257,10 +266,11 @@ def show_config(
         finder_recording=finder_recording,
         finder_recording_dir=finder_recording_dir,
         finder_recording_interval_s=finder_recording_interval_s,
-        finder_recording_low_confidence_interval_s=finder_recording_low_confidence_interval_s,
+        finder_recording_max_samples=finder_recording_max_samples,
         position_roi_snapshots=position_roi_snapshots,
         position_roi_snapshot_dir=position_roi_snapshot_dir,
         position_roi_snapshot_interval_s=position_roi_snapshot_interval_s,
+        position_roi_snapshot_max_samples=position_roi_snapshot_max_samples,
         ocr_profiling=ocr_profiling,
         ocr_profiling_interval_s=ocr_profiling_interval_s,
         log_level=log_level,
@@ -297,7 +307,7 @@ def serve(
         str | None,
         typer.Option(
             "--finder-record",
-            help="Finder crop recording modes: manual,state-change,low-confidence,interval,all.",
+            help="Finder crop recording modes: manual,interval,all.",
         ),
     ] = None,
     finder_recording_dir: Annotated[
@@ -308,11 +318,11 @@ def serve(
         float | None,
         typer.Option("--finder-record-interval-s", help="Interval recording cadence in seconds."),
     ] = None,
-    finder_recording_low_confidence_interval_s: Annotated[
-        float | None,
+    finder_recording_max_samples: Annotated[
+        int | None,
         typer.Option(
-            "--finder-record-low-confidence-interval-s",
-            help="Minimum seconds between low-confidence samples.",
+            "--finder-record-max-samples",
+            help="Maximum finder crop samples per OCR worker session.",
         ),
     ] = None,
     position_roi_snapshots: Annotated[
@@ -334,6 +344,13 @@ def serve(
         typer.Option(
             "--position-roi-snapshot-interval-s",
             help="Seconds between overwrites of position ROI snapshots.",
+        ),
+    ] = None,
+    position_roi_snapshot_max_samples: Annotated[
+        int | None,
+        typer.Option(
+            "--position-roi-snapshot-max-samples",
+            help="Maximum position ROI snapshot batches per OCR worker session.",
         ),
     ] = None,
     ocr_profiling: Annotated[
@@ -361,10 +378,11 @@ def serve(
         finder_recording=finder_recording,
         finder_recording_dir=finder_recording_dir,
         finder_recording_interval_s=finder_recording_interval_s,
-        finder_recording_low_confidence_interval_s=finder_recording_low_confidence_interval_s,
+        finder_recording_max_samples=finder_recording_max_samples,
         position_roi_snapshots=position_roi_snapshots,
         position_roi_snapshot_dir=position_roi_snapshot_dir,
         position_roi_snapshot_interval_s=position_roi_snapshot_interval_s,
+        position_roi_snapshot_max_samples=position_roi_snapshot_max_samples,
         ocr_profiling=ocr_profiling,
         ocr_profiling_interval_s=ocr_profiling_interval_s,
         log_level=log_level,

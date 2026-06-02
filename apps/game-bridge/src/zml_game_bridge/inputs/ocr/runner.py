@@ -57,10 +57,11 @@ def start_ocr_input(
     finder_recording_modes: str | None = None,
     finder_recording_dir: Path | None = None,
     finder_recording_interval_s: float | None = None,
-    finder_recording_low_confidence_interval_s: float | None = None,
+    finder_recording_max_samples: int | None = None,
     position_roi_snapshot_enabled: bool | None = None,
     position_roi_snapshot_dir: Path | None = None,
     position_roi_snapshot_interval_s: float | None = None,
+    position_roi_snapshot_max_samples: int | None = None,
     ocr_profiling_enabled: bool | None = None,
     ocr_profiling_interval_s: float | None = None,
     roi_profile_path: Path | None = None,
@@ -90,7 +91,7 @@ def start_ocr_input(
         logger.info("ocr_profiling_enabled interval_s=%s", ocr_profiling_config.interval_s)
 
     position_rois = roi_profile.position_rois.to_position_rois()
-    logger.info("ocr_profiling_enabled interval_s=%s", position_rois)
+    logger.debug("position_rois_loaded rois=%s", position_rois)
     position_pipeline = PositionPipeline(
         position_rois,
         profiler=profiler,
@@ -99,6 +100,7 @@ def start_ocr_input(
         enabled=position_roi_snapshot_enabled,
         root_dir=position_roi_snapshot_dir,
         interval_s=position_roi_snapshot_interval_s,
+        max_samples=position_roi_snapshot_max_samples,
     )
     position_snapshot_recorder = PositionRoiSnapshotRecorder(
         config=position_snapshot_config,
@@ -106,9 +108,10 @@ def start_ocr_input(
     )
     if position_snapshot_config.enabled:
         logger.info(
-            "position_roi_snapshots_enabled dir=%s interval_ms=%s",
+            "position_roi_snapshots_enabled dir=%s interval_ms=%s max_samples=%s",
             position_snapshot_config.root_dir,
             position_snapshot_config.interval_ms,
+            position_snapshot_config.max_samples,
         )
     if finder_debug_logging is None:
         finder_debug_logging = _env_bool("ZML_FINDER_DEBUG", default=False)
@@ -120,7 +123,7 @@ def start_ocr_input(
         modes=finder_recording_modes,
         root_dir=finder_recording_dir,
         interval_s=finder_recording_interval_s,
-        low_confidence_interval_s=finder_recording_low_confidence_interval_s,
+        max_samples=finder_recording_max_samples,
     )
     finder_recorder = (
         FinderCropRecorder(
@@ -132,11 +135,11 @@ def start_ocr_input(
     )
     if finder_recorder is not None:
         logger.info(
-            "finder_recording_enabled modes=%s dir=%s interval_ms=%s low_confidence_interval_ms=%s",
+            "finder_recording_enabled modes=%s dir=%s interval_ms=%s max_samples=%s",
             ",".join(sorted(finder_recording_config.modes)),
             finder_recording_config.root_dir,
             finder_recording_config.interval_ms,
-            finder_recording_config.low_confidence_min_interval_ms,
+            finder_recording_config.max_samples,
         )
 
     finder_pipeline = MiningFinderPipeline(

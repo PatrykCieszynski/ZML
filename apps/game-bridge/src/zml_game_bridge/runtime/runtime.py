@@ -177,13 +177,14 @@ class AppRuntime:
                     "finder_recording_modes": self._settings.finder_recording_modes,
                     "finder_recording_dir": self._settings.finder_recording_dir,
                     "finder_recording_interval_s": self._settings.finder_recording_interval_s,
-                    "finder_recording_low_confidence_interval_s": (
-                        self._settings.finder_recording_low_confidence_interval_s
-                    ),
-                    "position_roi_snapshot_enabled": (self._settings.position_roi_snapshot_enabled),
+                    "finder_recording_max_samples": self._settings.finder_recording_max_samples,
+                    "position_roi_snapshot_enabled": self._settings.position_roi_snapshot_enabled,
                     "position_roi_snapshot_dir": self._settings.position_roi_snapshot_dir,
                     "position_roi_snapshot_interval_s": (
                         self._settings.position_roi_snapshot_interval_s
+                    ),
+                    "position_roi_snapshot_max_samples": (
+                        self._settings.position_roi_snapshot_max_samples
                     ),
                     "ocr_profiling_enabled": self._settings.ocr_profiling_enabled,
                     "ocr_profiling_interval_s": self._settings.ocr_profiling_interval_s,
