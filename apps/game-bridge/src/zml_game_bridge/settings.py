@@ -221,6 +221,10 @@ def _default_finder_recording_max_samples() -> int:
     return _env_int("ZML_FINDER_RECORDING_MAX_SAMPLES", default=1)
 
 
+def _default_finder_presence_check_enabled() -> bool:
+    return _env_bool("ZML_FINDER_PRESENCE_CHECK", default=True)
+
+
 def _default_position_roi_snapshot_enabled() -> bool:
     return _env_bool("ZML_POSITION_ROI_SNAPSHOTS", default=False)
 
@@ -340,6 +344,9 @@ class Settings:
     finder_recording_dir: Path = field(default_factory=_default_finder_recording_dir)
     finder_recording_interval_s: float = field(default_factory=_default_finder_recording_interval_s)
     finder_recording_max_samples: int = field(default_factory=_default_finder_recording_max_samples)
+    finder_presence_check_enabled: bool = field(
+        default_factory=_default_finder_presence_check_enabled
+    )
     position_roi_snapshot_enabled: bool = field(
         default_factory=_default_position_roi_snapshot_enabled
     )
