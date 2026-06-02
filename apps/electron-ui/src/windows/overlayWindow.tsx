@@ -16,13 +16,17 @@ export function OverlayWindow() {
   const state = useZmlRendererStore(windowType);
   const [preferences] = useOverlayPreferences();
   const stats = useMemo(() => {
+    const activeRunId = state.activeRun?.runId ?? null;
+    const runLootTotals = state.miningLootTotals.filter(
+      (item) => item.scope === "run" && (activeRunId === null || item.runId === activeRunId),
+    );
     const dropCostMpec = state.miningDrops.reduce((sum, drop) => sum + drop.cost.totalMpec, 0);
-    const extractionCostMpec = state.miningLootTotals.reduce(
+    const extractionCostMpec = runLootTotals.reduce(
       (sum, item) => sum + item.extractionCostMpec,
       0,
     );
     const costMpec = dropCostMpec + extractionCostMpec;
-    const returnMpec = state.miningLootTotals.reduce((sum, item) => sum + item.valueMpec, 0);
+    const returnMpec = runLootTotals.reduce((sum, item) => sum + item.valueMpec, 0);
     const hitCount = state.miningDrops.filter((drop) => drop.result === "hit").length;
     return {
       costMpec,
@@ -30,7 +34,7 @@ export function OverlayWindow() {
       profitMpec: returnMpec - costMpec,
       hitRate: state.miningDrops.length === 0 ? null : hitCount / state.miningDrops.length,
     };
-  }, [state.miningDrops, state.miningLootTotals]);
+  }, [state.activeRun?.runId, state.miningDrops, state.miningLootTotals]);
   const metrics = useMemo<OverlayMetric[]>(
     () => {
       const allMetrics: OverlayMetric[] = [

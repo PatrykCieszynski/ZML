@@ -9,6 +9,7 @@ from zml_game_bridge.application.mining.segments.session import (
     RunSessionService,
 )
 from zml_game_bridge.application.mining.settings import default_id_factory
+from zml_game_bridge.application.position.input_processor import PositionInputProcessor
 from zml_game_bridge.application.position.tracking import PositionTrackingService
 from zml_game_bridge.events.in_memory_persisted_event_bus import InMemoryPersistedEventBus
 from zml_game_bridge.persistence.event_projector import CompositeEventProjector
@@ -21,6 +22,7 @@ from zml_game_bridge.runtime.channels import EventChannel, RuntimeInputChannel
 from zml_game_bridge.runtime.db_commands import DbCommandChannel
 from zml_game_bridge.runtime.db_writer import DbWriterWorker
 from zml_game_bridge.runtime.input_coordinator import InputCoordinator
+from zml_game_bridge.runtime.input_processor import CompositeInputProcessor
 from zml_game_bridge.runtime.restore import MiningLifecycleRestorer
 from zml_game_bridge.runtime.supervisor import WorkerSupervisor
 from zml_game_bridge.settings import Settings
@@ -79,7 +81,12 @@ def build_runtime_components(settings: Settings) -> RuntimeComponents:
     input_coordinator = InputCoordinator(
         pending_inputs=pending_inputs,
         pending_events=pending_events,
-        input_processor=mining_coordinator,
+        input_processor=CompositeInputProcessor(
+            [
+                PositionInputProcessor(position_service),
+                mining_coordinator,
+            ]
+        ),
         live_events=persisted_events,
     )
     db_writer_worker = DbWriterWorker(

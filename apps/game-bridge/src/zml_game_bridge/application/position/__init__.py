@@ -1,3 +1,4 @@
+from zml_game_bridge.application.position.input_processor import PositionInputProcessor
 from zml_game_bridge.application.position.model import (
     PositionDecision,
     PositionDecisionKind,
@@ -12,6 +13,7 @@ from zml_game_bridge.application.position.tracking import PositionTrackingServic
 __all__ = [
     "PositionDecision",
     "PositionDecisionKind",
+    "PositionInputProcessor",
     "PositionOutlierPolicy",
     "PositionProvider",
     "PositionSnapshot",
