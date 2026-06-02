@@ -18,11 +18,9 @@ from zml_game_bridge.inputs.ocr.pipelines.mining_finder.model import (
 
 logger = logging.getLogger(__name__)
 
-FinderRecordingMode = Literal["manual", "low-confidence", "state-change", "interval"]
+FinderRecordingMode = Literal["manual", "interval"]
 _VALID_MODES: set[FinderRecordingMode] = {
     "manual",
-    "low-confidence",
-    "state-change",
     "interval",
 }
 
@@ -31,13 +29,13 @@ _VALID_MODES: set[FinderRecordingMode] = {
 class FinderRecordingConfig:
     modes: frozenset[FinderRecordingMode]
     root_dir: Path
-    interval_ms: int = 10_000
-    low_confidence_min_interval_ms: int = 5_000
+    interval_ms: int = 60_000
+    max_samples: int = 1
     manual_trigger_filename: str = "record-now.flag"
 
     @property
     def enabled(self) -> bool:
-        return bool(self.modes)
+        return bool(self.modes) and self.max_samples > 0
 
 
 class FinderCropRecorder:
@@ -49,9 +47,7 @@ class FinderCropRecorder:
     ) -> None:
         self._config = config
         self._roi_name = roi_name
-        self._last_status_kind: str | None = None
         self._last_interval_ts_ms: int | None = None
-        self._last_low_confidence_ts_ms: int | None = None
         self._sequence = 0
         if config.enabled:
             config.root_dir.mkdir(parents=True, exist_ok=True)
@@ -66,10 +62,11 @@ class FinderCropRecorder:
     ) -> None:
         if not self._config.enabled:
             return
+        if self._sequence >= self._config.max_samples:
+            return
 
         try:
-            reasons = self._recording_reasons(ts_ms=ts_ms, features=features, signals=signals)
-            self._last_status_kind = features.status_kind
+            reasons = self._recording_reasons(ts_ms=ts_ms)
             if not reasons:
                 return
 
@@ -83,30 +80,11 @@ class FinderCropRecorder:
         self,
         *,
         ts_ms: int,
-        features: FinderFeatures,
-        signals: list[MiningFinderSignal],
     ) -> list[str]:
         reasons: list[str] = []
 
         if "manual" in self._config.modes and self._consume_manual_trigger():
             reasons.append("manual")
-
-        if "state-change" in self._config.modes and self._is_state_change(features, signals):
-            reasons.append("state-change")
-
-        if (
-            "low-confidence" in self._config.modes
-            and self._is_low_confidence(features)
-            and (
-                self._last_low_confidence_ts_ms is None
-                or (
-                    ts_ms - self._last_low_confidence_ts_ms
-                    >= self._config.low_confidence_min_interval_ms
-                )
-            )
-        ):
-            self._last_low_confidence_ts_ms = ts_ms
-            reasons.append("low-confidence")
 
         if "interval" in self._config.modes and (
             self._last_interval_ts_ms is None
@@ -128,26 +106,6 @@ class FinderCropRecorder:
                 "finder_record_manual_trigger_delete_failed path=%s", trigger, exc_info=True
             )
         return True
-
-    def _is_state_change(
-        self,
-        features: FinderFeatures,
-        signals: list[MiningFinderSignal],
-    ) -> bool:
-        return bool(signals) or features.status_kind != self._last_status_kind
-
-    def _is_low_confidence(self, features: FinderFeatures) -> bool:
-        if features.status_kind is None:
-            return True
-        if features.status_kind == "found":
-            return (
-                features.hit_size_label is None
-                or features.hit_size_index is None
-                or features.resource_name is None
-            )
-        if features.status_kind == "no_resources":
-            return not bool(features.raw_status_text)
-        return False
 
     def _write_sample(
         self,
@@ -195,7 +153,7 @@ def finder_recording_config_from_env(
     modes: str | None = None,
     root_dir: Path | None = None,
     interval_s: float | None = None,
-    low_confidence_interval_s: float | None = None,
+    max_samples: int | None = None,
 ) -> FinderRecordingConfig:
     return FinderRecordingConfig(
         modes=_parse_modes(modes if modes is not None else os.getenv("ZML_FINDER_RECORDING")),
@@ -205,13 +163,11 @@ def finder_recording_config_from_env(
         interval_ms=_seconds_to_ms(
             interval_s
             if interval_s is not None
-            else _env_float("ZML_FINDER_RECORDING_INTERVAL_S", default=10.0)
+            else _env_float("ZML_FINDER_RECORDING_INTERVAL_S", default=60.0)
         ),
-        low_confidence_min_interval_ms=_seconds_to_ms(
-            low_confidence_interval_s
-            if low_confidence_interval_s is not None
-            else _env_float("ZML_FINDER_RECORDING_LOW_CONFIDENCE_INTERVAL_S", default=5.0)
-        ),
+        max_samples=max_samples
+        if max_samples is not None
+        else _env_int("ZML_FINDER_RECORDING_MAX_SAMPLES", default=1),
     )
 
 
@@ -231,10 +187,6 @@ def _parse_modes(raw: str | None) -> frozenset[FinderRecordingMode]:
             normalized = "interval"
         if normalized == "manual":
             modes.add("manual")
-        elif normalized == "low-confidence":
-            modes.add("low-confidence")
-        elif normalized == "state-change":
-            modes.add("state-change")
         elif normalized == "interval":
             modes.add("interval")
         else:
@@ -299,6 +251,16 @@ def _env_float(name: str, *, default: float) -> float:
         return default
     try:
         return float(value)
+    except ValueError:
+        return default
+
+
+def _env_int(name: str, *, default: int) -> int:
+    value = os.getenv(name)
+    if value is None or value.strip() == "":
+        return default
+    try:
+        return int(value)
     except ValueError:
         return default
 

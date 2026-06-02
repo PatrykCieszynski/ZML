@@ -8,7 +8,7 @@ dev:
     uv run python -m zml_game_bridge.dev_cli serve
 
 ocr:
-    uv run python -m zml_game_bridge.dev_cli serve --mode live --position-roi-snapshots
+    uv run python -m zml_game_bridge.dev_cli serve --mode live --position-roi-snapshots --position-roi-snapshot-max-samples 1
 
 mock:
     uv run python -m zml_game_bridge.dev_cli serve --mode mock
@@ -17,7 +17,7 @@ finder-debug:
     uv run python -m zml_game_bridge.dev_cli serve --mode live --finder-debug
 
 ocr-profile-record:
-    uv run python -m zml_game_bridge.dev_cli serve --mode live --ocr-profiling --ocr-profiling-interval-s 5 --finder-record manual,state-change,low-confidence,interval --finder-record-interval-s 10 --finder-record-low-confidence-interval-s 2
+    uv run python -m zml_game_bridge.dev_cli serve --mode live --ocr-profiling --ocr-profiling-interval-s 5 --finder-record manual,interval --finder-record-interval-s 60 --finder-record-max-samples 1 --position-roi-snapshots --position-roi-snapshot-max-samples 1
 
 lint-fix:
     uv run ruff check . --fix

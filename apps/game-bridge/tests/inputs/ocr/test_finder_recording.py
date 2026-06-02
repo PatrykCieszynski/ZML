@@ -16,9 +16,13 @@ from zml_game_bridge.inputs.ocr.pipelines.mining_finder.recording import (
 )
 
 
-def test_finder_crop_recorder_writes_state_change_sample(tmp_path: Path) -> None:
+def test_finder_crop_recorder_writes_interval_sample(tmp_path: Path) -> None:
     recorder = FinderCropRecorder(
-        config=FinderRecordingConfig(modes=frozenset({"state-change"}), root_dir=tmp_path),
+        config=FinderRecordingConfig(
+            modes=frozenset({"interval"}),
+            root_dir=tmp_path,
+            interval_ms=1_000,
+        ),
         roi_name="finder_test",
     )
     crop = np.zeros((8, 12, 4), dtype=np.uint8)
@@ -31,7 +35,7 @@ def test_finder_crop_recorder_writes_state_change_sample(tmp_path: Path) -> None
     )
     recorder.record_frame(
         crop,
-        ts_ms=1_100,
+        ts_ms=1_500,
         features=FinderFeatures(status_kind="idle", raw_status_text="Press E to initiate survey"),
         signals=[],
     )
@@ -43,7 +47,7 @@ def test_finder_crop_recorder_writes_state_change_sample(tmp_path: Path) -> None
 
     metadata = json.loads(json_files[0].read_text(encoding="utf-8"))
     assert metadata["roi_name"] == "finder_test"
-    assert metadata["reasons"] == ["state-change"]
+    assert metadata["reasons"] == ["interval"]
     assert metadata["features"]["status_kind"] == "idle"
     assert metadata["image_shape"] == [8, 12, 4]
 
@@ -69,13 +73,13 @@ def test_finder_crop_recorder_writes_manual_sample_and_consumes_trigger(tmp_path
     assert metadata["reasons"] == ["manual"]
 
 
-def test_finder_crop_recorder_throttles_interval_and_low_confidence(tmp_path: Path) -> None:
+def test_finder_crop_recorder_respects_max_samples(tmp_path: Path) -> None:
     recorder = FinderCropRecorder(
         config=FinderRecordingConfig(
-            modes=frozenset({"interval", "low-confidence"}),
+            modes=frozenset({"interval"}),
             root_dir=tmp_path,
             interval_ms=1_000,
-            low_confidence_min_interval_ms=1_000,
+            max_samples=2,
         ),
         roi_name="finder_test",
     )
@@ -96,22 +100,25 @@ def test_finder_recording_config_from_env_parses_modes(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
-    monkeypatch.setenv("ZML_FINDER_RECORDING", "manual,state-change,interval")
+    monkeypatch.setenv("ZML_FINDER_RECORDING", "manual,interval")
     monkeypatch.setenv("ZML_FINDER_RECORDING_DIR", str(tmp_path))
     monkeypatch.setenv("ZML_FINDER_RECORDING_INTERVAL_S", "2.5")
+    monkeypatch.setenv("ZML_FINDER_RECORDING_MAX_SAMPLES", "4")
 
     config = finder_recording_config_from_env()
 
-    assert config.modes == frozenset({"manual", "state-change", "interval"})
+    assert config.modes == frozenset({"manual", "interval"})
     assert config.root_dir == tmp_path
     assert config.interval_ms == 2_500
+    assert config.max_samples == 4
 
 
 def test_finder_crop_recorder_records_signals_in_metadata(tmp_path: Path) -> None:
     recorder = FinderCropRecorder(
-        config=FinderRecordingConfig(modes=frozenset({"state-change"}), root_dir=tmp_path),
+        config=FinderRecordingConfig(modes=frozenset({"manual"}), root_dir=tmp_path),
         roi_name="finder_test",
     )
+    (tmp_path / "record-now.flag").write_text("", encoding="utf-8")
 
     recorder.record_frame(
         np.zeros((2, 3, 4), dtype=np.uint8),
