@@ -8,14 +8,13 @@ from zml_game_bridge.application.mining.claims.lifecycle import (
     ActiveClaim,
     ClaimLifecycleCorrelator,
 )
+from zml_game_bridge.application.mining.command_service import MiningCommandService
 from zml_game_bridge.application.mining.drops.finder_correlator import (
     DropRunContextProvider,
     FinderDropCorrelator,
 )
-from zml_game_bridge.application.mining.equipment.command_handler import (
-    MiningEquipmentCommandHandler,
-)
 from zml_game_bridge.application.mining.equipment.service import MiningEquipmentService
+from zml_game_bridge.application.mining.loot import MiningLootRecorder
 from zml_game_bridge.application.mining.settings import (
     IdFactory,
     MiningCoordinatorConfig,
@@ -23,19 +22,18 @@ from zml_game_bridge.application.mining.settings import (
     default_mining_equipment_profile,
 )
 from zml_game_bridge.application.position.provider import PositionProvider
-from zml_game_bridge.application.runs.command_handler import RunCommandHandler
 from zml_game_bridge.domain.mining_cost import MiningEquipmentProfile, calculate_extraction_cost
+from zml_game_bridge.domain.mining_events import MiningLootTotalsUpdatedEvent
+from zml_game_bridge.domain.money import Mpec
 from zml_game_bridge.events.base import EventBase, SignalBase
+from zml_game_bridge.inputs.chat.signals import ItemReceivedSignal
 from zml_game_bridge.resources.mining_resources import MiningResourceCatalog
 from zml_game_bridge.runtime.db_commands import DbCommand
-from zml_game_bridge.runtime.runtime_commands import (
-    RuntimeCommand,
-    RuntimeCommandResult,
-    UnsupportedRuntimeCommandError,
-)
+from zml_game_bridge.runtime.runtime_commands import RuntimeCommand, RuntimeCommandResult
 
 MiningEquipmentProfileProvider = Callable[[], MiningEquipmentProfile]
 RunIdProvider = Callable[[], int | None]
+SegmentIdProvider = Callable[[], str | None]
 
 
 class SignalCorrelator(Protocol):
@@ -56,12 +54,6 @@ class SignalHandler(Protocol):
         ...
 
 
-class CommandHandler(Protocol):
-    def process_command[T](self, command: RuntimeCommand[T]) -> RuntimeCommandResult[T]:
-        """Handle one runtime command type or raise UnsupportedRuntimeCommandError."""
-        ...
-
-
 class MiningCoordinator:
     def __init__(
         self,
@@ -74,6 +66,7 @@ class MiningCoordinator:
         resource_catalog: MiningResourceCatalog | None = None,
         run_context_provider: DropRunContextProvider | None = None,
         run_id_provider: RunIdProvider | None = None,
+        segment_id_provider: SegmentIdProvider | None = None,
         db_command_executor: Callable[[DbCommand[Any]], Any] | None = None,
         mining_equipment_service: MiningEquipmentService | None = None,
     ) -> None:
@@ -87,10 +80,36 @@ class MiningCoordinator:
             config=resolved_config,
             id_factory=id_factory,
         )
+        loot_recorder: (
+            Callable[
+                [ItemReceivedSignal, Mpec | None, int | None, str | None],
+                MiningLootTotalsUpdatedEvent | None,
+            ]
+            | None
+        ) = None
+        if db_command_executor is not None:
+            loot_service = MiningLootRecorder(db_command_executor)
+
+            def record_loot_item(
+                signal: ItemReceivedSignal,
+                extraction_cost_mpec: Mpec | None,
+                run_id: int | None,
+                segment_id: str | None,
+            ) -> MiningLootTotalsUpdatedEvent | None:
+                return loot_service.record_item(
+                    signal,
+                    extraction_cost_mpec=extraction_cost_mpec,
+                    run_id=run_id,
+                    segment_id=segment_id,
+                )
+
+            loot_recorder = record_loot_item
         self._chat = MiningChatCorrelator(
             resource_catalog=resource_catalog,
             extraction_cost_provider=lambda: calculate_extraction_cost(resolved_profile_provider()),
             run_id_provider=run_id_provider,
+            segment_id_provider=segment_id_provider,
+            loot_recorder=loot_recorder,
         )
         self._claim_lifecycle = ClaimLifecycleCorrelator(
             config=resolved_config,
@@ -102,20 +121,10 @@ class MiningCoordinator:
         self._derived_event_handlers: tuple[DerivedEventHandler, ...] = (self._claim_lifecycle,)
         self._direct_signal_handlers: tuple[SignalHandler, ...] = (self._claim_lifecycle,)
 
-        run_commands = (
-            RunCommandHandler(db_command_executor=db_command_executor)
-            if db_command_executor is not None
-            else None
-        )
-        equipment_commands = (
-            MiningEquipmentCommandHandler(equipment_service=mining_equipment_service)
-            if mining_equipment_service is not None
-            else None
-        )
-        self._command_handlers: tuple[CommandHandler, ...] = tuple(
-            handler
-            for handler in (run_commands, equipment_commands, self._claim_lifecycle)
-            if handler is not None
+        self._commands = MiningCommandService(
+            claim_lifecycle=self._claim_lifecycle,
+            db_command_executor=db_command_executor,
+            mining_equipment_service=mining_equipment_service,
         )
 
     def restore_active_claims(self, claims: Iterable[ActiveClaim]) -> None:
@@ -137,10 +146,4 @@ class MiningCoordinator:
         return derived_events
 
     def process_command[T](self, command: RuntimeCommand[T]) -> RuntimeCommandResult[T]:
-        last_error: UnsupportedRuntimeCommandError | None = None
-        for processor in self._command_handlers:
-            try:
-                return processor.process_command(command)
-            except UnsupportedRuntimeCommandError as exc:
-                last_error = exc
-        raise last_error or UnsupportedRuntimeCommandError(type(command).__name__)
+        return self._commands.process_command(command)

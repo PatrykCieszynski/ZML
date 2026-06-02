@@ -9,6 +9,7 @@ from zml_game_bridge.application.mining import (
     MiningCoordinatorConfig,
 )
 from zml_game_bridge.application.mining.claims.commands import (
+    ExpireMiningClaimsCommand,
     IgnoreMiningClaimCommand,
     MarkMiningClaimDepletedCommand,
 )
@@ -24,11 +25,12 @@ from zml_game_bridge.domain.mining_events import (
     MiningClaimCreatedEvent,
     MiningClaimDeedReceivedEvent,
     MiningClaimDepletedEvent,
+    MiningClaimExpiredEvent,
     MiningClaimIgnoredEvent,
     MiningDropEvent,
     MiningEnhancerBrokeEvent,
     MiningHitHintEvent,
-    MiningItemReceivedEvent,
+    MiningLootTotalsUpdatedEvent,
     MiningNoResourcesEvent,
     RunSegmentStartedEvent,
 )
@@ -49,7 +51,70 @@ from zml_game_bridge.inputs.ocr.pipelines.mining_finder.signals import (
     FinderUnitsChangedSignal,
     ProbeFiredSignal,
 )
+from zml_game_bridge.persistence.mining_loot import (
+    MiningLootItemRow,
+    MiningLootTotalRow,
+    MiningLootWriteResult,
+    RecordMiningLootItemCommand,
+)
 from zml_game_bridge.resources.mining_resources import MiningResourceCatalog
+
+
+class _LootExecutor:
+    def __init__(self) -> None:
+        self.commands: list[RecordMiningLootItemCommand] = []
+
+    def __call__(self, command: object) -> MiningLootWriteResult:
+        assert isinstance(command, RecordMiningLootItemCommand)
+        self.commands.append(command)
+        created_ts_ms = 10_000 + len(self.commands) - 1
+        run_total = (
+            None
+            if command.run_id is None
+            else MiningLootTotalRow(
+                scope="run",
+                run_id=command.run_id,
+                segment_id=None,
+                item_name=command.item_name,
+                qty=command.qty,
+                value_mpec=command.value_mpec,
+                extraction_cost_mpec=command.extraction_cost_mpec or Mpec(0),
+                event_count=len(self.commands),
+                first_seen_ts_ms=created_ts_ms,
+                last_seen_ts_ms=created_ts_ms,
+            )
+        )
+        segment_total = (
+            None
+            if command.run_id is None or command.segment_id is None
+            else MiningLootTotalRow(
+                scope="segment",
+                run_id=command.run_id,
+                segment_id=command.segment_id,
+                item_name=command.item_name,
+                qty=command.qty,
+                value_mpec=command.value_mpec,
+                extraction_cost_mpec=command.extraction_cost_mpec or Mpec(0),
+                event_count=len(self.commands),
+                first_seen_ts_ms=created_ts_ms,
+                last_seen_ts_ms=created_ts_ms,
+            )
+        )
+        return MiningLootWriteResult(
+            recent_item=MiningLootItemRow(
+                event_id=len(self.commands),
+                created_ts_ms=created_ts_ms,
+                event_dt=command.event_dt,
+                run_id=command.run_id,
+                segment_id=command.segment_id,
+                item_name=command.item_name,
+                qty=command.qty,
+                value_mpec=command.value_mpec,
+                extraction_cost_mpec=command.extraction_cost_mpec,
+            ),
+            run_total=run_total,
+            segment_total=segment_total,
+        )
 
 
 def test_mining_coordinator_records_probe_drop_with_current_units() -> None:
@@ -142,6 +207,10 @@ def test_mining_coordinator_carries_drop_run_segment_to_claim() -> None:
         )
     )
 
+    hit = events[0]
+    assert isinstance(hit, MiningHitHintEvent)
+    assert hit.run_id == 7
+    assert hit.segment_id == "segment-1"
     claim = events[1]
     assert isinstance(claim, MiningClaimCreatedEvent)
     assert claim.drop_id == "drop-1"
@@ -237,6 +306,49 @@ def test_mining_coordinator_prefers_probe_signal_units_over_cached_units() -> No
     assert mpec_to_int(drop.cost.total_mpec) == 10_000
 
 
+def test_mining_coordinator_uses_cached_units_when_probe_reports_zero() -> None:
+    coordinator = MiningCoordinator(id_factory=_id_factory("drop-1", "drop-2"))
+
+    coordinator.process_signal(
+        FinderUnitsChangedSignal(ts_ms=900, probes_per_drop=None, ammo_per_drop=1_000)
+    )
+    first_events = coordinator.process_signal(
+        ProbeFiredSignal(ts_ms=1_000, position=None, modes_mask=1, ammo_per_drop=0)
+    )
+    second_events = coordinator.process_signal(
+        ProbeFiredSignal(ts_ms=2_000, position=None, modes_mask=1, ammo_per_drop=None)
+    )
+
+    first = first_events[0]
+    second = second_events[0]
+    assert isinstance(first, MiningDropEvent)
+    assert isinstance(second, MiningDropEvent)
+    assert first.ammo_per_drop == 1_000
+    assert second.ammo_per_drop == 1_000
+    assert mpec_to_int(first.cost.total_mpec) == 10_000
+    assert mpec_to_int(second.cost.total_mpec) == 10_000
+
+
+def test_mining_coordinator_skips_drop_when_units_are_invalid_without_fallback() -> None:
+    captured_setups: list[MiningSegmentSetup] = []
+
+    def context_provider(_observed_ts_ms: int, setup: MiningSegmentSetup) -> DropRunContext:
+        captured_setups.append(setup)
+        return DropRunContext(run_id=7, segment_id="segment-1")
+
+    coordinator = MiningCoordinator(
+        id_factory=_id_factory("drop-1"),
+        run_context_provider=context_provider,
+    )
+
+    events = coordinator.process_signal(
+        ProbeFiredSignal(ts_ms=1_000, position=None, modes_mask=1, ammo_per_drop=0)
+    )
+
+    assert events == []
+    assert captured_setups == []
+
+
 def test_mining_coordinator_records_hit_hint_linked_to_recent_drop() -> None:
     position = WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None)
     coordinator = MiningCoordinator(
@@ -311,6 +423,10 @@ def test_mining_coordinator_records_no_resources_linked_to_recent_drop() -> None
     coordinator = MiningCoordinator(
         id_factory=_id_factory("drop-1"),
         position_provider=lambda: position,
+        run_context_provider=lambda _ts, _setup: DropRunContext(
+            run_id=7,
+            segment_id="segment-1",
+        ),
     )
 
     coordinator.process_signal(
@@ -328,6 +444,8 @@ def test_mining_coordinator_records_no_resources_linked_to_recent_drop() -> None
     assert isinstance(no_resources, MiningNoResourcesEvent)
     assert no_resources.drop_id == "drop-1"
     assert no_resources.position == position
+    assert no_resources.run_id == 7
+    assert no_resources.segment_id == "segment-1"
     assert no_resources.raw_status_text == "No resources found. Try again\nsomewhere else-"
 
 
@@ -398,7 +516,11 @@ def test_mining_coordinator_does_not_link_no_resources_to_stale_drop() -> None:
 
 
 def test_mining_coordinator_records_claim_deed_received_chat_event() -> None:
-    coordinator = MiningCoordinator()
+    current_segment_id = ["segment-1"]
+    coordinator = MiningCoordinator(
+        run_id_provider=lambda: 7,
+        segment_id_provider=lambda: current_segment_id[0],
+    )
     event_dt = datetime(2026, 1, 10, 12, 37, 50)
     received_raw = (
         "2026-01-10 12:37:50 [System] [] You received Mineral Resource Deed x (1) Value: 0.0000 PED"
@@ -419,6 +541,7 @@ def test_mining_coordinator_records_claim_deed_received_chat_event() -> None:
         )
         == []
     )
+    current_segment_id[0] = "segment-2"
     events = coordinator.process_signal(
         ResourceClaimedSignal(
             event_dt=event_dt,
@@ -441,6 +564,8 @@ def test_mining_coordinator_records_claim_deed_received_chat_event() -> None:
     assert event.raw == f"{received_raw}\n{claimed_raw}"
     assert event.received_raw == received_raw
     assert event.claimed_raw == claimed_raw
+    assert event.run_id == 7
+    assert event.segment_id == "segment-1"
 
 
 def test_mining_coordinator_learns_claim_deed_resource(tmp_path: Path) -> None:
@@ -692,6 +817,7 @@ def test_mining_coordinator_depletes_restored_active_claim() -> None:
                 segment_id="segment-1",
                 position=WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None),
                 search_radius_m=55.0,
+                expected_expires_ts_ms=None,
             )
         ]
     )
@@ -728,6 +854,7 @@ def test_mining_coordinator_ignores_active_claim_by_command() -> None:
                 segment_id="segment-1",
                 position=WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None),
                 search_radius_m=55.0,
+                expected_expires_ts_ms=None,
             )
         ]
     )
@@ -767,6 +894,7 @@ def test_mining_coordinator_marks_active_claim_depleted_by_command() -> None:
                 segment_id="segment-1",
                 position=WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None),
                 search_radius_m=55.0,
+                expected_expires_ts_ms=None,
             )
         ]
     )
@@ -799,8 +927,65 @@ def test_mining_coordinator_marks_active_claim_depleted_by_command() -> None:
     assert event.position == position
 
 
-def test_mining_coordinator_records_item_received_chat_event() -> None:
+def test_mining_coordinator_expires_active_claims_by_command() -> None:
     coordinator = MiningCoordinator()
+    coordinator.restore_active_claims(
+        [
+            ActiveClaim(
+                claim_id="expired-claim",
+                drop_id="drop-1",
+                hit_id="hit-1",
+                run_id=7,
+                segment_id="segment-1",
+                position=WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None),
+                search_radius_m=55.0,
+                expected_expires_ts_ms=2_000,
+            ),
+            ActiveClaim(
+                claim_id="active-claim",
+                drop_id="drop-2",
+                hit_id="hit-2",
+                run_id=7,
+                segment_id="segment-2",
+                position=WorldPos(planet_name="Calypso", x=58_900, y=84_650, z=None),
+                search_radius_m=55.0,
+                expected_expires_ts_ms=5_000,
+            ),
+            ActiveClaim(
+                claim_id="non-expiring-claim",
+                drop_id="drop-3",
+                hit_id="hit-3",
+                run_id=7,
+                segment_id="segment-3",
+                position=WorldPos(planet_name="Calypso", x=58_910, y=84_660, z=None),
+                search_radius_m=55.0,
+                expected_expires_ts_ms=None,
+            ),
+        ]
+    )
+
+    result = coordinator.process_command(ExpireMiningClaimsCommand(now_ts_ms=3_000))
+
+    assert result.value == 1
+    assert len(result.events) == 1
+    event = result.events[0]
+    assert isinstance(event, MiningClaimExpiredEvent)
+    assert event.claim_id == "expired-claim"
+    assert event.drop_id == "drop-1"
+    assert event.hit_id == "hit-1"
+    assert event.run_id == 7
+    assert event.segment_id == "segment-1"
+    assert event.expected_expires_ts_ms == 2_000
+    assert event.expired_ts_ms == 3_000
+
+    second_result = coordinator.process_command(ExpireMiningClaimsCommand(now_ts_ms=3_000))
+    assert second_result.value == 0
+    assert second_result.events == ()
+
+
+def test_mining_coordinator_records_item_received_chat_signal_as_loot_totals_update() -> None:
+    executor = _LootExecutor()
+    coordinator = MiningCoordinator(db_command_executor=executor)
     event_dt = datetime(2026, 1, 10, 12, 37, 50)
 
     events = coordinator.process_signal(
@@ -817,17 +1002,34 @@ def test_mining_coordinator_records_item_received_chat_event() -> None:
 
     assert len(events) == 1
     event = events[0]
-    assert isinstance(event, MiningItemReceivedEvent)
-    assert event.event_dt == event_dt
-    assert event.item_name == "Blue Crystal"
-    assert event.qty == 8
-    assert event.value_mpec == Mpec(16_000)
-    assert event.extraction_cost_mpec is None
+    assert isinstance(event, MiningLootTotalsUpdatedEvent)
+    assert event.updated_ts_ms == 10_000
     assert event.run_id is None
+    assert event.segment_id is None
+    assert event.recent_item is not None
+    assert event.recent_item.item_name == "Blue Crystal"
+    assert event.recent_item.qty == 8
+    assert event.recent_item.value_mpec == Mpec(16_000)
+    assert event.run_total is None
+    assert event.segment_total is None
+    assert len(executor.commands) == 1
+    command = executor.commands[0]
+    assert command.event_dt == event_dt
+    assert command.item_name == "Blue Crystal"
+    assert command.qty == 8
+    assert command.value_mpec == Mpec(16_000)
+    assert command.extraction_cost_mpec is None
+    assert command.run_id is None
+    assert command.segment_id is None
 
 
-def test_mining_coordinator_attaches_active_run_to_item_received_chat_event() -> None:
-    coordinator = MiningCoordinator(run_id_provider=lambda: 7)
+def test_mining_coordinator_attaches_active_run_to_loot_recording() -> None:
+    executor = _LootExecutor()
+    coordinator = MiningCoordinator(
+        run_id_provider=lambda: 7,
+        segment_id_provider=lambda: "segment-1",
+        db_command_executor=executor,
+    )
     event_dt = datetime(2026, 1, 10, 12, 37, 50)
 
     events = coordinator.process_signal(
@@ -843,18 +1045,33 @@ def test_mining_coordinator_attaches_active_run_to_item_received_chat_event() ->
     )
 
     event = events[0]
-    assert isinstance(event, MiningItemReceivedEvent)
+    assert isinstance(event, MiningLootTotalsUpdatedEvent)
     assert event.run_id == 7
+    assert event.segment_id == "segment-1"
+    assert event.run_total is not None
+    assert event.run_total.scope == "run"
+    assert event.run_total.run_id == 7
+    assert event.run_total.segment_id is None
+    assert event.run_total.item_name == "Blue Crystal"
+    assert event.segment_total is not None
+    assert event.segment_total.scope == "segment"
+    assert event.segment_total.run_id == 7
+    assert event.segment_total.segment_id == "segment-1"
+    assert event.segment_total.item_name == "Blue Crystal"
+    assert executor.commands[0].run_id == 7
+    assert executor.commands[0].segment_id == "segment-1"
 
 
-def test_mining_coordinator_adds_extractor_cost_to_item_received_event() -> None:
+def test_mining_coordinator_adds_extractor_cost_to_loot_recording() -> None:
+    executor = _LootExecutor()
     coordinator = MiningCoordinator(
         profile=MiningEquipmentProfile(
             finder=MiningToolProfile(name="Finder", decay_mpec=Mpec(0)),
             extractor=MiningToolProfile(
                 name="Extractor", decay_mpec=Mpec(100), markup=percent("125")
             ),
-        )
+        ),
+        db_command_executor=executor,
     )
     event_dt = datetime(2026, 1, 10, 12, 37, 50)
 
@@ -871,8 +1088,8 @@ def test_mining_coordinator_adds_extractor_cost_to_item_received_event() -> None
     )
 
     event = events[0]
-    assert isinstance(event, MiningItemReceivedEvent)
-    assert event.extraction_cost_mpec == Mpec(125)
+    assert isinstance(event, MiningLootTotalsUpdatedEvent)
+    assert executor.commands[0].extraction_cost_mpec == Mpec(125)
 
 
 def test_mining_coordinator_ignores_unknown_item_received_chat_event(tmp_path: Path) -> None:

@@ -60,6 +60,6 @@ indent-style = "space"
 testpaths = ["tests"]
 addopts = [
     "-q",
-    "--basetemp=.pytest-tmp",
+    "--basetemp=../../.tmp/pytest-game-bridge",
 ]
 timeout = 3

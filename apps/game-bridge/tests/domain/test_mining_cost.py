@@ -63,6 +63,26 @@ def test_calculate_drop_cost_uses_profile_fallbacks_when_ocr_units_are_missing()
     assert mpec_to_int(cost.total_mpec) == 5_100
 
 
+def test_calculate_drop_cost_treats_zero_ocr_units_as_missing() -> None:
+    profile = MiningEquipmentProfile(
+        finder=MiningToolProfile(name="Finder", decay_mpec=Mpec(100)),
+        fallback_ammo_per_drop=500,
+        fallback_probes_per_drop=1,
+    )
+
+    cost = calculate_drop_cost(
+        profile=profile,
+        ocr_ammo_per_drop=0,
+        ocr_probes_per_drop=None,
+    )
+
+    assert cost.ammo.quantity == 500
+    assert mpec_to_int(cost.ammo.cost_mpec) == 5_000
+    assert cost.ammo.source == "fallback"
+    assert cost.probes.quantity is None
+    assert cost.probes.source == "missing"
+
+
 def test_calculate_drop_cost_uses_probe_count_when_ammo_units_are_missing() -> None:
     profile = MiningEquipmentProfile(
         finder=MiningToolProfile(name="Finder", decay_mpec=Mpec(100)),

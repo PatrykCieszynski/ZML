@@ -7,6 +7,7 @@ from pathlib import Path
 
 from zml_game_bridge.api.channels.position_hub import PositionHub
 from zml_game_bridge.api.channels.sse_hub import SseHub
+from zml_game_bridge.application.mining.claims.commands import ExpireMiningClaimsCommand
 from zml_game_bridge.application.mining.equipment.service import MiningEquipmentService
 from zml_game_bridge.application.mining.segments.session import RunSessionService
 from zml_game_bridge.application.position.model import PositionSnapshot
@@ -17,6 +18,7 @@ from zml_game_bridge.inputs.ocr.pipelines.position.model import OcrPosition
 from zml_game_bridge.inputs.ocr.runner import start_ocr_input
 from zml_game_bridge.inputs.ocr.tesserocr_runtime import preload_tesserocr
 from zml_game_bridge.runtime.bootstrap import RuntimeComponents
+from zml_game_bridge.runtime.channels import ChannelClosedError
 from zml_game_bridge.runtime.db_commands import DbCommand
 from zml_game_bridge.runtime.runtime_commands import RuntimeCommand, RuntimeCommandRequest
 from zml_game_bridge.runtime.supervisor import WorkerSupervisor
@@ -111,7 +113,8 @@ class AppRuntime:
         logger.info(
             "app_started db_path=%s chat_log_path=%s mining_resource_catalog_path=%s "
             "mining_tools_path=%s ocr_profile_path=%s ocr_enabled=%s mock_inputs_enabled=%s "
-            "finder_recording_modes=%s ocr_profiling_enabled=%s",
+            "claim_expiration_maintenance_enabled=%s finder_recording_modes=%s "
+            "position_roi_snapshot_enabled=%s ocr_profiling_enabled=%s",
             self._settings.db_path,
             self._settings.chat_log_path,
             self._settings.mining_resource_catalog_path,
@@ -119,7 +122,9 @@ class AppRuntime:
             self._settings.ocr_profile_path,
             self._settings.ocr_enabled,
             self._settings.mock_inputs_enabled,
+            self._settings.claim_expiration_maintenance_enabled,
             self._settings.finder_recording_modes,
+            self._settings.position_roi_snapshot_enabled,
             self._settings.ocr_profiling_enabled,
         )
 
@@ -134,6 +139,13 @@ class AppRuntime:
             target=self._components.input_coordinator.run,
             worker_kwargs={"stop_event": self._stop_event},
         )
+
+        if self._settings.claim_expiration_maintenance_enabled:
+            self._supervisor.start_thread(
+                name="claim_expiration_maintenance",
+                target=self._run_claim_expiration_maintenance,
+                worker_kwargs={"stop_event": self._stop_event},
+            )
 
         self._supervisor.start_thread(
             name="chat_tail",
@@ -168,6 +180,11 @@ class AppRuntime:
                     "finder_recording_low_confidence_interval_s": (
                         self._settings.finder_recording_low_confidence_interval_s
                     ),
+                    "position_roi_snapshot_enabled": (self._settings.position_roi_snapshot_enabled),
+                    "position_roi_snapshot_dir": self._settings.position_roi_snapshot_dir,
+                    "position_roi_snapshot_interval_s": (
+                        self._settings.position_roi_snapshot_interval_s
+                    ),
                     "ocr_profiling_enabled": self._settings.ocr_profiling_enabled,
                     "ocr_profiling_interval_s": self._settings.ocr_profiling_interval_s,
                 },
@@ -197,6 +214,33 @@ class AppRuntime:
             )
         )
 
+    def _run_claim_expiration_maintenance(self, *, stop_event: threading.Event) -> None:
+        interval_s = max(1.0, self._settings.claim_expiration_maintenance_interval_s)
+        logger.info("claim_expiration_maintenance_started interval_s=%s", interval_s)
+        while not stop_event.is_set():
+            now_ts_ms = time.time_ns() // 1_000_000
+            request = RuntimeCommandRequest(ExpireMiningClaimsCommand(now_ts_ms=now_ts_ms))
+            try:
+                self._components.pending_inputs.emit(request)
+                expired_count = request.result(timeout_s=10.0)
+            except ChannelClosedError:
+                if stop_event.is_set():
+                    break
+                logger.exception("claim_expiration_maintenance_channel_closed")
+            except Exception:
+                if stop_event.is_set():
+                    break
+                logger.exception("claim_expiration_maintenance_failed")
+            else:
+                if expired_count:
+                    logger.info(
+                        "claim_expiration_maintenance_expired count=%s now_ts_ms=%s",
+                        expired_count,
+                        now_ts_ms,
+                    )
+            stop_event.wait(interval_s)
+        logger.info("claim_expiration_maintenance_stopped")
+
     def stop(self) -> None:
         if not self._started:
             return
@@ -210,6 +254,7 @@ class AppRuntime:
         self._supervisor.join_thread("chat_tail")
         self._supervisor.join_thread("ocr_worker")
         self._supervisor.join_thread("mock_mining_input")
+        self._supervisor.join_thread("claim_expiration_maintenance")
 
         self._components.pending_inputs.close()
         self._supervisor.join_thread("input_coordinator")

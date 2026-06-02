@@ -1,3 +1,4 @@
+from zml_game_bridge.application.mining.command_service import MiningCommandService
 from zml_game_bridge.application.mining.coordinator import MiningCoordinator
 from zml_game_bridge.application.mining.settings import (
     DEFAULT_DROP_RADIUS_M,
@@ -10,6 +11,7 @@ from zml_game_bridge.application.mining.settings import (
 __all__ = [
     "DEFAULT_DROP_RADIUS_M",
     "IdFactory",
+    "MiningCommandService",
     "MiningCoordinator",
     "MiningCoordinatorConfig",
     "default_id_factory",

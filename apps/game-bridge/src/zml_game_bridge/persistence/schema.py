@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 13
 
 SCHEMA_DDL = """
 -- =========================
@@ -146,6 +146,8 @@ CREATE TABLE IF NOT EXISTS mining_claims (
     ignored_event_id        INTEGER REFERENCES events(event_id) ON DELETE SET NULL,
     ignored_ts_ms           INTEGER,
     ignored_reason          TEXT,
+    expired_event_id        INTEGER REFERENCES events(event_id) ON DELETE SET NULL,
+    expired_ts_ms           INTEGER,
 
     CHECK (status IN ('active', 'depleted'))
 );
@@ -154,6 +156,7 @@ CREATE INDEX IF NOT EXISTS idx_mining_claims_status ON mining_claims(status);
 CREATE INDEX IF NOT EXISTS idx_mining_claims_observed_ts_ms ON mining_claims(observed_ts_ms);
 CREATE INDEX IF NOT EXISTS idx_mining_claims_expires ON mining_claims(expected_expires_ts_ms);
 CREATE INDEX IF NOT EXISTS idx_mining_claims_ignored ON mining_claims(ignored_event_id);
+CREATE INDEX IF NOT EXISTS idx_mining_claims_expired ON mining_claims(expired_event_id);
 
 CREATE TABLE IF NOT EXISTS mining_loot_items (
     event_id                INTEGER PRIMARY KEY REFERENCES events(event_id) ON DELETE CASCADE,
@@ -170,6 +173,60 @@ CREATE TABLE IF NOT EXISTS mining_loot_items (
 
 CREATE INDEX IF NOT EXISTS idx_mining_loot_run_id ON mining_loot_items(run_id, created_ts_ms);
 CREATE INDEX IF NOT EXISTS idx_mining_loot_item_name ON mining_loot_items(item_name);
+
+CREATE TABLE IF NOT EXISTS mining_loot_recent (
+    loot_id                 INTEGER PRIMARY KEY,
+    created_ts_ms           INTEGER NOT NULL,
+    event_dt                TEXT,
+    run_id                  INTEGER REFERENCES runs(run_id) ON DELETE SET NULL,
+    segment_id              TEXT REFERENCES run_segments(segment_id) ON DELETE SET NULL,
+
+    item_name               TEXT NOT NULL,
+    qty                     INTEGER NOT NULL,
+    value_mpec              INTEGER NOT NULL,
+    extraction_cost_mpec    INTEGER,
+    raw                     TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_mining_loot_recent_run_id
+    ON mining_loot_recent(run_id, created_ts_ms);
+CREATE INDEX IF NOT EXISTS idx_mining_loot_recent_segment_id
+    ON mining_loot_recent(segment_id, created_ts_ms);
+CREATE INDEX IF NOT EXISTS idx_mining_loot_recent_item_name
+    ON mining_loot_recent(item_name);
+
+CREATE TABLE IF NOT EXISTS run_item_totals (
+    run_id                  INTEGER NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
+    item_name               TEXT NOT NULL,
+    qty                     INTEGER NOT NULL DEFAULT 0,
+    value_mpec              INTEGER NOT NULL DEFAULT 0,
+    extraction_cost_mpec    INTEGER NOT NULL DEFAULT 0,
+    event_count             INTEGER NOT NULL DEFAULT 0,
+    first_seen_ts_ms        INTEGER NOT NULL,
+    last_seen_ts_ms         INTEGER NOT NULL,
+
+    PRIMARY KEY (run_id, item_name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_run_item_totals_run_value
+    ON run_item_totals(run_id, value_mpec);
+
+CREATE TABLE IF NOT EXISTS segment_item_totals (
+    segment_id              TEXT NOT NULL REFERENCES run_segments(segment_id) ON DELETE CASCADE,
+    run_id                  INTEGER NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
+    item_name               TEXT NOT NULL,
+    qty                     INTEGER NOT NULL DEFAULT 0,
+    value_mpec              INTEGER NOT NULL DEFAULT 0,
+    extraction_cost_mpec    INTEGER NOT NULL DEFAULT 0,
+    event_count             INTEGER NOT NULL DEFAULT 0,
+    first_seen_ts_ms        INTEGER NOT NULL,
+    last_seen_ts_ms         INTEGER NOT NULL,
+
+    PRIMARY KEY (segment_id, item_name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_segment_item_totals_run_id
+    ON segment_item_totals(run_id);
 
 -- =========================
 -- App state:
@@ -238,6 +295,16 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE mining_claims ADD COLUMN ignored_reason TEXT")
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_mining_claims_ignored ON mining_claims(ignored_event_id)"
+    )
+    if user_version < 12:
+        if not _column_exists(conn, "mining_claims", "expired_event_id"):
+            conn.execute(
+                "ALTER TABLE mining_claims ADD COLUMN expired_event_id INTEGER REFERENCES events(event_id) ON DELETE SET NULL"
+            )
+        if not _column_exists(conn, "mining_claims", "expired_ts_ms"):
+            conn.execute("ALTER TABLE mining_claims ADD COLUMN expired_ts_ms INTEGER")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_mining_claims_expired ON mining_claims(expired_event_id)"
     )
     if user_version < SCHEMA_VERSION:
         conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")

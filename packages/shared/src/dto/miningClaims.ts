@@ -1,6 +1,6 @@
 import type { WorldPosDTO } from "./worldPos";
 
-export type MiningClaimStatus = "active" | "depleted" | "ignored";
+export type MiningClaimStatus = "active" | "depleted" | "ignored" | "expired";
 export type MiningResourceType = "ore" | "enmatter" | "treasure" | "other" | "unknown";
 
 export type MiningClaimPositionDto = WorldPosDTO;
@@ -96,6 +96,16 @@ export type MiningClaimIgnoredEventWire = {
     segment_id?: string | null;
 };
 
+export type MiningClaimExpiredEventWire = {
+    claim_id: string;
+    expired_ts_ms: number;
+    expected_expires_ts_ms: number;
+    drop_id?: string | null;
+    hit_id?: string | null;
+    run_id?: number | null;
+    segment_id?: string | null;
+};
+
 export function isMiningClaimWire(value: unknown): value is MiningClaimWire {
     if (!isRecord(value)) return false;
     return (
@@ -174,6 +184,21 @@ export function isMiningClaimIgnoredEventWire(
     );
 }
 
+export function isMiningClaimExpiredEventWire(
+    value: unknown,
+): value is MiningClaimExpiredEventWire {
+    if (!isRecord(value)) return false;
+    return (
+        typeof value.claim_id === "string" &&
+        isFiniteNumber(value.expired_ts_ms) &&
+        isFiniteNumber(value.expected_expires_ts_ms) &&
+        (value.drop_id === undefined || isNullableString(value.drop_id)) &&
+        (value.hit_id === undefined || isNullableString(value.hit_id)) &&
+        (value.run_id === undefined || isNullableNumber(value.run_id)) &&
+        (value.segment_id === undefined || isNullableString(value.segment_id))
+    );
+}
+
 export function wireToMiningClaimDto(wire: MiningClaimWire): MiningClaimDto {
     return {
         claimId: wire.claim_id,
@@ -239,7 +264,12 @@ function wireToPositionDto(wire: MiningClaimPositionWire): MiningClaimPositionDt
 }
 
 function isMiningClaimStatus(value: unknown): value is MiningClaimStatus {
-    return value === "active" || value === "depleted" || value === "ignored";
+    return (
+        value === "active" ||
+        value === "depleted" ||
+        value === "ignored" ||
+        value === "expired"
+    );
 }
 
 function isNullableMiningResourceType(value: unknown): value is MiningResourceType | null {

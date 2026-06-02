@@ -5,6 +5,7 @@ import type {
     MiningClaimDto,
     MiningDropDto,
     MiningLootItemDto,
+    MiningLootTotalDto,
     MiningToolProfileDto,
     OcrPositionDTO,
     RunDto,
@@ -25,6 +26,7 @@ export type RuntimeState = {
     miningClaims: MiningClaimDto[];
     miningDrops: MiningDropDto[];
     miningLoot: MiningLootItemDto[];
+    miningLootTotals: MiningLootTotalDto[];
     miningTools: MiningToolProfileDto[];
     activeMiningTools?: ActiveMiningToolsDto;
 };
@@ -42,6 +44,7 @@ export const runtime: RuntimeState = {
     miningClaims: [],
     miningDrops: [],
     miningLoot: [],
+    miningLootTotals: [],
     miningTools: [],
     activeMiningTools: undefined,
 };

@@ -63,12 +63,16 @@ def build_runtime_components(settings: Settings) -> RuntimeComponents:
     def current_run_id() -> int | None:
         return run_session_service.current_run_id()
 
+    def current_segment_id() -> str | None:
+        return run_session_service.current_segment_id()
+
     mining_coordinator = MiningCoordinator(
         profile_provider=mining_equipment_service.get_equipment_profile,
         position_provider=position_service.get_latest_world_pos,
         resource_catalog=resource_catalog,
         run_context_provider=run_context_for_drop,
         run_id_provider=current_run_id,
+        segment_id_provider=current_segment_id,
         db_command_executor=pending_db_commands.execute,
         mining_equipment_service=mining_equipment_service,
     )
@@ -76,6 +80,7 @@ def build_runtime_components(settings: Settings) -> RuntimeComponents:
         pending_inputs=pending_inputs,
         pending_events=pending_events,
         input_processor=mining_coordinator,
+        live_events=persisted_events,
     )
     db_writer_worker = DbWriterWorker(
         db_path=settings.db_path,
@@ -115,6 +120,10 @@ def build_worker_supervisor(settings: Settings) -> WorkerSupervisor:
     supervisor = WorkerSupervisor()
     supervisor.register("db_writer", enabled=True)
     supervisor.register("input_coordinator", enabled=True)
+    supervisor.register(
+        "claim_expiration_maintenance",
+        enabled=settings.claim_expiration_maintenance_enabled,
+    )
     supervisor.register("chat_tail", enabled=True)
     supervisor.register("ocr_worker", enabled=settings.ocr_enabled)
     supervisor.register("mock_mining_input", enabled=settings.mock_inputs_enabled)

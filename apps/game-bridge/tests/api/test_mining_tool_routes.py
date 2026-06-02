@@ -16,9 +16,7 @@ from zml_game_bridge.api.schemas.mining_tools import (
     CreateMiningToolProfileRequestDto,
     SetActiveMiningToolsRequestDto,
 )
-from zml_game_bridge.application.mining.equipment.command_handler import (
-    MiningEquipmentCommandHandler,
-)
+from zml_game_bridge.application.mining.command_service import MiningCommandService
 from zml_game_bridge.application.mining.equipment.service import MiningEquipmentService
 from zml_game_bridge.runtime.runtime_commands import RuntimeCommand
 
@@ -26,7 +24,9 @@ from zml_game_bridge.runtime.runtime_commands import RuntimeCommand
 class _RuntimeStub:
     def __init__(self, service: MiningEquipmentService) -> None:
         self.mining_equipment_service = service
-        self._equipment = MiningEquipmentCommandHandler(equipment_service=service)
+        self._commands = MiningCommandService(
+            mining_equipment_service=service,
+        )
 
     def execute_runtime_command[T](
         self,
@@ -35,7 +35,7 @@ class _RuntimeStub:
         timeout_s: float = 5.0,
     ) -> T:
         del timeout_s
-        return self._equipment.process_command(command).value
+        return self._commands.process_command(command).value
 
 
 def test_mining_tool_routes_create_list_and_set_active_tools(tmp_path: Path) -> None:

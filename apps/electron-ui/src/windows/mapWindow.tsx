@@ -25,7 +25,7 @@ export function MapWindow() {
   }, [state.position]);
 
   // hardcoded planet for now
-  const planetId = "calypso" as const;
+  const planetId = "rocktropia" as const;
 
   return (
     <div className="zml-map-window">

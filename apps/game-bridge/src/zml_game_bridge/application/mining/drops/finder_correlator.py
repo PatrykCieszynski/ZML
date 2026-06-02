@@ -78,12 +78,17 @@ class FinderDropCorrelator:
             return []
 
         if isinstance(signal, FinderUnitsChangedSignal):
-            self._probes_per_drop = signal.probes_per_drop
-            self._ammo_per_drop = signal.ammo_per_drop
+            self._remember_units(
+                ammo_per_drop=signal.ammo_per_drop,
+                probes_per_drop=signal.probes_per_drop,
+            )
             logger.debug(
-                "finder_units_changed probes_per_drop=%s ammo_per_drop=%s",
+                "finder_units_changed probes_per_drop=%s ammo_per_drop=%s "
+                "cached_probes_per_drop=%s cached_ammo_per_drop=%s",
                 signal.probes_per_drop,
                 signal.ammo_per_drop,
+                self._probes_per_drop,
+                self._ammo_per_drop,
             )
             return []
 
@@ -104,19 +109,25 @@ class FinderDropCorrelator:
             logger.warning("drop_without_position signal=%s", signal)
 
         modes_mask = signal.modes_mask if signal.modes_mask is not None else self._modes_mask
-        probes_per_drop = (
-            signal.probes_per_drop if signal.probes_per_drop is not None else self._probes_per_drop
-        )
-        ammo_per_drop = (
-            signal.ammo_per_drop if signal.ammo_per_drop is not None else self._ammo_per_drop
-        )
-
-        if signal.probes_per_drop is not None:
-            self._probes_per_drop = signal.probes_per_drop
-        if signal.ammo_per_drop is not None:
-            self._ammo_per_drop = signal.ammo_per_drop
+        ammo_per_drop, probes_per_drop = self._resolve_drop_units(signal)
 
         profile = self._profile_provider()
+        cost = calculate_drop_cost(
+            profile=profile,
+            ocr_ammo_per_drop=ammo_per_drop,
+            ocr_probes_per_drop=probes_per_drop,
+        )
+        if cost.ammo.quantity is None and cost.probes.quantity is None:
+            logger.warning(
+                "drop_without_valid_units signal_ts=%s modes=%s position=%s raw_ammo=%s raw_probes=%s",
+                signal.ts_ms,
+                modes_mask,
+                position,
+                signal.ammo_per_drop,
+                signal.probes_per_drop,
+            )
+            return []
+
         segment_setup = MiningSegmentSetup(
             profile=profile,
             modes_mask=modes_mask,
@@ -127,11 +138,6 @@ class FinderDropCorrelator:
             self._run_context_provider(signal.ts_ms, segment_setup)
             if self._run_context_provider is not None
             else DropRunContext(run_id=None, segment_id=None)
-        )
-        cost = calculate_drop_cost(
-            profile=profile,
-            ocr_ammo_per_drop=ammo_per_drop,
-            ocr_probes_per_drop=probes_per_drop,
         )
         event = MiningDropEvent(
             drop_id=self._id_factory(),
@@ -147,13 +153,6 @@ class FinderDropCorrelator:
             segment_id=run_context.segment_id,
         )
         self._pending_drop = event
-        if cost.ammo.source == "missing" and cost.probes.source == "missing":
-            logger.warning(
-                "drop_without_units_config drop_id=%s modes=%s position=%s",
-                event.drop_id,
-                event.modes_mask,
-                event.position,
-            )
         logger.debug(
             "probe_fired_signal_processed event_type=%s drop_id=%s ts=%s position=%s "
             "modes=%s ammo=%s probes=%s total_mpec=%s",
@@ -167,6 +166,33 @@ class FinderDropCorrelator:
             event.cost.total_mpec,
         )
         return [*run_context.lifecycle_events, event]
+
+    def _resolve_drop_units(self, signal: ProbeFiredSignal) -> tuple[int | None, int | None]:
+        remembered = self._remember_units(
+            ammo_per_drop=signal.ammo_per_drop,
+            probes_per_drop=signal.probes_per_drop,
+        )
+        if remembered is not None:
+            return remembered
+        return self._ammo_per_drop, self._probes_per_drop
+
+    def _remember_units(
+        self,
+        *,
+        ammo_per_drop: int | None,
+        probes_per_drop: int | None,
+    ) -> tuple[int | None, int | None] | None:
+        positive_ammo = _positive_unit_or_none(ammo_per_drop)
+        positive_probes = _positive_unit_or_none(probes_per_drop)
+        if positive_ammo is not None:
+            self._ammo_per_drop = positive_ammo
+            self._probes_per_drop = None
+            return positive_ammo, None
+        if positive_probes is not None:
+            self._ammo_per_drop = None
+            self._probes_per_drop = positive_probes
+            return None, positive_probes
+        return None
 
     def _record_hit_hint(self, signal: FinderHitHintSignal) -> MiningHitHintEvent:
         linked_drop = self._linked_pending_drop(signal.ts_ms)
@@ -202,6 +228,8 @@ class FinderDropCorrelator:
             depth_m=signal.depth_m,
             raw_status_text=signal.raw_status_text,
             raw_details_text=signal.raw_details_text,
+            run_id=linked_drop.run_id if linked_drop is not None else None,
+            segment_id=linked_drop.segment_id if linked_drop is not None else None,
         )
         logger.debug(
             "hit_hint_recorded event_type=%s hit_id=%s drop_id=%s ts=%s resource=%r size=%s(%s)",
@@ -231,6 +259,8 @@ class FinderDropCorrelator:
             observed_ts_ms=signal.ts_ms,
             position=linked_drop.position if linked_drop is not None else None,
             raw_status_text=signal.raw_status_text,
+            run_id=linked_drop.run_id if linked_drop is not None else None,
+            segment_id=linked_drop.segment_id if linked_drop is not None else None,
         )
         logger.debug(
             "no_resources_recorded event_type=%s drop_id=%s ts=%s position=%s",
@@ -260,3 +290,9 @@ class FinderDropCorrelator:
 
 def _none_position_provider() -> WorldPos | None:
     return None
+
+
+def _positive_unit_or_none(value: int | None) -> int | None:
+    if value is None or value <= 0:
+        return None
+    return value

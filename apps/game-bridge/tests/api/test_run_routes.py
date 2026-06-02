@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 from zml_game_bridge.api.routes.runs import (
     active_run,
@@ -18,6 +18,8 @@ from zml_game_bridge.api.schemas.runs import (
     StopRunRequestDto,
     UpdateRunRequestDto,
 )
+from zml_game_bridge.application.mining.command_service import MiningCommandService
+from zml_game_bridge.persistence.runs import RunSegmentStore
 from zml_game_bridge.persistence.schema import ensure_schema
 from zml_game_bridge.persistence.sqlite import open_sqlite
 from zml_game_bridge.runtime.db_commands import DbCommand
@@ -33,6 +35,11 @@ def _open_test_db(tmp_path: Path) -> sqlite3.Connection:
 class _RuntimeStub:
     def __init__(self, conn: sqlite3.Connection) -> None:
         self.conn = conn
+        self._commands = MiningCommandService(db_command_executor=self._execute_db_command)
+
+    def _execute_db_command[T](self, command: DbCommand[T]) -> T:
+        with self.conn:
+            return command.execute(self.conn)
 
     def execute_runtime_command[T](
         self,
@@ -41,8 +48,7 @@ class _RuntimeStub:
         timeout_s: float = 5.0,
     ) -> T:
         del timeout_s
-        with self.conn:
-            return cast(DbCommand[T], command).execute(self.conn)
+        return self._commands.process_command(command).value
 
 
 def test_start_stop_run_roundtrip(tmp_path: Path) -> None:
@@ -72,8 +78,21 @@ def test_list_and_resume_run(tmp_path: Path) -> None:
     runtime: Any = _RuntimeStub(conn)
     try:
         first = start_run(StartRunRequestDto(name="First"), runtime)
+        RunSegmentStore(conn).create(
+            run_id=first.run_id,
+            segment_id="segment-1",
+            segment_index=1,
+            started_ts_ms=1_000,
+            setup_hash="hash-1",
+            setup_snapshot={"finder": {"name": "Finder"}},
+            ts_ms=1_000,
+        )
         stopped = stop_run(StopRunRequestDto(), runtime)
         second = start_run(StartRunRequestDto(name="Second"), runtime)
+
+        stopped_segment = RunSegmentStore(conn).get("segment-1")
+        assert stopped_segment is not None
+        assert stopped_segment.status == "ended"
 
         rows = list_runs(conn)
         assert [row.run_id for row in rows] == [second.run_id, stopped.run_id]
@@ -82,6 +101,10 @@ def test_list_and_resume_run(tmp_path: Path) -> None:
 
         assert resumed.run_id == first.run_id
         assert resumed.status == "running"
+        resumed_segment = RunSegmentStore(conn).get("segment-1")
+        assert resumed_segment is not None
+        assert resumed_segment.status == "active"
+        assert resumed_segment.ended_ts_ms is None
         active = active_run(conn)
         assert active is not None
         assert active.run_id == first.run_id
