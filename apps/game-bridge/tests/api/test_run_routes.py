@@ -19,8 +19,8 @@ from zml_game_bridge.api.schemas.runs import (
     UpdateRunRequestDto,
 )
 from zml_game_bridge.application.mining.command_service import MiningCommandService
-from zml_game_bridge.persistence.schema import ensure_schema
 from zml_game_bridge.persistence.runs import RunSegmentStore
+from zml_game_bridge.persistence.schema import ensure_schema
 from zml_game_bridge.persistence.sqlite import open_sqlite
 from zml_game_bridge.runtime.db_commands import DbCommand
 from zml_game_bridge.runtime.runtime_commands import RuntimeCommand

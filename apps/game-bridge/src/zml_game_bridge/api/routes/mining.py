@@ -9,7 +9,12 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
 
 from zml_game_bridge.api.dependencies import ReadConn, RuntimeDep
-from zml_game_bridge.api.schemas.mining import MiningClaimDto, MiningDropDto, MiningLootItemDto
+from zml_game_bridge.api.schemas.mining import (
+    MiningClaimDto,
+    MiningDropDto,
+    MiningLootItemDto,
+    MiningLootTotalDto,
+)
 from zml_game_bridge.application.mining.claims.commands import (
     IgnoreMiningClaimCommand,
     MarkMiningClaimDepletedCommand,
@@ -171,7 +176,7 @@ def list_mining_loot(
         if resolved_run_id is None:
             return []
 
-    rows = MiningLootReader(conn).list_all(run_id=resolved_run_id)
+    rows = MiningLootReader(conn).list_recent(run_id=resolved_run_id)
     logger.debug(
         "api_request_read_loot active_run=%s run_id=%s rows=%s",
         active_run,
@@ -179,6 +184,39 @@ def list_mining_loot(
         len(rows),
     )
     return [MiningLootItemDto.from_row(row) for row in rows]
+
+
+@router.get("/loot/totals", response_model=list[MiningLootTotalDto])
+def list_mining_loot_totals(
+    conn: ReadConn,
+    run_id: Annotated[int | None, Query(ge=1)] = None,
+    segment_id: Annotated[str | None, Query()] = None,
+    active_run: Annotated[bool, Query()] = False,
+) -> list[MiningLootTotalDto]:
+    reader = MiningLootReader(conn)
+    if segment_id is not None:
+        rows = reader.list_segment_totals(segment_id=segment_id)
+        logger.debug(
+            "api_request_read_loot_totals segment_id=%s rows=%s",
+            segment_id,
+            len(rows),
+        )
+        return [MiningLootTotalDto.from_row(row) for row in rows]
+
+    resolved_run_id = run_id
+    if active_run:
+        resolved_run_id = RunState(conn).try_get_active_run_id()
+        if resolved_run_id is None:
+            return []
+
+    rows = reader.list_run_totals(run_id=resolved_run_id)
+    logger.debug(
+        "api_request_read_loot_totals active_run=%s run_id=%s rows=%s",
+        active_run,
+        resolved_run_id,
+        len(rows),
+    )
+    return [MiningLootTotalDto.from_row(row) for row in rows]
 
 
 def _now_ms() -> int:

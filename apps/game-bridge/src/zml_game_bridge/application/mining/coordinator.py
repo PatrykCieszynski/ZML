@@ -14,6 +14,7 @@ from zml_game_bridge.application.mining.drops.finder_correlator import (
     FinderDropCorrelator,
 )
 from zml_game_bridge.application.mining.equipment.service import MiningEquipmentService
+from zml_game_bridge.application.mining.loot import MiningLootRecorder
 from zml_game_bridge.application.mining.settings import (
     IdFactory,
     MiningCoordinatorConfig,
@@ -22,7 +23,10 @@ from zml_game_bridge.application.mining.settings import (
 )
 from zml_game_bridge.application.position.provider import PositionProvider
 from zml_game_bridge.domain.mining_cost import MiningEquipmentProfile, calculate_extraction_cost
+from zml_game_bridge.domain.mining_events import MiningLootTotalsUpdatedEvent
+from zml_game_bridge.domain.money import Mpec
 from zml_game_bridge.events.base import EventBase, SignalBase
+from zml_game_bridge.inputs.chat.signals import ItemReceivedSignal
 from zml_game_bridge.resources.mining_resources import MiningResourceCatalog
 from zml_game_bridge.runtime.db_commands import DbCommand
 from zml_game_bridge.runtime.runtime_commands import RuntimeCommand, RuntimeCommandResult
@@ -76,11 +80,33 @@ class MiningCoordinator:
             config=resolved_config,
             id_factory=id_factory,
         )
+        loot_recorder: Callable[
+            [ItemReceivedSignal, Mpec | None, int | None, str | None],
+            MiningLootTotalsUpdatedEvent | None,
+        ] | None = None
+        if db_command_executor is not None:
+            loot_service = MiningLootRecorder(db_command_executor)
+
+            def record_loot_item(
+                signal: ItemReceivedSignal,
+                extraction_cost_mpec: Mpec | None,
+                run_id: int | None,
+                segment_id: str | None,
+            ) -> MiningLootTotalsUpdatedEvent | None:
+                return loot_service.record_item(
+                    signal,
+                    extraction_cost_mpec=extraction_cost_mpec,
+                    run_id=run_id,
+                    segment_id=segment_id,
+                )
+
+            loot_recorder = record_loot_item
         self._chat = MiningChatCorrelator(
             resource_catalog=resource_catalog,
             extraction_cost_provider=lambda: calculate_extraction_cost(resolved_profile_provider()),
             run_id_provider=run_id_provider,
             segment_id_provider=segment_id_provider,
+            loot_recorder=loot_recorder,
         )
         self._claim_lifecycle = ClaimLifecycleCorrelator(
             config=resolved_config,

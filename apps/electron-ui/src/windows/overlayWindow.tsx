@@ -17,12 +17,12 @@ export function OverlayWindow() {
   const [preferences] = useOverlayPreferences();
   const stats = useMemo(() => {
     const dropCostMpec = state.miningDrops.reduce((sum, drop) => sum + drop.cost.totalMpec, 0);
-    const extractionCostMpec = state.miningLoot.reduce(
-      (sum, item) => sum + (item.extractionCostMpec ?? 0),
+    const extractionCostMpec = state.miningLootTotals.reduce(
+      (sum, item) => sum + item.extractionCostMpec,
       0,
     );
     const costMpec = dropCostMpec + extractionCostMpec;
-    const returnMpec = state.miningLoot.reduce((sum, item) => sum + item.valueMpec, 0);
+    const returnMpec = state.miningLootTotals.reduce((sum, item) => sum + item.valueMpec, 0);
     const hitCount = state.miningDrops.filter((drop) => drop.result === "hit").length;
     return {
       costMpec,
@@ -30,7 +30,7 @@ export function OverlayWindow() {
       profitMpec: returnMpec - costMpec,
       hitRate: state.miningDrops.length === 0 ? null : hitCount / state.miningDrops.length,
     };
-  }, [state.miningDrops, state.miningLoot]);
+  }, [state.miningDrops, state.miningLootTotals]);
   const metrics = useMemo<OverlayMetric[]>(
     () => {
       const allMetrics: OverlayMetric[] = [

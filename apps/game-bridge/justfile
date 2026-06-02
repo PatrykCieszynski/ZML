@@ -8,7 +8,7 @@ dev:
     uv run python -m zml_game_bridge.dev_cli serve
 
 ocr:
-    uv run python -m zml_game_bridge.dev_cli serve --mode live
+    uv run python -m zml_game_bridge.dev_cli serve --mode live --position-roi-snapshots
 
 mock:
     uv run python -m zml_game_bridge.dev_cli serve --mode mock

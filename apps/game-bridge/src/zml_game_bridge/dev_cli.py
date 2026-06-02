@@ -92,9 +92,7 @@ def _apply_env_overrides(
     if position_roi_snapshot_interval_s is not None:
         if position_roi_snapshot_interval_s <= 0:
             raise typer.BadParameter("position ROI snapshot interval must be greater than 0")
-        os.environ["ZML_POSITION_ROI_SNAPSHOT_INTERVAL_S"] = str(
-            position_roi_snapshot_interval_s
-        )
+        os.environ["ZML_POSITION_ROI_SNAPSHOT_INTERVAL_S"] = str(position_roi_snapshot_interval_s)
     if ocr_profiling:
         os.environ["ZML_OCR_PROFILING"] = "1"
     if ocr_profiling_interval_s is not None:

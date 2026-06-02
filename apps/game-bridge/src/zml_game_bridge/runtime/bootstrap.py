@@ -80,6 +80,7 @@ def build_runtime_components(settings: Settings) -> RuntimeComponents:
         pending_inputs=pending_inputs,
         pending_events=pending_events,
         input_processor=mining_coordinator,
+        live_events=persisted_events,
     )
     db_writer_worker = DbWriterWorker(
         db_path=settings.db_path,

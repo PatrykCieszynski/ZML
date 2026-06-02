@@ -9,6 +9,7 @@ import type {
   MiningClaimDto,
   MiningDropDto,
   MiningLootItemDto,
+  MiningLootTotalDto,
   MiningToolProfileDto,
   OcrPositionDTO,
   OcrPositionEvent,
@@ -35,6 +36,7 @@ export type ZmlRendererState = {
   miningClaims: MiningClaimDto[];
   miningDrops: MiningDropDto[];
   miningLoot: MiningLootItemDto[];
+  miningLootTotals: MiningLootTotalDto[];
   miningTools: MiningToolProfileDto[];
   activeMiningTools?: ActiveMiningToolsDto;
   agentHealth?: AgentHealthDto;
@@ -61,6 +63,7 @@ const initialState: ZmlRendererState = {
   miningClaims: [],
   miningDrops: [],
   miningLoot: [],
+  miningLootTotals: [],
   miningTools: [],
   activeMiningTools: undefined,
   agentHealthChecking: false,
@@ -111,6 +114,7 @@ function applyBootstrap(bootstrap: BootstrapState): void {
     miningClaims: bootstrap.miningClaims ?? state.miningClaims,
     miningDrops: bootstrap.miningDrops ?? state.miningDrops,
     miningLoot: bootstrap.miningLoot ?? state.miningLoot,
+    miningLootTotals: bootstrap.miningLootTotals ?? state.miningLootTotals,
     miningTools: bootstrap.miningTools ?? state.miningTools,
     activeMiningTools: bootstrap.activeMiningTools ?? state.activeMiningTools,
     error: null,
@@ -554,6 +558,7 @@ export async function deleteRun(runId: number): Promise<void> {
       miningClaims: deletingActive ? [] : state.miningClaims,
       miningDrops: deletingActive ? [] : state.miningDrops,
       miningLoot: deletingActive ? [] : state.miningLoot,
+      miningLootTotals: deletingActive ? [] : state.miningLootTotals,
       runCommandPending: false,
       lastCommandError: null,
     });

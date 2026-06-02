@@ -10,6 +10,7 @@ from zml_game_bridge.api.routes.mining import (
     list_mining_claims,
     list_mining_drops,
     list_mining_loot,
+    list_mining_loot_totals,
     mark_mining_claim_depleted,
 )
 from zml_game_bridge.application.mining.claims.commands import (
@@ -22,7 +23,6 @@ from zml_game_bridge.domain.mining_events import (
     MiningClaimDepletedEvent,
     MiningClaimIgnoredEvent,
     MiningDropEvent,
-    MiningItemReceivedEvent,
 )
 from zml_game_bridge.domain.money import Mpec
 from zml_game_bridge.domain.position import WorldPos
@@ -30,7 +30,7 @@ from zml_game_bridge.persistence.event_projector import CompositeEventProjector
 from zml_game_bridge.persistence.event_writer import EventWriter
 from zml_game_bridge.persistence.mining_claims import MiningClaimProjector
 from zml_game_bridge.persistence.mining_drops import MiningDropProjector
-from zml_game_bridge.persistence.mining_loot import MiningLootProjector
+from zml_game_bridge.persistence.mining_loot import RecordMiningLootItemCommand
 from zml_game_bridge.persistence.runs import RunStore
 from zml_game_bridge.persistence.schema import ensure_schema
 from zml_game_bridge.persistence.sqlite import open_sqlite
@@ -190,18 +190,25 @@ def test_list_mining_loot_returns_items_for_run(tmp_path: Path) -> None:
                 ts_ms=1_000,
                 status="running",
             )
-        writer = EventWriter(conn, projector=MiningLootProjector())
-        writer.write(_loot_event(item_name="Blue Crystal", run_id=1, value_mpec=16_000))
-        writer.write(_loot_event(item_name="Crude Oil", run_id=None, value_mpec=10_000))
+        with conn:
+            _record_loot_item(conn, item_name="Blue Crystal", run_id=1, value_mpec=16_000)
+            _record_loot_item(conn, item_name="Crude Oil", run_id=None, value_mpec=10_000)
 
         loot = list_mining_loot(conn, run_id=1)
+        totals = list_mining_loot_totals(conn, run_id=1)
 
         assert len(loot) == 1
         assert loot[0].run_id == 1
+        assert loot[0].segment_id is None
         assert loot[0].item_name == "Blue Crystal"
         assert loot[0].qty == 8
         assert loot[0].value_mpec == 16_000
         assert loot[0].extraction_cost_mpec == 125
+        assert len(totals) == 1
+        assert totals[0].scope == "run"
+        assert totals[0].run_id == 1
+        assert totals[0].item_name == "Blue Crystal"
+        assert totals[0].event_count == 1
     finally:
         conn.close()
 
@@ -247,13 +254,14 @@ def _claim_created_event(
     )
 
 
-def _loot_event(
+def _record_loot_item(
+    conn: sqlite3.Connection,
     *,
     item_name: str,
     run_id: int | None,
     value_mpec: int,
-) -> MiningItemReceivedEvent:
-    return MiningItemReceivedEvent(
+) -> None:
+    RecordMiningLootItemCommand(
         event_dt=datetime(2026, 1, 10, 12, 37, 50),
         item_name=item_name,
         qty=8,
@@ -261,7 +269,9 @@ def _loot_event(
         raw="raw",
         extraction_cost_mpec=Mpec(125),
         run_id=run_id,
-    )
+        segment_id=None,
+        created_ts_ms=value_mpec,
+    ).execute(conn)
 
 
 class _RuntimeStub:

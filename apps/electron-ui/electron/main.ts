@@ -23,7 +23,11 @@ import { startMockPositionSource } from "./mocks/mockPositionSource.ts";
 import { pushPosition } from "./ipc/pushPosition.ts";
 import { pushStatePatch } from "./ipc/pushStatePatch.ts";
 import { applyMiningEvent, replaceMiningClaims, replaceMiningDrops } from "./mining/miningDropsState.ts";
-import { applyMiningLootEvent, replaceMiningLoot } from "./mining/miningLootState.ts";
+import {
+  applyMiningLootEvent,
+  replaceMiningLoot,
+  replaceMiningLootTotals,
+} from "./mining/miningLootState.ts";
 import { applyRunEvent, replaceActiveRun, replaceRunSegments } from "./runs/runSegmentsState.ts";
 import type { PositionSourceOptions, PositionSourceStatus, StopPositionSource } from "./agent/positionSource.ts";
 
@@ -92,14 +96,16 @@ function handleEventStreamStatus(status: AgentEventStreamStatus, err?: string) {
 
 async function refreshMiningSnapshot() {
   try {
-    const [miningClaims, miningDrops, miningLoot] = await Promise.all([
+    const [miningClaims, miningDrops, miningLoot, miningLootTotals] = await Promise.all([
       agentRestClient.listMiningClaims({ active: false, activeRun: true }),
       agentRestClient.listMiningDrops({ activeRun: true }),
       agentRestClient.listMiningLoot({ activeRun: true }),
+      agentRestClient.listMiningLootTotals({ activeRun: true }),
     ]);
     replaceMiningClaims(miningClaims);
     replaceMiningDrops(miningDrops);
     replaceMiningLoot(miningLoot);
+    replaceMiningLootTotals(miningLootTotals);
   } catch (error) {
     runtime.lastError = error instanceof Error ? error.message : String(error);
     pushStatePatch({

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 
 SCHEMA_DDL = """
 -- =========================
@@ -173,6 +173,60 @@ CREATE TABLE IF NOT EXISTS mining_loot_items (
 
 CREATE INDEX IF NOT EXISTS idx_mining_loot_run_id ON mining_loot_items(run_id, created_ts_ms);
 CREATE INDEX IF NOT EXISTS idx_mining_loot_item_name ON mining_loot_items(item_name);
+
+CREATE TABLE IF NOT EXISTS mining_loot_recent (
+    loot_id                 INTEGER PRIMARY KEY,
+    created_ts_ms           INTEGER NOT NULL,
+    event_dt                TEXT,
+    run_id                  INTEGER REFERENCES runs(run_id) ON DELETE SET NULL,
+    segment_id              TEXT REFERENCES run_segments(segment_id) ON DELETE SET NULL,
+
+    item_name               TEXT NOT NULL,
+    qty                     INTEGER NOT NULL,
+    value_mpec              INTEGER NOT NULL,
+    extraction_cost_mpec    INTEGER,
+    raw                     TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_mining_loot_recent_run_id
+    ON mining_loot_recent(run_id, created_ts_ms);
+CREATE INDEX IF NOT EXISTS idx_mining_loot_recent_segment_id
+    ON mining_loot_recent(segment_id, created_ts_ms);
+CREATE INDEX IF NOT EXISTS idx_mining_loot_recent_item_name
+    ON mining_loot_recent(item_name);
+
+CREATE TABLE IF NOT EXISTS run_item_totals (
+    run_id                  INTEGER NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
+    item_name               TEXT NOT NULL,
+    qty                     INTEGER NOT NULL DEFAULT 0,
+    value_mpec              INTEGER NOT NULL DEFAULT 0,
+    extraction_cost_mpec    INTEGER NOT NULL DEFAULT 0,
+    event_count             INTEGER NOT NULL DEFAULT 0,
+    first_seen_ts_ms        INTEGER NOT NULL,
+    last_seen_ts_ms         INTEGER NOT NULL,
+
+    PRIMARY KEY (run_id, item_name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_run_item_totals_run_value
+    ON run_item_totals(run_id, value_mpec);
+
+CREATE TABLE IF NOT EXISTS segment_item_totals (
+    segment_id              TEXT NOT NULL REFERENCES run_segments(segment_id) ON DELETE CASCADE,
+    run_id                  INTEGER NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
+    item_name               TEXT NOT NULL,
+    qty                     INTEGER NOT NULL DEFAULT 0,
+    value_mpec              INTEGER NOT NULL DEFAULT 0,
+    extraction_cost_mpec    INTEGER NOT NULL DEFAULT 0,
+    event_count             INTEGER NOT NULL DEFAULT 0,
+    first_seen_ts_ms        INTEGER NOT NULL,
+    last_seen_ts_ms         INTEGER NOT NULL,
+
+    PRIMARY KEY (segment_id, item_name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_segment_item_totals_run_id
+    ON segment_item_totals(run_id);
 
 -- =========================
 -- App state:

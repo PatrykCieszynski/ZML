@@ -2,7 +2,7 @@ import type { OcrPositionEvent } from "../events/envelope";
 import type { OcrPositionDTO } from "../dto/ocrPosition";
 import type { MiningClaimDto } from "../dto/miningClaims";
 import type { MiningDropDto } from "../dto/miningDrops";
-import type { MiningLootItemDto } from "../dto/miningLoot";
+import type { MiningLootItemDto, MiningLootTotalDto } from "../dto/miningLoot";
 import type { ActiveMiningToolsDto, MiningToolProfileDto } from "../dto/miningTools";
 import type { RunDto, RunSegmentDto } from "../agent/runs";
 import type { BootstrapAgentState, BootstrapStreamsState } from "./bootstrap";
@@ -24,6 +24,7 @@ export type RuntimeStatePatch = {
     miningClaims?: MiningClaimDto[];
     miningDrops?: MiningDropDto[];
     miningLoot?: MiningLootItemDto[];
+    miningLootTotals?: MiningLootTotalDto[];
     miningTools?: MiningToolProfileDto[];
     activeMiningTools?: ActiveMiningToolsDto;
 };

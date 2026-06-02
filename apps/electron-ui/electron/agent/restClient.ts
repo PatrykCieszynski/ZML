@@ -8,6 +8,7 @@ import {
   isMiningClaimWire,
   isMiningDropWire,
   isMiningLootItemWire,
+  isMiningLootTotalWire,
   isMiningToolProfileWire,
   setActiveMiningToolsRequestToWire,
   startRunRequestToWire,
@@ -18,6 +19,7 @@ import {
   wireToMiningClaimDto,
   wireToMiningDropDto,
   wireToMiningLootItemDto,
+  wireToMiningLootTotalDto,
   wireToMiningToolProfileDto,
   wireToRunSegmentDto,
   wireToRunDto,
@@ -27,6 +29,7 @@ import {
   type MiningClaimDto,
   type MiningDropDto,
   type MiningLootItemDto,
+  type MiningLootTotalDto,
   type MiningToolProfileDto,
   type RunDto,
   type RunSegmentDto,
@@ -63,6 +66,7 @@ export type AgentClient = {
   ignoreMiningClaim: (claimId: string, request?: IgnoreMiningClaimRequest) => Promise<MiningClaimDto>;
   listMiningDrops: (request?: ListMiningDropsRequest) => Promise<MiningDropDto[]>;
   listMiningLoot: (request?: ListMiningLootRequest) => Promise<MiningLootItemDto[]>;
+  listMiningLootTotals: (request?: ListMiningLootTotalsRequest) => Promise<MiningLootTotalDto[]>;
   listMiningTools: () => Promise<MiningToolProfileDto[]>;
   createMiningTool: (request: CreateMiningToolProfileRequest) => Promise<MiningToolProfileDto>;
   deleteMiningTool: (toolId: string) => Promise<void>;
@@ -92,6 +96,12 @@ export type ListMiningDropsRequest = {
 
 export type ListMiningLootRequest = {
   runId?: number;
+  activeRun?: boolean;
+};
+
+export type ListMiningLootTotalsRequest = {
+  runId?: number;
+  segmentId?: string;
   activeRun?: boolean;
 };
 
@@ -275,6 +285,29 @@ export class AgentRestClient implements AgentClient {
       throw new Error("Agent mining loot returned an invalid payload");
     }
     return data.map(wireToMiningLootItemDto);
+  }
+
+  async listMiningLootTotals(
+    request: ListMiningLootTotalsRequest = {},
+  ): Promise<MiningLootTotalDto[]> {
+    const params = new URLSearchParams();
+    if (request.runId !== undefined) {
+      params.set("run_id", String(request.runId));
+    }
+    if (request.segmentId !== undefined) {
+      params.set("segment_id", request.segmentId);
+    }
+    if (request.activeRun !== undefined) {
+      params.set("active_run", request.activeRun ? "yes" : "no");
+    }
+
+    const serializedParams = params.toString();
+    const query = serializedParams ? `?${serializedParams}` : "";
+    const data = await this.getJson(`/api/v1/mining/loot/totals${query}`);
+    if (!Array.isArray(data) || !data.every(isMiningLootTotalWire)) {
+      throw new Error("Agent mining loot totals returned an invalid payload");
+    }
+    return data.map(wireToMiningLootTotalDto);
   }
 
   async listMiningTools(): Promise<MiningToolProfileDto[]> {

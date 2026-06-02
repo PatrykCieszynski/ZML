@@ -5,6 +5,7 @@ import type {
     MiningClaimDto,
     MiningDropDto,
     MiningLootItemDto,
+    MiningLootTotalDto,
     MiningToolKind,
     MiningToolProfileDto,
     RunDto,
@@ -20,6 +21,7 @@ import type {
     ListMiningClaimsRequest,
     ListMiningDropsRequest,
     ListMiningLootRequest,
+    ListMiningLootTotalsRequest,
 } from "../agent/restClient.ts";
 
 const MOCK_MINING_CLAIMS: MiningClaimDto[] = [
@@ -268,6 +270,16 @@ export class MockAgentRestClient implements AgentClient {
         return MOCK_MINING_LOOT.filter((item) => item.runId === runId);
     }
 
+    async listMiningLootTotals(
+        request: ListMiningLootTotalsRequest = {},
+    ): Promise<MiningLootTotalDto[]> {
+        const loot = await this.listMiningLoot({
+            runId: request.runId,
+            activeRun: request.activeRun,
+        });
+        return buildMockLootTotals(loot);
+    }
+
     async listMiningTools(): Promise<MiningToolProfileDto[]> {
         return [...this.miningTools];
     }
@@ -409,11 +421,32 @@ function createMockMiningLoot(
         createdTsMs,
         eventDt: new Date(createdTsMs).toISOString(),
         runId: 1,
+        segmentId: null,
         itemName,
         qty,
         valueMpec,
         extractionCostMpec,
     };
+}
+
+function buildMockLootTotals(loot: MiningLootItemDto[]): MiningLootTotalDto[] {
+    const rows = new Map<string, MiningLootTotalDto>();
+    for (const item of loot) {
+        const current = rows.get(item.itemName);
+        rows.set(item.itemName, {
+            scope: "run",
+            runId: item.runId ?? 1,
+            segmentId: null,
+            itemName: item.itemName,
+            qty: (current?.qty ?? 0) + item.qty,
+            valueMpec: (current?.valueMpec ?? 0) + item.valueMpec,
+            extractionCostMpec: (current?.extractionCostMpec ?? 0) + (item.extractionCostMpec ?? 0),
+            eventCount: (current?.eventCount ?? 0) + 1,
+            firstSeenTsMs: Math.min(current?.firstSeenTsMs ?? item.createdTsMs, item.createdTsMs),
+            lastSeenTsMs: Math.max(current?.lastSeenTsMs ?? item.createdTsMs, item.createdTsMs),
+        });
+    }
+    return [...rows.values()].sort((a, b) => b.valueMpec - a.valueMpec);
 }
 
 function createMockMiningClaim(

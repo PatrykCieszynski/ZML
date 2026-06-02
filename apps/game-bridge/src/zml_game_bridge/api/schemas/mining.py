@@ -6,7 +6,7 @@ from zml_game_bridge.domain.money import mpec_to_int
 from zml_game_bridge.domain.position import WorldPos
 from zml_game_bridge.persistence.mining_claims import MiningClaimRow
 from zml_game_bridge.persistence.mining_drops import MiningDropRow
-from zml_game_bridge.persistence.mining_loot import MiningLootItemRow
+from zml_game_bridge.persistence.mining_loot import MiningLootItemRow, MiningLootTotalRow
 
 
 class MiningDropPositionDto(BaseModel):
@@ -183,6 +183,7 @@ class MiningLootItemDto(BaseModel):
     created_ts_ms: int
     event_dt: str | None
     run_id: int | None
+    segment_id: str | None
     item_name: str
     qty: int
     value_mpec: int
@@ -195,6 +196,7 @@ class MiningLootItemDto(BaseModel):
             created_ts_ms=row.created_ts_ms,
             event_dt=row.event_dt.isoformat() if row.event_dt is not None else None,
             run_id=row.run_id,
+            segment_id=row.segment_id,
             item_name=row.item_name,
             qty=row.qty,
             value_mpec=mpec_to_int(row.value_mpec),
@@ -203,4 +205,34 @@ class MiningLootItemDto(BaseModel):
                 if row.extraction_cost_mpec is not None
                 else None
             ),
+        )
+
+
+class MiningLootTotalDto(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    scope: str
+    run_id: int
+    segment_id: str | None
+    item_name: str
+    qty: int
+    value_mpec: int
+    extraction_cost_mpec: int
+    event_count: int
+    first_seen_ts_ms: int
+    last_seen_ts_ms: int
+
+    @classmethod
+    def from_row(cls, row: MiningLootTotalRow) -> MiningLootTotalDto:
+        return cls(
+            scope=row.scope,
+            run_id=row.run_id,
+            segment_id=row.segment_id,
+            item_name=row.item_name,
+            qty=row.qty,
+            value_mpec=mpec_to_int(row.value_mpec),
+            extraction_cost_mpec=mpec_to_int(row.extraction_cost_mpec),
+            event_count=row.event_count,
+            first_seen_ts_ms=row.first_seen_ts_ms,
+            last_seen_ts_ms=row.last_seen_ts_ms,
         )

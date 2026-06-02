@@ -4,6 +4,7 @@ import type {
   MiningClaimDto,
   MiningDropDto,
   MiningLootItemDto,
+  MiningLootTotalDto,
   MiningResourceType,
   MiningToolKind,
   MiningToolProfileDto,
@@ -91,8 +92,8 @@ export function MainWindow() {
     [state.miningTools, state.activeMiningTools],
   );
   const runStats = useMemo(
-    () => getRunStats(state.miningDrops, state.miningClaims, state.miningLoot),
-    [state.miningDrops, state.miningClaims, state.miningLoot],
+    () => getRunStats(state.miningDrops, state.miningClaims, state.miningLootTotals),
+    [state.miningDrops, state.miningClaims, state.miningLootTotals],
   );
   const feed = useMemo(
     () => buildFeed(state.miningDrops, state.miningClaims, state.miningLoot),
@@ -273,7 +274,7 @@ export function MainWindow() {
                 claims={state.miningClaims}
               />
             )}
-            {view === "loot" && <LootView loot={state.miningLoot} />}
+            {view === "loot" && <LootView loot={state.miningLoot} totals={state.miningLootTotals} />}
             {view === "claims" && <ClaimsView claims={state.miningClaims} />}
             {view === "setup" && (
               <MiningToolsPanel
@@ -639,11 +640,13 @@ function SegmentsView({
   );
 }
 
-function LootView({ loot }: { loot: MiningLootItemDto[] }) {
-  const totalMpec = loot.reduce((sum, item) => sum + item.valueMpec, 0);
-  const extractionCostMpec = totalExtractionCostMpec(loot);
+function LootView({ loot, totals }: { loot: MiningLootItemDto[]; totals: MiningLootTotalDto[] }) {
+  const runTotals = useMemo(() => totals.filter((item) => item.scope === "run"), [totals]);
+  const totalMpec = runTotals.reduce((sum, item) => sum + item.valueMpec, 0);
+  const extractionCostMpec = totalExtractionCostMpec(runTotals);
   const netMpec = totalMpec - extractionCostMpec;
-  const rows = useMemo(() => buildLootAggregation(loot), [loot]);
+  const rows = useMemo(() => buildLootAggregation(runTotals), [runTotals]);
+  const eventCount = runTotals.reduce((sum, item) => sum + item.eventCount, 0);
 
   return (
     <section className="zml-work-panel">
@@ -656,11 +659,11 @@ function LootView({ loot }: { loot: MiningLootItemDto[] }) {
       </div>
       <div className="zml-claim-summary-grid">
         <ClaimSummaryCard label="Items" value={String(rows.length)} />
-        <ClaimSummaryCard label="Events" value={String(loot.length)} />
+        <ClaimSummaryCard label="Events" value={String(eventCount)} />
         <ClaimSummaryCard label="Return" value={formatPedFromMpec(totalMpec)} />
         <ClaimSummaryCard label="Net Return" value={formatPedFromMpec(netMpec)} />
       </div>
-      {loot.length === 0 ? (
+      {rows.length === 0 ? (
         <EmptyState text="No loot recorded for this run" />
       ) : (
         <>
@@ -706,6 +709,7 @@ function LootView({ loot }: { loot: MiningLootItemDto[] }) {
             <div>
               <h2>Loot History</h2>
               <span>Raw chat-derived item received events</span>
+              <span>Latest {loot.length} entries</span>
             </div>
           </div>
           <div className="zml-table-wrap">
@@ -1589,25 +1593,18 @@ function buildClaimDistribution(
     .sort((a, b) => b.count - a.count || a.resourceName.localeCompare(b.resourceName));
 }
 
-function buildLootAggregation(loot: MiningLootItemDto[]): LootAggregationRow[] {
-  const totalMpec = loot.reduce((sum, item) => sum + item.valueMpec, 0);
-  const rows = new Map<string, LootAggregationRow>();
-
-  for (const item of loot) {
-    const current = rows.get(item.itemName);
-    const extractionCostMpec = item.extractionCostMpec ?? 0;
-    rows.set(item.itemName, {
+function buildLootAggregation(totals: MiningLootTotalDto[]): LootAggregationRow[] {
+  const totalMpec = totals.reduce((sum, item) => sum + item.valueMpec, 0);
+  return totals
+    .map((item) => ({
       itemName: item.itemName,
-      eventCount: (current?.eventCount ?? 0) + 1,
-      qty: (current?.qty ?? 0) + item.qty,
-      valueMpec: (current?.valueMpec ?? 0) + item.valueMpec,
-      extractionCostMpec: (current?.extractionCostMpec ?? 0) + extractionCostMpec,
-      netMpec: (current?.netMpec ?? 0) + item.valueMpec - extractionCostMpec,
+      eventCount: item.eventCount,
+      qty: item.qty,
+      valueMpec: item.valueMpec,
+      extractionCostMpec: item.extractionCostMpec,
+      netMpec: item.valueMpec - item.extractionCostMpec,
       percent: 0,
-    });
-  }
-
-  return [...rows.values()]
+    }))
     .map((row) => ({
       ...row,
       percent: totalMpec === 0 ? 0 : row.valueMpec / totalMpec,
@@ -1639,16 +1636,21 @@ function emptyStringToNull(value: string): string | null {
   return value === "" ? null : value;
 }
 
-function getRunStats(drops: MiningDropDto[], claims: MiningClaimDto[], loot: MiningLootItemDto[]): RunStats {
+function getRunStats(
+  drops: MiningDropDto[],
+  claims: MiningClaimDto[],
+  lootTotals: MiningLootTotalDto[],
+): RunStats {
+  const runLootTotals = lootTotals.filter((item) => item.scope === "run");
   const hitCount = drops.filter((drop) => drop.result === "hit").length;
   const noResourceCount = drops.filter((drop) => drop.result === "no_resources").length;
   const activeClaimCount = claims.filter((claim) => claim.status === "active").length;
   const depletedClaimCount = claims.filter((claim) => claim.status === "depleted").length;
   const totalClaimCount = claims.filter((claim) => claim.status !== "ignored").length;
   const totalCostPed =
-    (drops.reduce((sum, drop) => sum + drop.cost.totalMpec, 0) + totalExtractionCostMpec(loot)) /
+    (drops.reduce((sum, drop) => sum + drop.cost.totalMpec, 0) + totalExtractionCostMpec(runLootTotals)) /
     100_000;
-  const totalReturnPed = loot.reduce((sum, item) => sum + item.valueMpec, 0) / 100_000;
+  const totalReturnPed = runLootTotals.reduce((sum, item) => sum + item.valueMpec, 0) / 100_000;
 
   return {
     dropCount: drops.length,
@@ -1908,8 +1910,8 @@ function formatPedFromMpec(value: number | null | undefined): string {
   return formatPed(value / 100_000);
 }
 
-function totalExtractionCostMpec(loot: MiningLootItemDto[]): number {
-  return loot.reduce((sum, item) => sum + (item.extractionCostMpec ?? 0), 0);
+function totalExtractionCostMpec(lootTotals: MiningLootTotalDto[]): number {
+  return lootTotals.reduce((sum, item) => sum + item.extractionCostMpec, 0);
 }
 
 function formatPed(value: number): string {

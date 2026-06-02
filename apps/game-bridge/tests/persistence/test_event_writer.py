@@ -1,15 +1,13 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import ClassVar
 
-from zml_game_bridge.domain.mining_events import (
-    MiningClaimDeedReceivedEvent,
-    MiningItemReceivedEvent,
-)
+from zml_game_bridge.domain.mining_events import MiningClaimDeedReceivedEvent
 from zml_game_bridge.domain.money import Mpec
 from zml_game_bridge.events.base import EventBase
 from zml_game_bridge.events.envelope import EventEnvelope
@@ -73,16 +71,20 @@ def test_event_writer_stores_event_dt_and_raw_outside_payload(tmp_path: Path) ->
     conn = open_sqlite(db_path)
     ensure_schema(conn)
     event_dt = datetime(2026, 1, 10, 12, 37, 50)
-    raw = "2026-01-10 12:37:50 [System] [] You received Blue Crystal x (8) Value: 0.1600 PED"
+    raw = "deed raw\nclaimed raw"
 
     try:
         env = EventWriter(conn).write(
-            MiningItemReceivedEvent(
+            MiningClaimDeedReceivedEvent(
                 event_dt=event_dt,
-                item_name="Blue Crystal",
-                qty=8,
-                value_mpec=Mpec(16_000),
+                resource_name="Lysterium Stone",
+                mining_type="ore",
+                deed_item_name="Mineral Resource Deed",
+                qty=1,
+                value_mpec=Mpec(0),
                 raw=raw,
+                received_raw="deed raw",
+                claimed_raw="claimed raw",
             )
         )
     finally:
@@ -98,11 +100,18 @@ def test_event_writer_stores_event_dt_and_raw_outside_payload(tmp_path: Path) ->
         conn.close()
 
     assert row is not None
-    assert row["event_type"] == "MiningItemReceivedEvent"
-    assert (
-        row["payload_json"]
-        == '{"item_name":"Blue Crystal","qty":8,"value_mpec":16000,"extraction_cost_mpec":null,"run_id":null}'
-    )
+    assert row["event_type"] == "MiningClaimDeedReceivedEvent"
+    assert json.loads(row["payload_json"]) == {
+        "resource_name": "Lysterium Stone",
+        "mining_type": "ore",
+        "deed_item_name": "Mineral Resource Deed",
+        "qty": 1,
+        "value_mpec": 0,
+        "received_raw": "deed raw",
+        "claimed_raw": "claimed raw",
+        "run_id": None,
+        "segment_id": None,
+    }
     assert row["event_dt"] == "2026-01-10T12:37:50"
     assert row["raw"] == raw
 

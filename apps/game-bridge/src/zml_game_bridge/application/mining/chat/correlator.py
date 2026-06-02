@@ -8,7 +8,6 @@ from datetime import datetime, timedelta
 from zml_game_bridge.domain.mining_events import (
     MiningClaimDeedReceivedEvent,
     MiningEnhancerBrokeEvent,
-    MiningItemReceivedEvent,
 )
 from zml_game_bridge.domain.money import Mpec
 from zml_game_bridge.events.base import EventBase, SignalBase
@@ -48,6 +47,11 @@ class MiningChatCorrelator:
         extraction_cost_provider: ExtractionCostProvider | None = None,
         run_id_provider: RunIdProvider | None = None,
         segment_id_provider: SegmentIdProvider | None = None,
+        loot_recorder: Callable[
+            [ItemReceivedSignal, Mpec | None, int | None, str | None],
+            EventBase | None,
+        ]
+        | None = None,
         pending_deed_link_window_ms: int = DEFAULT_PENDING_DEED_LINK_WINDOW_MS,
     ) -> None:
         self._pending_deeds: list[PendingClaimDeed] = []
@@ -55,6 +59,7 @@ class MiningChatCorrelator:
         self._extraction_cost_provider = extraction_cost_provider or _missing_extraction_cost
         self._run_id_provider = run_id_provider or _missing_run_id
         self._segment_id_provider = segment_id_provider or _missing_segment_id
+        self._loot_recorder = loot_recorder
         self._pending_deed_link_window = timedelta(milliseconds=pending_deed_link_window_ms)
 
     def process_signal(self, signal: SignalBase) -> list[EventBase]:
@@ -145,7 +150,7 @@ class MiningChatCorrelator:
                 now,
             )
 
-    def _record_item_received(self, signal: ItemReceivedSignal) -> MiningItemReceivedEvent | None:
+    def _record_item_received(self, signal: ItemReceivedSignal) -> EventBase | None:
         resource = self._resource_catalog.get(signal.item_name)
         if resource is None or not resource.track_as_loot:
             logger.debug(
@@ -156,25 +161,30 @@ class MiningChatCorrelator:
             )
             return None
 
-        event = MiningItemReceivedEvent(
-            event_dt=signal.event_dt,
-            item_name=signal.item_name,
-            qty=signal.qty,
-            value_mpec=signal.value_mpec,
-            raw=signal.raw,
-            extraction_cost_mpec=self._extraction_cost_provider(),
-            run_id=self._run_id_provider(),
-        )
+        if self._loot_recorder is None:
+            logger.debug(
+                "item_received_ignored item=%r qty=%s value_mpec=%s reason=no_loot_recorder",
+                signal.item_name,
+                signal.qty,
+                signal.value_mpec,
+            )
+            return None
+
+        extraction_cost_mpec = self._extraction_cost_provider()
+        run_id = self._run_id_provider()
+        segment_id = self._segment_id_provider()
+        event = self._loot_recorder(signal, extraction_cost_mpec, run_id, segment_id)
         logger.debug(
-            "item_received_recorded event_type=%s item=%r qty=%s value_mpec=%s "
-            "extraction_cost_mpec=%s run_id=%s event_dt=%s",
-            type(event).__name__,
-            event.item_name,
-            event.qty,
-            event.value_mpec,
-            event.extraction_cost_mpec,
-            event.run_id,
-            event.event_dt,
+            "item_received_recorded item=%r qty=%s value_mpec=%s "
+            "extraction_cost_mpec=%s run_id=%s segment_id=%s update_event=%s event_dt=%s",
+            signal.item_name,
+            signal.qty,
+            signal.value_mpec,
+            extraction_cost_mpec,
+            run_id,
+            segment_id,
+            type(event).__name__ if event is not None else None,
+            signal.event_dt,
         )
         return event
 

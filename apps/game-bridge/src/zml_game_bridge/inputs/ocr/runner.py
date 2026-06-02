@@ -90,6 +90,7 @@ def start_ocr_input(
         logger.info("ocr_profiling_enabled interval_s=%s", ocr_profiling_config.interval_s)
 
     position_rois = roi_profile.position_rois.to_position_rois()
+    logger.info("ocr_profiling_enabled interval_s=%s", position_rois)
     position_pipeline = PositionPipeline(
         position_rois,
         profiler=profiler,

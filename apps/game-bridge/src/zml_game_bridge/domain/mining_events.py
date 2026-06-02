@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import ClassVar
 
 from zml_game_bridge.domain.mining_cost import DropCostBreakdown
 from zml_game_bridge.domain.money import Mpec
@@ -94,6 +95,8 @@ class MiningClaimCreatedEvent(EventBase):
 
 @dataclass(frozen=True, slots=True)
 class MiningItemReceivedEvent(EventBase):
+    persist: ClassVar[bool] = False
+
     event_dt: datetime
     item_name: str
     qty: int
@@ -101,6 +104,46 @@ class MiningItemReceivedEvent(EventBase):
     raw: str
     extraction_cost_mpec: Mpec | None = None
     run_id: int | None = None
+    segment_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class MiningLootItemSnapshot:
+    event_id: int
+    created_ts_ms: int
+    event_dt: datetime | None
+    run_id: int | None
+    segment_id: str | None
+    item_name: str
+    qty: int
+    value_mpec: Mpec
+    extraction_cost_mpec: Mpec | None
+
+
+@dataclass(frozen=True, slots=True)
+class MiningLootTotalSnapshot:
+    scope: str
+    run_id: int
+    segment_id: str | None
+    item_name: str
+    qty: int
+    value_mpec: Mpec
+    extraction_cost_mpec: Mpec
+    event_count: int
+    first_seen_ts_ms: int
+    last_seen_ts_ms: int
+
+
+@dataclass(frozen=True, slots=True)
+class MiningLootTotalsUpdatedEvent(EventBase):
+    persist: ClassVar[bool] = False
+
+    updated_ts_ms: int
+    run_id: int | None = None
+    segment_id: str | None = None
+    recent_item: MiningLootItemSnapshot | None = None
+    run_total: MiningLootTotalSnapshot | None = None
+    segment_total: MiningLootTotalSnapshot | None = None
 
 
 @dataclass(frozen=True, slots=True)
