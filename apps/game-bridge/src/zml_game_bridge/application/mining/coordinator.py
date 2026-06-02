@@ -80,10 +80,13 @@ class MiningCoordinator:
             config=resolved_config,
             id_factory=id_factory,
         )
-        loot_recorder: Callable[
-            [ItemReceivedSignal, Mpec | None, int | None, str | None],
-            MiningLootTotalsUpdatedEvent | None,
-        ] | None = None
+        loot_recorder: (
+            Callable[
+                [ItemReceivedSignal, Mpec | None, int | None, str | None],
+                MiningLootTotalsUpdatedEvent | None,
+            ]
+            | None
+        ) = None
         if db_command_executor is not None:
             loot_service = MiningLootRecorder(db_command_executor)
 
