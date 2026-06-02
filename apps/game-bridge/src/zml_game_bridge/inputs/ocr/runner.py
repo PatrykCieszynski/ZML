@@ -19,6 +19,7 @@ from zml_game_bridge.inputs.ocr.pipelines.mining_finder.pipeline import (
     MiningFinderPipeline,
     MiningFinderPipelineConfig,
 )
+from zml_game_bridge.inputs.ocr.pipelines.mining_finder.presence import FinderPresenceDetector
 from zml_game_bridge.inputs.ocr.pipelines.mining_finder.recording import (
     FinderCropRecorder,
     finder_recording_config_from_env,
@@ -58,6 +59,7 @@ def start_ocr_input(
     finder_recording_dir: Path | None = None,
     finder_recording_interval_s: float | None = None,
     finder_recording_max_samples: int | None = None,
+    finder_presence_check_enabled: bool | None = None,
     position_roi_snapshot_enabled: bool | None = None,
     position_roi_snapshot_dir: Path | None = None,
     position_roi_snapshot_interval_s: float | None = None,
@@ -118,6 +120,11 @@ def start_ocr_input(
     if finder_debug_logging:
         _configure_finder_debug_logging()
         logger.info("finder_debug_enabled")
+    if finder_presence_check_enabled is None:
+        finder_presence_check_enabled = _env_bool("ZML_FINDER_PRESENCE_CHECK", default=True)
+    finder_presence_detector = FinderPresenceDetector()
+    last_finder_present: bool | None = None
+    logger.info("finder_presence_check_enabled enabled=%s", finder_presence_check_enabled)
 
     finder_recording_config = finder_recording_config_from_env(
         modes=finder_recording_modes,
@@ -217,14 +224,33 @@ def start_ocr_input(
                 with profiler.measure("finder.screen_crop"):
                     finder = roi_profile.screen_rois.finder.crop(frame)
                 if finder is not None:
-                    finder_future = finder_executor.submit(
-                        _run_finder_step,
-                        finder_pipeline,
-                        finder,
-                        ts_ms,
-                        profiler,
-                        time.perf_counter(),
-                    )
+                    should_run_finder = True
+                    if finder_presence_check_enabled:
+                        with profiler.measure("finder.presence"):
+                            presence = finder_presence_detector.detect(finder)
+                        if finder_debug_logging and presence.present != last_finder_present:
+                            logger.debug(
+                                "finder_presence_changed present=%s score=%.3f "
+                                "panel_dark=%.3f grid=%.3f blue=%.3f green=%.3f",
+                                presence.present,
+                                presence.score,
+                                presence.panel_dark_score,
+                                presence.grid_score,
+                                presence.blue_score,
+                                presence.green_score,
+                            )
+                        last_finder_present = presence.present
+                        if not presence.present:
+                            should_run_finder = False
+                    if should_run_finder:
+                        finder_future = finder_executor.submit(
+                            _run_finder_step,
+                            finder_pipeline,
+                            finder,
+                            ts_ms,
+                            profiler,
+                            time.perf_counter(),
+                        )
 
             if tick % deeds_every_n == 0:
                 pass

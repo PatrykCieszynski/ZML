@@ -37,6 +37,7 @@ def _apply_env_overrides(
     finder_recording_dir: Path | None = None,
     finder_recording_interval_s: float | None = None,
     finder_recording_max_samples: int | None = None,
+    finder_presence_check: bool | None = None,
     position_roi_snapshots: bool | None = None,
     position_roi_snapshot_dir: Path | None = None,
     position_roi_snapshot_interval_s: float | None = None,
@@ -82,6 +83,8 @@ def _apply_env_overrides(
         if finder_recording_max_samples < 0:
             raise typer.BadParameter("finder recording max samples cannot be negative")
         os.environ["ZML_FINDER_RECORDING_MAX_SAMPLES"] = str(finder_recording_max_samples)
+    if finder_presence_check is not None:
+        os.environ["ZML_FINDER_PRESENCE_CHECK"] = "1" if finder_presence_check else "0"
     if position_roi_snapshots is not None:
         os.environ["ZML_POSITION_ROI_SNAPSHOTS"] = "1" if position_roi_snapshots else "0"
     if position_roi_snapshot_dir is not None:
@@ -141,6 +144,10 @@ def _settings_table(settings: Settings) -> Table:
     table.add_row("finder_recording_dir", str(settings.finder_recording_dir))
     table.add_row("finder_recording_interval_s", str(settings.finder_recording_interval_s))
     table.add_row("finder_recording_max_samples", str(settings.finder_recording_max_samples))
+    table.add_row(
+        "finder_presence_check_enabled",
+        _format_bool(settings.finder_presence_check_enabled),
+    )
     table.add_row(
         "position_roi_snapshot_enabled",
         _format_bool(settings.position_roi_snapshot_enabled),
@@ -213,6 +220,13 @@ def show_config(
             help="Maximum finder crop samples per OCR worker session.",
         ),
     ] = None,
+    finder_presence_check: Annotated[
+        bool | None,
+        typer.Option(
+            "--finder-presence-check/--no-finder-presence-check",
+            help="Skip finder OCR when a cheap visual check says the panel is not visible.",
+        ),
+    ] = None,
     position_roi_snapshots: Annotated[
         bool | None,
         typer.Option(
@@ -267,6 +281,7 @@ def show_config(
         finder_recording_dir=finder_recording_dir,
         finder_recording_interval_s=finder_recording_interval_s,
         finder_recording_max_samples=finder_recording_max_samples,
+        finder_presence_check=finder_presence_check,
         position_roi_snapshots=position_roi_snapshots,
         position_roi_snapshot_dir=position_roi_snapshot_dir,
         position_roi_snapshot_interval_s=position_roi_snapshot_interval_s,
@@ -325,6 +340,13 @@ def serve(
             help="Maximum finder crop samples per OCR worker session.",
         ),
     ] = None,
+    finder_presence_check: Annotated[
+        bool | None,
+        typer.Option(
+            "--finder-presence-check/--no-finder-presence-check",
+            help="Skip finder OCR when a cheap visual check says the panel is not visible.",
+        ),
+    ] = None,
     position_roi_snapshots: Annotated[
         bool | None,
         typer.Option(
@@ -379,6 +401,7 @@ def serve(
         finder_recording_dir=finder_recording_dir,
         finder_recording_interval_s=finder_recording_interval_s,
         finder_recording_max_samples=finder_recording_max_samples,
+        finder_presence_check=finder_presence_check,
         position_roi_snapshots=position_roi_snapshots,
         position_roi_snapshot_dir=position_roi_snapshot_dir,
         position_roi_snapshot_interval_s=position_roi_snapshot_interval_s,

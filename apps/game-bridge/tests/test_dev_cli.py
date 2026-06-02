@@ -22,6 +22,7 @@ def test_apply_env_overrides_sets_mock_mode(monkeypatch, tmp_path: Path) -> None
     monkeypatch.delenv("ZML_FINDER_RECORDING_DIR", raising=False)
     monkeypatch.delenv("ZML_FINDER_RECORDING_INTERVAL_S", raising=False)
     monkeypatch.delenv("ZML_FINDER_RECORDING_MAX_SAMPLES", raising=False)
+    monkeypatch.delenv("ZML_FINDER_PRESENCE_CHECK", raising=False)
     monkeypatch.delenv("ZML_POSITION_ROI_SNAPSHOTS", raising=False)
     monkeypatch.delenv("ZML_POSITION_ROI_SNAPSHOT_DIR", raising=False)
     monkeypatch.delenv("ZML_POSITION_ROI_SNAPSHOT_INTERVAL_S", raising=False)
@@ -41,6 +42,7 @@ def test_apply_env_overrides_sets_mock_mode(monkeypatch, tmp_path: Path) -> None
         finder_recording_dir=tmp_path / "finder-crops",
         finder_recording_interval_s=2.5,
         finder_recording_max_samples=3,
+        finder_presence_check=False,
         position_roi_snapshots=False,
         position_roi_snapshot_dir=tmp_path / "position-roi",
         position_roi_snapshot_interval_s=5.0,
@@ -61,6 +63,7 @@ def test_apply_env_overrides_sets_mock_mode(monkeypatch, tmp_path: Path) -> None
     assert os.environ["ZML_FINDER_RECORDING_DIR"] == str(tmp_path / "finder-crops")
     assert os.environ["ZML_FINDER_RECORDING_INTERVAL_S"] == "2.5"
     assert os.environ["ZML_FINDER_RECORDING_MAX_SAMPLES"] == "3"
+    assert os.environ["ZML_FINDER_PRESENCE_CHECK"] == "0"
     assert os.environ["ZML_POSITION_ROI_SNAPSHOTS"] == "0"
     assert os.environ["ZML_POSITION_ROI_SNAPSHOT_DIR"] == str(tmp_path / "position-roi")
     assert os.environ["ZML_POSITION_ROI_SNAPSHOT_INTERVAL_S"] == "5.0"
@@ -87,6 +90,7 @@ def test_config_command_prints_resolved_settings(monkeypatch, tmp_path: Path) ->
     assert "ocr_enabled" in result.output
     assert "ocr_profile_path" in result.output
     assert "finder_recording_modes" in result.output
+    assert "finder_presence_check_enabled" in result.output
     assert "position_roi_snapshot_enabled" in result.output
     assert "position_roi_snapshot_max_samples" in result.output
     assert "ocr_profiling_enabled" in result.output
