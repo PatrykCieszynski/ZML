@@ -26,7 +26,7 @@ from zml_backend.runtime.ocr_worker.supervisor import (
 from zml_backend.runtime.supervisor import WorkerSupervisor
 from zml_backend.settings import Settings
 
-_FAKE_AGENT = Path(__file__).parents[2] / "fixtures" / "fake_ocr_worker.py"
+_FAKE_WORKER = Path(__file__).parents[2] / "fixtures" / "fake_ocr_worker.py"
 
 
 @pytest.mark.timeout(8)
@@ -155,7 +155,7 @@ def _start_harness(
     environment = {"ZML_FAKE_OCR_SCENARIO": scenario}
     environment.update(extra_environment or {})
     process = OcrWorkerProcessConfig(
-        command=(sys.executable, str(_FAKE_AGENT)),
+        command=(sys.executable, str(_FAKE_WORKER)),
         environment=environment,
     )
     transports = transport_factory or StdioOcrProcessTransport
