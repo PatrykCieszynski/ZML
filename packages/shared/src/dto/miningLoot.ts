@@ -1,3 +1,4 @@
+import type { components } from "@zml/api-contract";
 import type { AgentEventEnvelope } from "./miningDrops";
 
 export type MiningLootItemDto = {
@@ -12,20 +13,10 @@ export type MiningLootItemDto = {
     extractionCostMpec: number | null;
 };
 
-export type MiningLootItemWire = {
-    event_id: number;
-    created_ts_ms: number;
-    event_dt: string | null;
-    run_id: number | null;
-    segment_id: string | null;
-    item_name: string;
-    qty: number;
-    value_mpec: number;
-    extraction_cost_mpec: number | null;
-};
+export type MiningLootItemWire = components["schemas"]["MiningLootItemDto"];
 
 export type MiningLootTotalDto = {
-    scope: "run" | "segment";
+    scope: MiningLootTotalWire["scope"];
     runId: number;
     segmentId: string | null;
     itemName: string;
@@ -37,18 +28,7 @@ export type MiningLootTotalDto = {
     lastSeenTsMs: number;
 };
 
-export type MiningLootTotalWire = {
-    scope: "run" | "segment";
-    run_id: number;
-    segment_id: string | null;
-    item_name: string;
-    qty: number;
-    value_mpec: number;
-    extraction_cost_mpec: number;
-    event_count: number;
-    first_seen_ts_ms: number;
-    last_seen_ts_ms: number;
-};
+export type MiningLootTotalWire = components["schemas"]["MiningLootTotalDto"];
 
 export type MiningItemReceivedEventWire = {
     run_id?: number | null;
