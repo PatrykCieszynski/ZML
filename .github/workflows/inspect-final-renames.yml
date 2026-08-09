@@ -76,6 +76,7 @@ jobs:
               ('Game Bridge', 'Backend'),
               ('Electron UI', 'Desktop'),
               ('electron-ui', 'desktop'),
+              ('game-bridge', 'backend'),
               ('AgentRestClientOptions', 'BackendRestClientOptions'),
               ('AgentRestClient', 'BackendRestClient'),
               ('AgentClient', 'BackendClient'),
@@ -84,6 +85,9 @@ jobs:
               ('isAgentHealthWire', 'isBackendHealthWire'),
               ('wireToAgentHealthDto', 'wireToBackendHealthDto'),
               ('AgentEventEnvelope', 'BackendEventEnvelope'),
+              ('getAgentHealth', 'getBackendHealth'),
+              ('refreshAgentHealth', 'refreshBackendHealth'),
+              ('agentHealth', 'backendHealth'),
               ('agentRestClient', 'backendRestClient'),
               ('agentClient', 'backendClient'),
               ('agentBaseUrl', 'backendBaseUrl'),
@@ -123,6 +127,7 @@ jobs:
           agent_env_cmd = Path('scripts/agent-env.cmd')
           if agent_env_cmd.exists():
               text = agent_env_cmd.read_text(encoding='utf-8')
+              text = text.replace('%REPO_ROOT%\\apps\\game-bridge\\.uv-cache', '%REPO_ROOT%\\.uv-cache')
               text = text.replace('%REPO_ROOT%\\apps\\backend\\.uv-cache', '%REPO_ROOT%\\.uv-cache')
               agent_env_cmd.write_text(text, encoding='utf-8')
           PY
@@ -138,7 +143,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.github -E 'electron-ui|game-bridge|ocr-agent|zml_game_bridge|zml_ocr_agent|@zml/electron-ui|zml-game-bridge|zml-ocr-agent|ZML_OCR_AGENT_PATH|OcrAgent|OCR Agent|AgentRestClient|AgentClient|AgentHealth|AgentEventEnvelope' .; then
+          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.github -E 'electron-ui|game-bridge|ocr-agent|zml_game_bridge|zml_ocr_agent|@zml/electron-ui|zml-game-bridge|zml-ocr-agent|ZML_OCR_AGENT_PATH|OcrAgent|OCR Agent|AgentRestClient|AgentClient|AgentHealth|AgentEventEnvelope|getAgentHealth|refreshAgentHealth|agentHealth' .; then
             echo 'Stale implementation name remains outside workflow files.' >&2
             exit 1
           fi
