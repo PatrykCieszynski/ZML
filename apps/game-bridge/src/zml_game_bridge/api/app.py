@@ -31,10 +31,11 @@ def create_app() -> FastAPI:
         loop = asyncio.get_running_loop()
         sse_hub = SseHub(loop)
         position_hub = PositionHub(loop)
+        supervisor = build_worker_supervisor(settings)
         runtime = AppRuntime(
             settings=settings,
-            components=build_runtime_components(settings),
-            supervisor=build_worker_supervisor(settings),
+            components=build_runtime_components(settings, supervisor=supervisor),
+            supervisor=supervisor,
             sse_hub=sse_hub,
             position_hub=position_hub,
         )

@@ -58,6 +58,9 @@ Z Mining Log is now a working local mining tracker prototype:
   - missing/lost Entropia window degrades health and retries instead of crashing OCR;
   - OCR still runs in-process, but `packages/ocr-protocol` now defines the
     strict version 1 DTO and NDJSON boundary for the planned OCR Agent;
+  - `AppRuntime` owns only the `OcrInputSource` lifecycle while
+    `EmbeddedOcrInputSource` adapts the current runner, position snapshots,
+    finder signals, preload, and worker health without changing behavior;
   - finder application signals live under `application.mining.signals.finder`,
     so mining logic no longer imports signal types from `inputs.ocr`.
 - Desktop lifecycle and packaging:
@@ -81,7 +84,7 @@ See `ROADMAP_2025-05-26.md` for the ordered roadmap. The highest-value items are
 
 1. Managed OCR Agent migration:
    - create the standalone OCR Agent application;
-   - add the embedded adapter and then subprocess supervisor behind a rollback flag;
+   - add the subprocess supervisor behind a rollback flag;
    - synchronize full configuration snapshots and validate real-game behavior;
    - package both executables before removing embedded OCR.
 
