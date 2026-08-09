@@ -65,7 +65,7 @@ Prerequisites:
 
 - Python **3.13** and [`uv`](https://docs.astral.sh/uv/)
 - Node.js **22**
-- Corepack / pnpm **10.27**
+- pnpm **10.27** (pinned by the root `package.json`)
 - [`just`](https://just.systems/)
 - Windows for live OCR and packaged runtime testing
 
@@ -73,7 +73,6 @@ From the repository root:
 
 ```powershell
 uv python install
-corepack enable
 pnpm install --frozen-lockfile
 just dev
 ```
