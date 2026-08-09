@@ -6,6 +6,27 @@
     "apps/*",
     "packages/*"
   ],
+  "scripts": {
+    "dev": "just dev",
+    "ocr-protocol:format": "just protocol format",
+    "ocr-protocol:verify": "just protocol verify",
+    "bridge:format": "just backend format",
+    "bridge:package": "just backend package",
+    "bridge:verify": "just backend verify",
+    "ocr-agent:format": "just ocr format",
+    "ocr-agent:package": "just ocr package",
+    "ocr-agent:verify": "just ocr verify",
+    "python:stage": "just stage-python",
+    "backend:stage": "just stage-python",
+    "shared:verify": "just shared verify",
+    "frontend:verify": "just shared verify && just desktop verify",
+    "frontend:build": "just build",
+    "frontend:package": "just shared build && just desktop package",
+    "verify": "just verify",
+    "build": "just build",
+    "package": "just package",
+    "lint": "just lint"
+  },
   "devDependencies": {
     "concurrently": "^9.2.1",
     "eslint-config-prettier": "^10.1.8",
