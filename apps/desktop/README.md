@@ -5,7 +5,7 @@ The Desktop is the Electron + React application. It owns user-facing windows, th
 ## Runtime boundary
 
 ```mermaid
-flowchart LR
+flowchart TB
     Renderer[React renderer] -->|window.zml| Preload[Preload / contextBridge]
     Preload -->|typed IPC| Main[Electron main]
     Main -->|REST| Backend[Backend]
