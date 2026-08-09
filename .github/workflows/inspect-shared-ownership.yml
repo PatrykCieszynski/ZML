@@ -1,0 +1,26 @@
+name: Inspect shared ownership
+
+on:
+  push:
+    branches:
+      - agent/shared-ownership-cleanup
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Inspect shared and typings references
+        shell: bash
+        run: |
+          echo '=== @zml/shared references ==='
+          grep -RIn --exclude-dir=node_modules --exclude-dir=.git '@zml/shared' . || true
+          echo '=== packages/shared references ==='
+          grep -RIn --exclude-dir=node_modules --exclude-dir=.git 'packages/shared' . || true
+          echo '=== typings references ==='
+          grep -RIn --exclude-dir=node_modules --exclude-dir=.git -E 'typings|stubPath|zml_game_bridge.*\.pyi' . || true
+          echo '=== typings tree ==='
+          find typings -type f -print 2>/dev/null || true
