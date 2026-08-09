@@ -26,8 +26,8 @@ from zml_ocr_protocol import (
 from zml_ocr_protocol.messages import AgentStatusState
 
 from zml_backend.runtime.ocr_worker.process_transport import (
-    OcrWorkerProcessConfig,
     OcrProcessTransport,
+    OcrWorkerProcessConfig,
     StdioOcrProcessTransport,
 )
 from zml_backend.runtime.supervisor import WorkerSupervisor

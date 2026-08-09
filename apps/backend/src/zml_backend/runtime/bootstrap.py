@@ -28,12 +28,12 @@ from zml_backend.runtime.db_commands import DbCommandChannel
 from zml_backend.runtime.db_writer import DbWriterWorker
 from zml_backend.runtime.input_coordinator import InputCoordinator
 from zml_backend.runtime.input_processor import CompositeInputProcessor
+from zml_backend.runtime.ocr_input import OcrInputSource
 from zml_backend.runtime.ocr_worker.process_transport import OcrWorkerProcessConfig
 from zml_backend.runtime.ocr_worker.supervisor import (
     OcrWorkerSupervisor,
     OcrWorkerSupervisorConfig,
 )
-from zml_backend.runtime.ocr_input import OcrInputSource
 from zml_backend.runtime.restore import MiningLifecycleRestorer
 from zml_backend.runtime.supervisor import WorkerSupervisor
 from zml_backend.settings import Settings

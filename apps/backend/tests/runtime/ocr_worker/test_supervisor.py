@@ -36,8 +36,8 @@ from zml_backend.events.base import SignalBase
 from zml_backend.inputs.ocr_worker.config import build_desired_ocr_config
 from zml_backend.inputs.ocr_worker.message_mapper import OcrWorkerMessageMapper
 from zml_backend.runtime.ocr_worker.process_transport import (
-    OcrWorkerProcessConfig,
     OcrProcessTransport,
+    OcrWorkerProcessConfig,
 )
 from zml_backend.runtime.ocr_worker.supervisor import (
     OcrWorkerProcessError,
