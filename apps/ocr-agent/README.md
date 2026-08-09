@@ -15,5 +15,11 @@ uv run zml-ocr-agent stdio
 
 In `stdio` mode the first stdout line is a protocol `hello` message. The process
 emits periodic heartbeats, accepts protocol commands on stdin, and exits on a
-`shutdown` command or EOF. `ZML_OCR_PROFILE_PATH` selects the startup ROI profile;
-revisioned live configuration is handled in the next migration step.
+`shutdown` command or EOF. It waits for a complete revisioned `apply_config`
+snapshot before starting capture and OCR. Repeating the same revision with the
+same values is idempotent; stale revisions and conflicting values for an already
+applied revision are rejected. Game Bridge owns the desired snapshot and sends
+it again after every process restart.
+
+The OCR Agent and Game Bridge runtimes are pinned to Python 3.13 because the
+Windows `tesserocr` dependency is distributed as a CPython 3.13 wheel.

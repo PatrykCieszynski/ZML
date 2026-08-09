@@ -75,11 +75,20 @@ restarts failed processes with bounded exponential backoff. Both transports use
 one mapper for position and finder DTOs, so downstream application behavior is
 the same.
 
+In agent mode Game Bridge owns one complete desired configuration snapshot. It
+sends revisioned `apply_config` after each `hello` and accepts OCR observations
+only after the matching `command_result` acknowledges that revision. A restarted
+agent therefore receives the same full snapshot before capture resumes; it does
+not reconstruct state from child-process environment or deltas. Reapplying an
+identical revision is idempotent, while stale or conflicting revisions fail the
+configuration handshake.
+
 The agent reports a missing game window as a recoverable capture state. Health
 diagnostics therefore distinguish `failure_kind=capture` with
 `process_state=window_unavailable` from process/protocol failures and restart
-backoff. The current settings are passed to the child as startup environment;
-revisioned `apply_config` synchronization is the next migration step.
+backoff. Shutdown first sends a protocol command and closes stdin, then escalates
+through wait, terminate, and kill if the child does not exit. The agent also
+exits cleanly when it observes stdin EOF.
 
 ## Signal To Event Flow
 

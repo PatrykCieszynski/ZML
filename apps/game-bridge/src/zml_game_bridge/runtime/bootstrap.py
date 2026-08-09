@@ -28,6 +28,7 @@ from zml_game_bridge.runtime.db_commands import DbCommandChannel
 from zml_game_bridge.runtime.db_writer import DbWriterWorker
 from zml_game_bridge.runtime.input_coordinator import InputCoordinator
 from zml_game_bridge.runtime.input_processor import CompositeInputProcessor
+from zml_game_bridge.runtime.ocr_agent.config import build_desired_ocr_config
 from zml_game_bridge.runtime.ocr_agent.process_transport import OcrAgentProcessConfig
 from zml_game_bridge.runtime.ocr_agent.supervisor import (
     OcrAgentSupervisor,
@@ -166,9 +167,10 @@ def build_ocr_input_source(
         return OcrAgentSupervisor(
             config=OcrAgentSupervisorConfig(
                 enabled=settings.ocr_enabled,
+                desired_config=build_desired_ocr_config(settings),
                 process=OcrAgentProcessConfig(
                     command=command,
-                    environment=_ocr_agent_environment(settings),
+                    environment={},
                 ),
             ),
             supervisor=supervisor,
@@ -196,27 +198,6 @@ def build_ocr_input_source(
         position_sink=position_sink,
         signal_sink=signal_sink,
     )
-
-
-def _ocr_agent_environment(settings: Settings) -> dict[str, str]:
-    return {
-        "ZML_OCR_PROFILE_PATH": str(settings.ocr_profile_path),
-        "ZML_FINDER_RECORDING": settings.finder_recording_modes,
-        "ZML_FINDER_RECORDING_DIR": str(settings.finder_recording_dir),
-        "ZML_FINDER_RECORDING_INTERVAL_S": str(settings.finder_recording_interval_s),
-        "ZML_FINDER_RECORDING_MAX_SAMPLES": str(settings.finder_recording_max_samples),
-        "ZML_FINDER_PRESENCE_CHECK": _env_bool(settings.finder_presence_check_enabled),
-        "ZML_POSITION_ROI_SNAPSHOTS": _env_bool(settings.position_roi_snapshot_enabled),
-        "ZML_POSITION_ROI_SNAPSHOT_DIR": str(settings.position_roi_snapshot_dir),
-        "ZML_POSITION_ROI_SNAPSHOT_INTERVAL_S": str(settings.position_roi_snapshot_interval_s),
-        "ZML_POSITION_ROI_SNAPSHOT_MAX_SAMPLES": str(settings.position_roi_snapshot_max_samples),
-        "ZML_OCR_PROFILING": _env_bool(settings.ocr_profiling_enabled),
-        "ZML_OCR_PROFILING_INTERVAL_S": str(settings.ocr_profiling_interval_s),
-    }
-
-
-def _env_bool(value: bool) -> str:
-    return "1" if value else "0"
 
 
 def build_worker_supervisor(settings: Settings) -> WorkerSupervisor:

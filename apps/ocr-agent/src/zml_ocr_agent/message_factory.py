@@ -58,6 +58,7 @@ class AgentMessageFactory:
         self._pid = pid or os.getpid()
         self._started_ts_ms = self._clock_ms()
         self._sequence_id = -1
+        self._applied_revision: int | None = None
         self._lock = threading.Lock()
 
     def hello(self) -> HelloMessage:
@@ -72,7 +73,15 @@ class AgentMessageFactory:
                 agent_version=self._agent_version,
                 pid=self._pid,
                 started_ts_ms=self._started_ts_ms,
-                capabilities=["stdio", "position", "finder", "status", "heartbeat"],
+                capabilities=[
+                    "stdio",
+                    "position",
+                    "finder",
+                    "status",
+                    "heartbeat",
+                    "apply_config",
+                    "shutdown",
+                ],
             ),
         )
 
@@ -124,7 +133,7 @@ class AgentMessageFactory:
         code: str | None = None,
         detail: str | None = None,
     ) -> StatusMessage:
-        message_id, sequence_id, emitted_ts_ms = self._metadata()
+        message_id, sequence_id, emitted_ts_ms, applied_revision = self._metadata_with_revision()
         return StatusMessage(
             protocol_version=PROTOCOL_VERSION,
             type="status",
@@ -134,7 +143,7 @@ class AgentMessageFactory:
             payload=StatusPayload(
                 state=state,
                 capture_available=capture_available,
-                applied_revision=None,
+                applied_revision=applied_revision,
                 code=code,
                 detail=detail,
             ),
@@ -146,7 +155,7 @@ class AgentMessageFactory:
         state: AgentStatusState,
         capture_available: bool,
     ) -> HeartbeatMessage:
-        message_id, sequence_id, emitted_ts_ms = self._metadata()
+        message_id, sequence_id, emitted_ts_ms, applied_revision = self._metadata_with_revision()
         return HeartbeatMessage(
             protocol_version=PROTOCOL_VERSION,
             type="heartbeat",
@@ -156,7 +165,7 @@ class AgentMessageFactory:
             payload=HeartbeatPayload(
                 state=state,
                 capture_available=capture_available,
-                applied_revision=None,
+                applied_revision=applied_revision,
             ),
         )
 
@@ -182,6 +191,30 @@ class AgentMessageFactory:
                 error=None,
             ),
         )
+
+    def command_applied(self, *, command_id: str, revision: int) -> CommandResultMessage:
+        message_id, sequence_id, emitted_ts_ms = self._metadata()
+        return CommandResultMessage(
+            protocol_version=PROTOCOL_VERSION,
+            type="command_result",
+            message_id=message_id,
+            sequence_id=sequence_id,
+            emitted_ts_ms=emitted_ts_ms,
+            payload=CommandResultPayload(
+                command_id=command_id,
+                command_type="apply_config",
+                status="ok",
+                applied_revision=revision,
+                capture=None,
+                error=None,
+            ),
+        )
+
+    def set_applied_revision(self, revision: int) -> None:
+        if revision < 1:
+            raise ValueError("applied revision must be positive")
+        with self._lock:
+            self._applied_revision = revision
 
     def command_error(
         self,
@@ -214,9 +247,18 @@ class AgentMessageFactory:
         )
 
     def _metadata(self) -> tuple[str, int, int]:
+        message_id, sequence_id, emitted_ts_ms, _ = self._metadata_with_revision()
+        return message_id, sequence_id, emitted_ts_ms
+
+    def _metadata_with_revision(self) -> tuple[str, int, int, int | None]:
         with self._lock:
             self._sequence_id += 1
-            return self._message_id_factory(), self._sequence_id, self._clock_ms()
+            return (
+                self._message_id_factory(),
+                self._sequence_id,
+                self._clock_ms(),
+                self._applied_revision,
+            )
 
 
 def _finder_payload(signal: MiningFinderSignal, *, roi_name: str) -> FinderObservationPayload:
