@@ -4,7 +4,10 @@ import asyncio
 import signal
 import sys
 import threading
+from collections.abc import Callable
 from types import FrameType
+
+_SignalHandler = Callable[[int, FrameType | None], object]
 
 
 class RuntimeShutdownSignal:
@@ -39,15 +42,20 @@ class RuntimeShutdownSignal:
             if not callable(previous_handler):
                 continue
 
-            def forward_signal(
-                received_signal: int,
-                frame: FrameType | None,
-                previous_handler=previous_handler,
-            ) -> None:
-                self.request()
-                previous_handler(received_signal, frame)
+            signal.signal(
+                signal_number,
+                self._build_signal_forwarder(previous_handler),
+            )
 
-            signal.signal(signal_number, forward_signal)
+    def _build_signal_forwarder(
+        self,
+        previous_handler: _SignalHandler,
+    ) -> _SignalHandler:
+        def forward_signal(received_signal: int, frame: FrameType | None) -> None:
+            self.request()
+            previous_handler(received_signal, frame)
+
+        return forward_signal
 
 
 process_shutdown_signal = RuntimeShutdownSignal()

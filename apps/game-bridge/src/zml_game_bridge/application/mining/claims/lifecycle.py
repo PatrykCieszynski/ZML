@@ -75,7 +75,10 @@ class ClaimLifecycleCorrelator:
 
     def process_event(self, event: EventBase) -> list[EventBase]:
         if isinstance(event, MiningDropEvent):
-            stale_results = self._resolve_stale_pending_drops(event.observed_ts_ms)
+            stale_results: list[EventBase] = []
+            stale_results.extend(
+                self._resolve_stale_pending_drops(event.observed_ts_ms)
+            )
             self._drops_by_id[event.drop_id] = event
             return stale_results
 
