@@ -36,8 +36,8 @@ jobs:
       - name: Verify protocol
         run: just protocol verify
 
-  ocr-agent:
-    name: OCR Agent / Python
+  ocr-worker:
+    name: OCR Worker / Python
     runs-on: windows-latest
 
     steps:
@@ -55,14 +55,14 @@ jobs:
       - name: Install Python
         run: uv python install
 
-      - name: Sync OCR Agent dependencies
-        run: uv sync --locked --package zml-ocr-agent
+      - name: Sync OCR Worker dependencies
+        run: uv sync --locked --package zml-ocr-worker
 
-      - name: Verify OCR Agent
+      - name: Verify OCR Worker
         run: just ocr verify
 
-  bridge:
-    name: Bridge / Python
+  backend:
+    name: Backend / Python
     runs-on: windows-latest
 
     steps:
@@ -80,10 +80,10 @@ jobs:
       - name: Install Python
         run: uv python install
 
-      - name: Sync bridge dependencies
-        run: uv sync --locked --package zml-game-bridge
+      - name: Sync backend dependencies
+        run: uv sync --locked --package zml-backend
 
-      - name: Verify bridge
+      - name: Verify backend
         run: just backend verify
 
   python-packaging:
@@ -108,18 +108,18 @@ jobs:
       - name: Sync Python workspace
         run: uv sync --locked --all-packages
 
-      - name: Package OCR Agent
+      - name: Package OCR Worker
         run: just ocr package
 
-      - name: Package bridge
+      - name: Package backend
         run: just backend package
 
       - name: Verify packaged process tree
         shell: pwsh
         run: ./scripts/verify-python-artifacts.ps1
 
-  frontend:
-    name: Electron UI / TypeScript
+  desktop:
+    name: Desktop / TypeScript
     runs-on: ubuntu-latest
 
     steps:
@@ -137,8 +137,8 @@ jobs:
       - name: Install Python
         run: uv python install
 
-      - name: Sync bridge dependencies
-        run: uv sync --locked --package zml-game-bridge
+      - name: Sync backend dependencies
+        run: uv sync --locked --package zml-backend
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
