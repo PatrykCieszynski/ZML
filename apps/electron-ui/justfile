@@ -1,0 +1,25 @@
+default:
+    just --list
+
+dev:
+    pnpm dev
+
+dev-mocks:
+    pnpm dev:mocks
+
+typecheck:
+    pnpm typecheck
+
+lint:
+    pnpm lint
+
+test:
+    pnpm test
+
+build:
+    pnpm build
+
+package:
+    pnpm package
+
+verify: typecheck lint test build
