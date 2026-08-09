@@ -7,7 +7,7 @@ Version 1 uses strict Pydantic DTOs serialized as UTF-8 newline-delimited JSON o
 ## Ownership
 
 ```mermaid
-flowchart LR
+flowchart TB
     Protocol[zml-ocr-protocol]
     Protocol --> Backend[Backend supervisor / adapter]
     Protocol --> Worker[OCR Worker runner]
