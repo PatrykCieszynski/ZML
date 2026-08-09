@@ -61,10 +61,11 @@ Z Mining Log is now a working local mining tracker prototype:
   - profiling and finder crop recording hooks exist;
   - position outlier filtering exists;
   - missing/lost Entropia window degrades health and retries instead of crashing OCR;
-  - OCR still runs in-process by default, but `ZML_OCR_TRANSPORT=agent` now
-    selects a managed child process and `ZML_OCR_AGENT_PATH` can select its executable;
-  - source runs retain that embedded rollback default, while packaged Electron
-    explicitly starts Game Bridge in agent mode with the bundled Agent path;
+  - OCR always runs as a managed child process; the embedded adapter and
+    transport-selection flag have been removed;
+  - Game Bridge depends only on `zml-ocr-protocol`, while `ZML_OCR_AGENT_PATH`
+    or `PATH` supplies the runtime executable;
+  - Electron passes the standalone Agent path in both development and packaged runs;
   - the subprocess supervisor validates `hello`, drains both output pipes,
     applies the complete desired config before accepting observations, monitors
     heartbeats, maps observations, and restarts with bounded backoff;
@@ -77,21 +78,22 @@ Z Mining Log is now a working local mining tracker prototype:
     state from an unavailable Entropia capture window;
   - the runner emits strict version 1 `packages/ocr-protocol` messages and
     imports no Game Bridge code;
-  - `AppRuntime` owns only the `OcrInputSource` lifecycle while
-    `EmbeddedOcrInputSource` maps agent messages to position snapshots, finder
-    signals, preload, and worker health without changing runtime behavior;
+  - `runtime/ocr_agent` owns only stdio transport, handshake, health, restart,
+    and shutdown; protocol-to-application mapping and desired config adaptation
+    live under `inputs/ocr_agent`;
   - finder application signals live under `application.mining.signals.finder`,
     so mining logic no longer imports signal types from `inputs.ocr`.
 - Desktop lifecycle and packaging:
   - Electron starts the local backend from `.venv` in development;
+  - development Electron passes the separate OCR Agent `.venv` executable;
   - Windows builds produce separate PyInstaller artifacts for Game Bridge and OCR Agent;
   - the Bridge artifact excludes the Agent package, Windows capture bindings,
     native OCR libraries, and tessdata;
   - packaged Electron stages both artifacts separately, starts the bundled Bridge,
     and passes the bundled Agent path through its managed environment;
   - backend exits through FastAPI lifespan when Electron sends `shutdown` on the parent pipe;
-  - parent-pipe reads are non-blocking and Ctrl+C retains Uvicorn's handler despite
-    `tesserocr`/`cysignals` initialization;
+  - parent-pipe reads are non-blocking and native OCR cannot alter Uvicorn's
+    signal handlers because it initializes only in the child process;
   - a runtime shutdown signal releases long-lived WS/SSE streams before connection drain;
   - unexpected backend exits use a bounded restart policy;
   - packaging verification checks both artifact layouts, the Agent protocol,
@@ -108,9 +110,8 @@ Z Mining Log is now a working local mining tracker prototype:
 See `ROADMAP_2025-05-26.md` for the ordered roadmap. The highest-value items are:
 
 1. Managed OCR Agent migration:
-   - validate agent mode during real gameplay;
-   - run a packaged gameplay smoke and soak before switching the source default
-     or removing embedded OCR.
+   - run a packaged gameplay smoke and soak for operational validation;
+   - keep process diagnostics and restart behavior observable while tuning OCR.
 
 2. Runtime config and live settings:
    - move safe OCR/runtime options beyond env-only configuration;

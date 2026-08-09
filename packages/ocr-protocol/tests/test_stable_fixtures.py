@@ -16,6 +16,7 @@ from zml_ocr_protocol import (
 )
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
+SOURCE_DIR = Path(__file__).parents[1] / "src" / "zml_ocr_protocol"
 
 
 @pytest.mark.parametrize(
@@ -31,8 +32,11 @@ def test_fixture_lines_have_stable_canonical_encoding(
 ) -> None:
     lines = (FIXTURE_DIR / filename).read_bytes().splitlines(keepends=True)
     assert lines
-    for line in lines:
-        assert encode_message(decoder(line)) == line
+    for checkout_line in lines:
+        canonical_line = (
+            checkout_line[:-2] + b"\n" if checkout_line.endswith(b"\r\n") else checkout_line
+        )
+        assert encode_message(decoder(canonical_line)) == canonical_line
 
 
 def test_import_does_not_load_native_ocr_dependencies() -> None:
@@ -53,3 +57,10 @@ if loaded:
         timeout=10,
     )
     assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_protocol_source_does_not_import_either_application() -> None:
+    source = "\n".join(path.read_text(encoding="utf-8") for path in SOURCE_DIR.glob("*.py"))
+
+    assert "zml_game_bridge" not in source
+    assert "zml_ocr_agent" not in source

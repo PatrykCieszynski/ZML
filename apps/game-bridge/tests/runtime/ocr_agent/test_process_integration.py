@@ -12,7 +12,8 @@ import pytest
 from zml_game_bridge.application.mining.signals.finder import FinderNoResourcesSignal
 from zml_game_bridge.application.position.model import PositionSnapshot
 from zml_game_bridge.events.base import SignalBase
-from zml_game_bridge.runtime.ocr_agent.config import build_desired_ocr_config
+from zml_game_bridge.inputs.ocr_agent.config import build_desired_ocr_config
+from zml_game_bridge.inputs.ocr_agent.message_mapper import OcrAgentMessageMapper
 from zml_game_bridge.runtime.ocr_agent.process_transport import (
     OcrAgentProcessConfig,
     StdioOcrProcessTransport,
@@ -162,6 +163,10 @@ def _start_harness(
     supervisor.register("ocr_worker", enabled=True)
     positions: list[PositionSnapshot] = []
     signals: list[SignalBase] = []
+    mapper = OcrAgentMessageMapper(
+        position_sink=positions.append,
+        signal_sink=signals.append,
+    )
     source = OcrAgentSupervisor(
         config=OcrAgentSupervisorConfig(
             enabled=True,
@@ -174,8 +179,8 @@ def _start_harness(
             restart=RestartPolicy(delays_s=(0.01,), window_s=1.0, stable_reset_s=1.0),
         ),
         supervisor=supervisor,
-        position_sink=positions.append,
-        signal_sink=signals.append,
+        position_message_sink=mapper.map_position,
+        finder_message_sink=mapper.map_finder,
         transport_factory=lambda: transports(process),
     )
     stop_event = threading.Event()

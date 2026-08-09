@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from zml_game_bridge.runtime.ocr_agent.config import (
+from zml_game_bridge.inputs.ocr_agent.config import (
     build_desired_ocr_config,
     load_ocr_roi_profile_payload,
 )

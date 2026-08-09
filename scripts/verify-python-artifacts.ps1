@@ -139,7 +139,6 @@ if (-not $SkipProcessTree) {
     $startInfo.EnvironmentVariables["ZML_APP_DATA_DIR"] = $smokeData
     $startInfo.EnvironmentVariables["ZML_CHAT_LOG_PATH"] = Join-Path $smokeData "chat.log"
     $startInfo.EnvironmentVariables["ZML_OCR_CAPTURE_HZ"] = "1"
-    $startInfo.EnvironmentVariables["ZML_OCR_TRANSPORT"] = "agent"
     $startInfo.EnvironmentVariables["ZML_OCR_AGENT_PATH"] = $agentExe
     $startInfo.EnvironmentVariables["ZML_PARENT_MANAGED"] = "1"
 

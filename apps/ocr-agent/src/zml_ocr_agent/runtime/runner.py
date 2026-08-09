@@ -17,7 +17,6 @@ from zml_ocr_agent.capture.window_capturer import (
     WindowCaptureUnavailableError,
 )
 from zml_ocr_agent.config import OcrRoiProfile, load_ocr_roi_profile
-from zml_ocr_agent.message_factory import AgentMessageFactory
 from zml_ocr_agent.pipelines.mining_finder.model import MiningFinderSignal
 from zml_ocr_agent.pipelines.mining_finder.pipeline import (
     MiningFinderPipeline,
@@ -34,7 +33,8 @@ from zml_ocr_agent.pipelines.position.recording import (
     PositionRoiSnapshotRecorder,
     position_roi_snapshot_config_from_env,
 )
-from zml_ocr_agent.profiling import (
+from zml_ocr_agent.runtime.message_factory import AgentMessageFactory
+from zml_ocr_agent.runtime.profiling import (
     OcrProfiler,
     ocr_profiling_config_from_env,
 )

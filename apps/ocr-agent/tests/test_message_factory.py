@@ -9,10 +9,10 @@ from zml_ocr_protocol import (
     StatusMessage,
 )
 
-from zml_ocr_agent.message_factory import AgentMessageFactory
-from zml_ocr_agent.models import WorldPosition
 from zml_ocr_agent.pipelines.mining_finder.model import MiningFinderSignal
+from zml_ocr_agent.pipelines.model import WorldPosition
 from zml_ocr_agent.pipelines.position.model import OcrPosition
+from zml_ocr_agent.runtime.message_factory import AgentMessageFactory
 
 
 def test_factory_emits_ordered_hello_position_status_and_heartbeat_messages() -> None:

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from zml_ocr_agent.paths import get_tessdata_dir
-from zml_ocr_agent.tesserocr_runtime import preload_tesserocr
+from zml_ocr_agent.runtime.paths import get_tessdata_dir
+from zml_ocr_agent.runtime.tesserocr import preload_tesserocr
 
 
 class TesserDigitsEngine:

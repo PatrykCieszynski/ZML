@@ -11,11 +11,11 @@ from typing import Literal
 import cv2
 import numpy as np
 
-from zml_ocr_agent.paths import get_app_data_dir
 from zml_ocr_agent.pipelines.mining_finder.model import (
     FinderFeatures,
     MiningFinderSignal,
 )
+from zml_ocr_agent.runtime.paths import get_app_data_dir
 
 logger = logging.getLogger(__name__)
 

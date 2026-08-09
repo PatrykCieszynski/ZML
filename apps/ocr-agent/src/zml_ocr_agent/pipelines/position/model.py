@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from zml_ocr_agent.capture.model import RoiRect
-from zml_ocr_agent.models import WorldPosition
+from zml_ocr_agent.pipelines.model import WorldPosition
 
 
 @dataclass(frozen=True, slots=True)

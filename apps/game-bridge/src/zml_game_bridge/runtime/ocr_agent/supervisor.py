@@ -25,12 +25,6 @@ from zml_ocr_protocol import (
 )
 from zml_ocr_protocol.messages import AgentStatusState
 
-from zml_game_bridge.events.contracts import SignalSink
-from zml_game_bridge.runtime.ocr_agent.message_mapper import (
-    ClockMs,
-    OcrAgentMessageMapper,
-    PositionSnapshotSink,
-)
 from zml_game_bridge.runtime.ocr_agent.process_transport import (
     OcrAgentProcessConfig,
     OcrProcessTransport,
@@ -48,6 +42,8 @@ _FATAL_AGENT_STATUS_CODES = frozenset({"ocr_preload_failed", "ocr_runner_crashed
 
 MonotonicClock = Callable[[], float]
 TransportFactory = Callable[[], OcrProcessTransport]
+PositionMessageSink = Callable[[PositionMessage], None]
+FinderMessageSink = Callable[[FinderSignalMessage], None]
 
 
 class OcrAgentProcessError(RuntimeError):
@@ -110,19 +106,15 @@ class OcrAgentSupervisor:
         *,
         config: OcrAgentSupervisorConfig,
         supervisor: WorkerSupervisor,
-        position_sink: PositionSnapshotSink,
-        signal_sink: SignalSink,
+        position_message_sink: PositionMessageSink,
+        finder_message_sink: FinderMessageSink,
         transport_factory: TransportFactory | None = None,
         monotonic: MonotonicClock | None = None,
-        clock_ms: ClockMs | None = None,
     ) -> None:
         self._config = config
         self._supervisor = supervisor
-        self._mapper = OcrAgentMessageMapper(
-            position_sink=position_sink,
-            signal_sink=signal_sink,
-            clock_ms=clock_ms,
-        )
+        self._position_message_sink = position_message_sink
+        self._finder_message_sink = finder_message_sink
         self._transport_factory = transport_factory or (
             lambda: StdioOcrProcessTransport(config.process)
         )
@@ -232,7 +224,8 @@ class OcrAgentSupervisor:
 
         failures: queue.Queue[BaseException] = queue.Queue()
         session = _ProtocolSession(
-            mapper=self._mapper,
+            position_message_sink=self._position_message_sink,
+            finder_message_sink=self._finder_message_sink,
             supervisor=self._supervisor,
             monotonic=self._monotonic,
         )
@@ -385,11 +378,13 @@ class _ProtocolSession:
     def __init__(
         self,
         *,
-        mapper: OcrAgentMessageMapper,
+        position_message_sink: PositionMessageSink,
+        finder_message_sink: FinderMessageSink,
         supervisor: WorkerSupervisor,
         monotonic: MonotonicClock,
     ) -> None:
-        self._mapper = mapper
+        self._position_message_sink = position_message_sink
+        self._finder_message_sink = finder_message_sink
         self._supervisor = supervisor
         self._monotonic = monotonic
         self._lock = threading.Lock()
@@ -451,11 +446,11 @@ class _ProtocolSession:
 
             if isinstance(message, PositionMessage):
                 self._require_configured_observations()
-                self._mapper.map_position(message)
+                self._position_message_sink(message)
                 return
             if isinstance(message, FinderSignalMessage):
                 self._require_configured_observations()
-                self._mapper.map_finder(message)
+                self._finder_message_sink(message)
                 return
             if isinstance(message, StatusMessage):
                 self._observe_applied_revision(message.payload.applied_revision)

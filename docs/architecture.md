@@ -30,7 +30,7 @@ api/
   FastAPI app, REST routes, SSE, WebSocket, dependency wiring
 
 inputs/
-  OCR adapters, chat tailing, mock sources; emits SignalBase subclasses
+  external OCR protocol adapters, chat tailing, mock sources; emits application inputs
 
 application/
   use-case/business logic: mining coordinator, correlators, equipment,
@@ -64,18 +64,19 @@ domain -> no app/runtime/persistence imports
 
 `apps/ocr-agent` owns Windows capture, ROI models, finder and position
 pipelines, recording/profiling tools, `tesserocr`, OpenCV, numpy, and tessdata.
-Its runner emits `zml-ocr-protocol` messages and imports no Game Bridge modules.
+It is organized around `capture`, `pipelines`, `runtime`, and config rather than
+backend DDD layers. Its runner emits `zml-ocr-protocol` messages and imports no
+Game Bridge modules.
 
-During the migration, Game Bridge supports two implementations of its
-`OcrInputSource` port. `EmbeddedOcrInputSource` runs the agent runner in-process
-and remains the default rollback path. `OcrAgentSupervisor` starts the agent's
-`stdio` entrypoint as a child process when `ZML_OCR_TRANSPORT=agent`, validates
-the initial `hello`, drains stdout/stderr concurrently, monitors heartbeats, and
-restarts failed processes with bounded exponential backoff. Both transports use
-one mapper for position and finder DTOs, so downstream application behavior is
-the same.
+Game Bridge depends only on `zml-ocr-protocol`; the Agent executable is a
+runtime dependency, not a Python package dependency. `OcrAgentSupervisor`
+starts its `stdio` entrypoint, validates the initial `hello`, drains
+stdout/stderr concurrently, monitors heartbeats, and restarts failed processes
+with bounded exponential backoff. `runtime/ocr_agent` contains only that process
+lifecycle and transport. `inputs/ocr_agent` owns translation between protocol
+DTOs, backend settings, position snapshots, and finder application signals.
 
-In agent mode Game Bridge owns one complete desired configuration snapshot. It
+Game Bridge owns one complete desired configuration snapshot. It
 sends revisioned `apply_config` after each `hello` and accepts OCR observations
 only after the matching `command_result` acknowledges that revision. A restarted
 agent therefore receives the same full snapshot before capture resumes; it does
@@ -95,9 +96,11 @@ Game Bridge and OCR Agent. The Bridge artifact excludes `zml_ocr_agent`, Windows
 capture bindings (`win32gui`/`win32ui`), and the native OCR stack (`tesserocr`,
 OpenCV, numpy, mss, and tessdata); those files are owned only by the Agent
 artifact. The staging script copies both artifacts into separate Electron
-resources. Packaged Electron explicitly selects agent mode and
-passes the bundled Agent executable path, while source/development runs retain
-the embedded default during the migration. Packaging verification checks the
+resources. Packaged Electron passes the bundled Agent executable path.
+Development Electron passes the
+standalone Agent virtualenv executable; direct backend runs use
+`ZML_OCR_AGENT_PATH` or resolve `zml-ocr-agent` from `PATH`. Packaging
+verification checks the
 artifact boundary, protocol startup, config acknowledgement, and full
 Bridge-to-Agent shutdown without an orphan child process.
 
@@ -254,8 +257,8 @@ sequenceDiagram
   covering abrupt Electron exits without blocking Python startup.
 - `RuntimeShutdownSignal` lets WS/SSE handlers finish before Uvicorn waits for active
   connections, avoiding a circular graceful-shutdown wait.
-- In embedded OCR mode, the main-thread `tesserocr` preload preserves Uvicorn's
-  `SIGINT` handler; agent mode keeps native OCR initialization in the child.
+- Native OCR initialization exists only in the Agent child process and cannot
+  replace Uvicorn's signal handlers in Game Bridge.
 - Absence of the Entropia window is not a process failure. OCR reports `degraded`, retries
   capture, and returns to `running` when the window becomes available.
 

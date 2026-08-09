@@ -8,7 +8,7 @@ from zml_ocr_agent.capture.window_capturer import (
     WindowCapturer,
     WindowCaptureUnavailableError,
 )
-from zml_ocr_agent.runner import _try_grab_frame
+from zml_ocr_agent.runtime.runner import _try_grab_frame
 
 
 class _RecoveringCapturer:

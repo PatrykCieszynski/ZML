@@ -1,0 +1,17 @@
+lint:
+    uv run ruff check .
+
+format:
+    uv run ruff check --fix .
+    uv run ruff format .
+
+format-check:
+    uv run ruff format --check .
+
+typecheck:
+    uv run pyright
+
+test:
+    uv run pytest --basetemp ../../.tmp/pytest-ocr-protocol -o cache_dir=../../.tmp/pytest-ocr-protocol-cache
+
+verify: lint format-check typecheck test

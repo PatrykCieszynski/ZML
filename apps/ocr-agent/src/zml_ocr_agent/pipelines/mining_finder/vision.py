@@ -7,7 +7,6 @@ from typing import Literal, Protocol
 import cv2
 import numpy as np
 
-from zml_ocr_agent.models import MiningMode
 from zml_ocr_agent.pipelines.image import (
     RelativeRect,
     crop_relative,
@@ -26,8 +25,9 @@ from zml_ocr_agent.pipelines.mining_finder.parsing import (
     parse_hit_size,
     parse_units_text,
 )
+from zml_ocr_agent.pipelines.model import MiningMode
 from zml_ocr_agent.pipelines.text import clean_ocr_text
-from zml_ocr_agent.profiling import OcrProfiler
+from zml_ocr_agent.runtime.profiling import OcrProfiler
 
 logger = logging.getLogger(__name__)
 ModeIconState = Literal["active", "inactive", "disabled"]

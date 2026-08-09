@@ -3,11 +3,11 @@ from __future__ import annotations
 import cv2
 import numpy as np
 
-from zml_ocr_agent.models import MiningMode
 from zml_ocr_agent.pipelines.mining_finder.vision import (
     FinderPanelLayout,
     VisionFinderFeatureDetector,
 )
+from zml_ocr_agent.pipelines.model import MiningMode
 
 
 def test_finder_mode_classifier_uses_only_active_icons_for_modes_mask() -> None:

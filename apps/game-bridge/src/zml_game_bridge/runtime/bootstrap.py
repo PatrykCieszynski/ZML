@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -16,6 +15,8 @@ from zml_game_bridge.application.position.model import PositionSnapshot
 from zml_game_bridge.application.position.tracking import PositionTrackingService
 from zml_game_bridge.events.contracts import SignalSink
 from zml_game_bridge.events.in_memory_persisted_event_bus import InMemoryPersistedEventBus
+from zml_game_bridge.inputs.ocr_agent.config import build_desired_ocr_config
+from zml_game_bridge.inputs.ocr_agent.message_mapper import OcrAgentMessageMapper
 from zml_game_bridge.persistence.event_projector import CompositeEventProjector
 from zml_game_bridge.persistence.mining_claims import MiningClaimProjector
 from zml_game_bridge.persistence.mining_drops import MiningDropProjector
@@ -27,7 +28,6 @@ from zml_game_bridge.runtime.db_commands import DbCommandChannel
 from zml_game_bridge.runtime.db_writer import DbWriterWorker
 from zml_game_bridge.runtime.input_coordinator import InputCoordinator
 from zml_game_bridge.runtime.input_processor import CompositeInputProcessor
-from zml_game_bridge.runtime.ocr_agent.config import build_desired_ocr_config
 from zml_game_bridge.runtime.ocr_agent.process_transport import OcrAgentProcessConfig
 from zml_game_bridge.runtime.ocr_agent.supervisor import (
     OcrAgentSupervisor,
@@ -157,47 +157,27 @@ def build_ocr_input_source(
     position_sink: Callable[[PositionSnapshot], None],
     signal_sink: SignalSink,
 ) -> OcrInputSource:
-    if settings.ocr_transport == "agent":
-        command = (
-            (str(settings.ocr_agent_path), "stdio")
-            if settings.ocr_agent_path is not None
-            else (sys.executable, "-m", "zml_ocr_agent", "stdio")
-        )
-        return OcrAgentSupervisor(
-            config=OcrAgentSupervisorConfig(
-                enabled=settings.ocr_enabled,
-                desired_config=build_desired_ocr_config(settings),
-                process=OcrAgentProcessConfig(
-                    command=command,
-                    environment={},
-                ),
-            ),
-            supervisor=supervisor,
-            position_sink=position_sink,
-            signal_sink=signal_sink,
-        )
-
-    from zml_game_bridge.inputs.ocr.source import EmbeddedOcrInputConfig, EmbeddedOcrInputSource
-
-    return EmbeddedOcrInputSource(
-        config=EmbeddedOcrInputConfig(
-            enabled=settings.ocr_enabled,
-            roi_profile_path=settings.ocr_profile_path,
-            finder_recording_modes=settings.finder_recording_modes,
-            finder_recording_dir=settings.finder_recording_dir,
-            finder_recording_interval_s=settings.finder_recording_interval_s,
-            finder_recording_max_samples=settings.finder_recording_max_samples,
-            finder_presence_check_enabled=settings.finder_presence_check_enabled,
-            position_roi_snapshot_enabled=settings.position_roi_snapshot_enabled,
-            position_roi_snapshot_dir=settings.position_roi_snapshot_dir,
-            position_roi_snapshot_interval_s=settings.position_roi_snapshot_interval_s,
-            position_roi_snapshot_max_samples=settings.position_roi_snapshot_max_samples,
-            ocr_profiling_enabled=settings.ocr_profiling_enabled,
-            ocr_profiling_interval_s=settings.ocr_profiling_interval_s,
-        ),
-        supervisor=supervisor,
+    command = (
+        (str(settings.ocr_agent_path), "stdio")
+        if settings.ocr_agent_path is not None
+        else ("zml-ocr-agent", "stdio")
+    )
+    mapper = OcrAgentMessageMapper(
         position_sink=position_sink,
         signal_sink=signal_sink,
+    )
+    return OcrAgentSupervisor(
+        config=OcrAgentSupervisorConfig(
+            enabled=settings.ocr_enabled,
+            desired_config=build_desired_ocr_config(settings),
+            process=OcrAgentProcessConfig(
+                command=command,
+                environment={},
+            ),
+        ),
+        supervisor=supervisor,
+        position_message_sink=mapper.map_position,
+        finder_message_sink=mapper.map_finder,
     )
 
 

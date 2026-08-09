@@ -214,7 +214,6 @@ export function createBackendLaunchSpec({
       args: ["serve", "--mode", "live"],
       cwd: backendDir,
       environment: {
-        ZML_OCR_TRANSPORT: "agent",
         ZML_OCR_AGENT_PATH: ocrAgentExecutable,
       },
     };
@@ -225,10 +224,18 @@ export function createBackendLaunchSpec({
     process.platform === "win32"
       ? path.join(backendDir, ".venv", "Scripts", "python.exe")
       : path.join(backendDir, ".venv", "bin", "python");
+  const ocrAgentDir = path.resolve(appRoot, "..", "ocr-agent");
+  const ocrAgentExecutable =
+    process.platform === "win32"
+      ? path.join(ocrAgentDir, ".venv", "Scripts", "zml-ocr-agent.exe")
+      : path.join(ocrAgentDir, ".venv", "bin", "zml-ocr-agent");
   return {
     command: pythonExecutable,
     args: ["-m", "zml_game_bridge.dev_cli", "serve", "--mode", "live"],
     cwd: backendDir,
+    environment: {
+      ZML_OCR_AGENT_PATH: ocrAgentExecutable,
+    },
   };
 }
 

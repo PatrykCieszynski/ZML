@@ -20,9 +20,9 @@ from zml_ocr_protocol.messages import (
 )
 
 from zml_ocr_agent.config import AppliedOcrConfig, applied_ocr_config
-from zml_ocr_agent.message_factory import AgentMessageFactory
-from zml_ocr_agent.runner import start_ocr_input
-from zml_ocr_agent.tesserocr_runtime import preload_tesserocr_preserving_sigint_handler
+from zml_ocr_agent.runtime.message_factory import AgentMessageFactory
+from zml_ocr_agent.runtime.runner import start_ocr_input
+from zml_ocr_agent.runtime.tesserocr import preload_tesserocr_preserving_sigint_handler
 
 logger = logging.getLogger(__name__)
 
