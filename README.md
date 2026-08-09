@@ -17,11 +17,14 @@ Z Mining Log is a local-first desktop mining assistant for **Entropia Universe**
 ## Architecture
 
 ```mermaid
-flowchart LR
+flowchart TB
     Game[Entropia Universe window] -->|screen capture| Worker[OCR Worker]
     Worker -->|NDJSON over stdio| Backend[Python Backend]
     Chat[chat.log] --> Backend
-    Backend --> SQLite[(SQLite)]
+
+    Backend -->|writes events + projections| SQLite[(SQLite)]
+    SQLite -.->|reads projections + event history| Backend
+
     Backend -->|REST / SSE / WebSocket| Main[Electron main]
     Main -->|typed IPC| Renderer[React renderer]
 ```
