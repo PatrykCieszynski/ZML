@@ -45,13 +45,25 @@ jobs:
         working-directory: apps/game-bridge
         run: just verify
 
+      - name: Install OCR Agent dependencies
+        working-directory: apps/ocr-agent
+        run: uv sync --locked --dev
+
+      - name: Verify OCR Agent
+        working-directory: apps/ocr-agent
+        run: just verify
+
+      - name: Package OCR Agent
+        working-directory: apps/ocr-agent
+        run: just package
+
       - name: Package bridge
         working-directory: apps/game-bridge
         run: just package
 
-      - name: Smoke test bridge executable
-        working-directory: apps/game-bridge
-        run: .\dist\zml-game-bridge\zml-game-bridge.exe config
+      - name: Verify packaged process tree
+        shell: pwsh
+        run: ./scripts/verify-python-artifacts.ps1
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
@@ -66,22 +78,30 @@ jobs:
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Stage backend in Electron resources
-        run: pnpm backend:stage
+      - name: Stage Python components in Electron resources
+        run: pnpm python:stage
 
       - name: Package Electron application
         run: pnpm frontend:package
 
-      - name: Smoke test bundled backend
+      - name: Verify bundled Python process tree
         shell: pwsh
         run: |
           $backend = Get-ChildItem apps/electron-ui/release -Recurse -Filter zml-game-bridge.exe |
             Where-Object { $_.FullName -match 'win-unpacked[\\/]+resources[\\/]+backend' } |
             Select-Object -First 1
+          $agent = Get-ChildItem apps/electron-ui/release -Recurse -Filter zml-ocr-agent.exe |
+            Where-Object { $_.FullName -match 'win-unpacked[\\/]+resources[\\/]+ocr-agent' } |
+            Select-Object -First 1
           if ($null -eq $backend) {
             throw "Bundled backend executable was not found in win-unpacked resources"
           }
-          & $backend.FullName config
+          if ($null -eq $agent) {
+            throw "Bundled OCR Agent executable was not found in win-unpacked resources"
+          }
+          & ./scripts/verify-python-artifacts.ps1 `
+            -BridgeArtifactDir $backend.Directory.FullName `
+            -AgentArtifactDir $agent.Directory.FullName
 
       - name: Verify installer artifact
         shell: pwsh

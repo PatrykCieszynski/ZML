@@ -90,6 +90,17 @@ backoff. Shutdown first sends a protocol command and closes stdin, then escalate
 through wait, terminate, and kill if the child does not exit. The agent also
 exits cleanly when it observes stdin EOF.
 
+Windows packaging produces independent one-directory PyInstaller artifacts for
+Game Bridge and OCR Agent. The Bridge artifact excludes `zml_ocr_agent`, Windows
+capture bindings (`win32gui`/`win32ui`), and the native OCR stack (`tesserocr`,
+OpenCV, numpy, mss, and tessdata); those files are owned only by the Agent
+artifact. The staging script copies both artifacts into separate Electron
+resources. Packaged Electron explicitly selects agent mode and
+passes the bundled Agent executable path, while source/development runs retain
+the embedded default during the migration. Packaging verification checks the
+artifact boundary, protocol startup, config acknowledgement, and full
+Bridge-to-Agent shutdown without an orphan child process.
+
 ## Signal To Event Flow
 
 ```mermaid
@@ -234,7 +245,8 @@ sequenceDiagram
 ```
 
 - Development resolves `apps/game-bridge/.venv` directly.
-- Packaged builds resolve `resources/backend/zml-game-bridge.exe`.
+- Packaged builds resolve `resources/backend/zml-game-bridge.exe` and configure
+  it to supervise `resources/ocr-agent/zml-ocr-agent.exe`.
 - `ZML_MANAGE_BACKEND=0` leaves lifecycle ownership to the developer.
 - An explicit `ZML_BACKEND_URL` is treated as external by default.
 - If a managed backend exits unexpectedly, Electron retries with bounded backoff.

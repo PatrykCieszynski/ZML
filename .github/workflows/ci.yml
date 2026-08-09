@@ -54,6 +54,33 @@ jobs:
         working-directory: apps/game-bridge
         run: just verify
 
+  python-packaging:
+    name: Python executables / Windows
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up bridge
+        uses: ./.github/actions/setup-bridge
+
+      - name: Install OCR Agent dependencies
+        working-directory: apps/ocr-agent
+        run: uv sync --locked --dev
+
+      - name: Package OCR Agent
+        working-directory: apps/ocr-agent
+        run: just package
+
+      - name: Package bridge
+        working-directory: apps/game-bridge
+        run: just package
+
+      - name: Verify packaged process tree
+        shell: pwsh
+        run: ./scripts/verify-python-artifacts.ps1
+
   frontend:
     name: Shared + Electron UI
     runs-on: ubuntu-latest

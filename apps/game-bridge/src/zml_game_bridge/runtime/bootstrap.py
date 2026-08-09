@@ -16,7 +16,6 @@ from zml_game_bridge.application.position.model import PositionSnapshot
 from zml_game_bridge.application.position.tracking import PositionTrackingService
 from zml_game_bridge.events.contracts import SignalSink
 from zml_game_bridge.events.in_memory_persisted_event_bus import InMemoryPersistedEventBus
-from zml_game_bridge.inputs.ocr.source import EmbeddedOcrInputConfig, EmbeddedOcrInputSource
 from zml_game_bridge.persistence.event_projector import CompositeEventProjector
 from zml_game_bridge.persistence.mining_claims import MiningClaimProjector
 from zml_game_bridge.persistence.mining_drops import MiningDropProjector
@@ -177,6 +176,8 @@ def build_ocr_input_source(
             position_sink=position_sink,
             signal_sink=signal_sink,
         )
+
+    from zml_game_bridge.inputs.ocr.source import EmbeddedOcrInputConfig, EmbeddedOcrInputSource
 
     return EmbeddedOcrInputSource(
         config=EmbeddedOcrInputConfig(

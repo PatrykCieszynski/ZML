@@ -6,6 +6,17 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from zml_game_bridge.dev_cli import InputMode, _apply_env_overrides, app
+from zml_game_bridge.settings import Settings
+
+
+def test_network_settings_support_process_local_environment(monkeypatch) -> None:
+    monkeypatch.setenv("ZML_HOST", "127.0.0.2")
+    monkeypatch.setenv("ZML_PORT", "28771")
+
+    settings = Settings()
+
+    assert settings.host == "127.0.0.2"
+    assert settings.port == 28771
 
 
 def test_apply_env_overrides_sets_mock_mode(monkeypatch, tmp_path: Path) -> None:

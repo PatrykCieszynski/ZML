@@ -15,9 +15,25 @@ describe("createBackendLaunchSpec", () => {
     });
 
     expect(launch.command).toBe(
-      path.join("C:", "Z Mining Log", "resources", "backend", "zml-game-bridge.exe"),
+      path.join(
+        "C:",
+        "Z Mining Log",
+        "resources",
+        "backend",
+        "zml-game-bridge.exe",
+      ),
     );
     expect(launch.args).toEqual(["serve", "--mode", "live"]);
+    expect(launch.environment).toEqual({
+      ZML_OCR_TRANSPORT: "agent",
+      ZML_OCR_AGENT_PATH: path.join(
+        "C:",
+        "Z Mining Log",
+        "resources",
+        "ocr-agent",
+        "zml-ocr-agent.exe",
+      ),
+    });
   });
 
   it("uses the game bridge virtualenv in development", () => {
@@ -36,6 +52,7 @@ describe("createBackendLaunchSpec", () => {
       "--mode",
       "live",
     ]);
+    expect(launch.environment).toBeUndefined();
   });
 });
 

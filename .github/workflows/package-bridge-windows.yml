@@ -1,4 +1,4 @@
-name: Package Bridge Windows
+name: Package Python Components Windows
 
 on:
   workflow_dispatch:
@@ -16,8 +16,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  package-bridge:
-    name: Package Bridge / Windows
+  package-python-components:
+    name: Package Python Components / Windows
     runs-on: windows-latest
 
     steps:
@@ -31,18 +31,38 @@ jobs:
         working-directory: apps/game-bridge
         run: just verify
 
+      - name: Install OCR Agent dependencies
+        working-directory: apps/ocr-agent
+        run: uv sync --locked --dev
+
+      - name: Verify OCR Agent
+        working-directory: apps/ocr-agent
+        run: just verify
+
+      - name: Package OCR Agent
+        working-directory: apps/ocr-agent
+        run: just package
+
       - name: Package bridge
         working-directory: apps/game-bridge
         run: just package
 
-      - name: Smoke test packaged bridge config
-        working-directory: apps/game-bridge
-        run: .\dist\zml-game-bridge\zml-game-bridge.exe config
+      - name: Verify packaged process tree
+        shell: pwsh
+        run: ./scripts/verify-python-artifacts.ps1
 
       - name: Upload bridge artifact
         uses: actions/upload-artifact@v6
         with:
           name: zml-game-bridge-windows-${{ github.event.inputs.build_name }}
           path: apps/game-bridge/dist/zml-game-bridge
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Upload OCR Agent artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: zml-ocr-agent-windows-${{ github.event.inputs.build_name }}
+          path: apps/ocr-agent/dist/zml-ocr-agent
           retention-days: 14
           if-no-files-found: error

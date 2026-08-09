@@ -50,6 +50,7 @@ Input modes:
 ## Useful Environment Variables
 
 - `ZML_LOG_LEVEL`: console log level, defaults to `INFO`.
+- `ZML_HOST` / `ZML_PORT`: backend bind address, defaults to `127.0.0.1:17171`.
 - `ZML_APP_DATA_DIR`: optional override for the directory containing backend DB, config, logs, and OCR captures.
 - `ZML_ERROR_LOG_PATH`: optional override for error-only log file.
 - `ZML_DB_PATH`: optional override for SQLite DB path.
@@ -72,6 +73,11 @@ Input modes:
 - `ZML_FINDER_RECORDING_LOW_CONFIDENCE_INTERVAL_S`: minimum cadence for low-confidence samples, defaults to `5`.
 - `ZML_OCR_PROFILING`: enable OCR timing summaries in logs.
 - `ZML_OCR_PROFILING_INTERVAL_S`: OCR profiling summary interval, defaults to `10`.
+
+Windows packaging builds Game Bridge and OCR Agent as separate Python 3.13
+artifacts. Packaged Electron supplies `ZML_OCR_TRANSPORT=agent` and the bundled
+`ZML_OCR_AGENT_PATH`; source runs keep `embedded` as the migration rollback
+default until packaged gameplay validation is complete.
 
 For manual finder recording, enable `manual` mode and create a `record-now.flag` file in `ZML_FINDER_RECORDING_DIR`; the OCR worker consumes the flag on the next finder frame.
 

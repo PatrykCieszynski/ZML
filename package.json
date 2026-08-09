@@ -14,9 +14,11 @@
     "bridge:verify": "cd apps/game-bridge && just verify",
 
     "ocr-agent:format": "cd apps/ocr-agent && just format",
+    "ocr-agent:package": "cd apps/ocr-agent && just package",
     "ocr-agent:verify": "cd apps/ocr-agent && just verify",
 
-    "backend:stage": "node scripts/stage-backend.mjs",
+    "python:stage": "node scripts/stage-python-components.mjs",
+    "backend:stage": "pnpm python:stage",
 
     "shared:verify": "pnpm --filter @zml/shared typecheck && pnpm --filter @zml/shared build",
 
@@ -26,7 +28,7 @@
 
     "verify": "pnpm ocr-agent:verify && pnpm bridge:verify && pnpm frontend:verify",
     "build": "pnpm frontend:build",
-    "package": "pnpm bridge:package && pnpm backend:stage && pnpm frontend:package",
+    "package": "pnpm ocr-agent:package && pnpm bridge:package && pnpm python:stage && pnpm frontend:package",
     "lint": "cd apps/ocr-agent && just lint && cd ../game-bridge && just lint && cd ../.. && pnpm --filter @zml/electron-ui lint"
   },
   "devDependencies": {
