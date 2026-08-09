@@ -1,3 +1,5 @@
+import type { components } from "@zml/api-contract";
+
 export type RunDto = {
     runId: number;
     name: string;
@@ -7,14 +9,7 @@ export type RunDto = {
     updatedTsMs?: number;
 };
 
-export type RunWire = {
-    run_id: number;
-    name: string;
-    status: string;
-    notes?: string | null;
-    created_ts_ms?: number;
-    updated_ts_ms?: number;
-};
+export type RunWire = components["schemas"]["RunDto"];
 
 export type RunSegmentDto = {
     segmentId: string;
@@ -30,19 +25,7 @@ export type RunSegmentDto = {
     updatedTsMs: number;
 };
 
-export type RunSegmentWire = {
-    segment_id: string;
-    run_id: number;
-    segment_index: number;
-    status: string;
-    started_ts_ms: number;
-    ended_ts_ms: number | null;
-    setup_hash: string;
-    setup_snapshot: Record<string, unknown>;
-    notes?: string | null;
-    created_ts_ms: number;
-    updated_ts_ms: number;
-};
+export type RunSegmentWire = components["schemas"]["RunSegmentDto"];
 
 export type RunSegmentStartedEventWire = {
     segment_id: string;
@@ -73,6 +56,10 @@ export type UpdateRunRequest = {
     name?: string;
     notes?: string | null;
 };
+
+export type StartRunRequestWire = components["schemas"]["StartRunRequestDto"];
+export type StopRunRequestWire = components["schemas"]["StopRunRequestDto"];
+export type UpdateRunRequestWire = components["schemas"]["UpdateRunRequestDto"];
 
 export function isStartRunRequest(value: unknown): value is StartRunRequest {
     if (!isRecord(value)) return false;
@@ -207,20 +194,20 @@ export function runSegmentDtoWithEndedEvent(
     };
 }
 
-export function startRunRequestToWire(request: StartRunRequest): StartRunRequest {
+export function startRunRequestToWire(request: StartRunRequest): StartRunRequestWire {
     return {
         name: request.name.trim(),
         notes: request.notes ?? null,
     };
 }
 
-export function stopRunRequestToWire(request: StopRunRequest): { run_id?: number } {
+export function stopRunRequestToWire(request: StopRunRequest): StopRunRequestWire {
     return {
         run_id: request.runId,
     };
 }
 
-export function updateRunRequestToWire(request: UpdateRunRequest): UpdateRunRequest {
+export function updateRunRequestToWire(request: UpdateRunRequest): UpdateRunRequestWire {
     return {
         ...(request.name === undefined ? {} : { name: request.name.trim() }),
         ...(request.notes === undefined ? {} : { notes: request.notes }),
