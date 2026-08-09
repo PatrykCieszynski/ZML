@@ -6,27 +6,6 @@
     "apps/*",
     "packages/*"
   ],
-  "scripts": {
-    "dev": "pnpm --filter @zml/electron-ui dev",
-    "ocr-protocol:format": "cd packages/ocr-protocol && just format",
-    "ocr-protocol:verify": "cd packages/ocr-protocol && just verify",
-    "bridge:format": "cd apps/game-bridge && just format",
-    "bridge:package": "cd apps/game-bridge && just package",
-    "bridge:verify": "cd apps/game-bridge && just verify",
-    "ocr-agent:format": "cd apps/ocr-agent && just format",
-    "ocr-agent:package": "cd apps/ocr-agent && just package",
-    "ocr-agent:verify": "cd apps/ocr-agent && just verify",
-    "python:stage": "node scripts/stage-python-components.mjs",
-    "backend:stage": "pnpm python:stage",
-    "shared:verify": "pnpm --filter @zml/shared typecheck && pnpm --filter @zml/shared build",
-    "frontend:verify": "pnpm shared:verify && pnpm --filter @zml/electron-ui typecheck && pnpm --filter @zml/electron-ui lint && pnpm --filter @zml/electron-ui test && pnpm --filter @zml/electron-ui build",
-    "frontend:build": "pnpm --filter @zml/shared build && pnpm --filter @zml/electron-ui build",
-    "frontend:package": "pnpm --filter @zml/shared build && pnpm --filter @zml/electron-ui package",
-    "verify": "pnpm ocr-protocol:verify && pnpm ocr-agent:verify && pnpm bridge:verify && pnpm frontend:verify",
-    "build": "pnpm frontend:build",
-    "package": "pnpm ocr-agent:package && pnpm bridge:package && pnpm python:stage && pnpm frontend:package",
-    "lint": "cd packages/ocr-protocol && just lint && cd ../../apps/ocr-agent && just lint && cd ../game-bridge && just lint && cd ../.. && pnpm --filter @zml/electron-ui lint"
-  },
   "devDependencies": {
     "concurrently": "^9.2.1",
     "eslint-config-prettier": "^10.1.8",
