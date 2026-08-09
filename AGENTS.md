@@ -1,164 +1,132 @@
-# Z Mining Log - Agent Handoff
+# Z Mining Log - Agent Guide
 
-This repository is a local-first Entropia Universe mining tracker. It has a
-Python backend (`apps/backend`), an Electron/React UI (`apps/desktop`),
-and desktop-internal shared TypeScript modules (`apps/desktop/shared`).
+This file is the operational entry point for automated coding agents working in this repository.
 
-Use this file as the first stop for future Codex/agent work. The deeper project
-notes live in:
+## Read first
 
-- `docs/architecture.md`
-- `docs/current-state.md`
-- `docs/decisions/`
-- `ROADMAP_2025-05-26.md`
+Before changing architecture or runtime boundaries, read:
 
-## Working Rules
+1. `README.md`
+2. `docs/architecture.md`
+3. the README of the component being changed
+4. `docs/current-state.md`
 
-- Do not revert user changes. The worktree may be dirty.
-- Prefer reading the current code before changing it. A lot of design was
-  refined during real gameplay testing.
-- Use `rg` / `rg --files` for searches.
-- Use `apply_patch` for manual edits.
-- Keep changes small and scoped. This project has several moving parts and
-  accidental cross-layer rewrites are expensive.
-- The user prefers not to run local `ruff`, `pyright`, or broad lint pipelines
-  unless explicitly requested. CI/PR checks cover those. Focused tests or
-  TypeScript checks are fine when useful.
-- Do not start the Desktop, Vite dev server, Browser tooling, or mock UI
-  preview for routine verification unless the user explicitly asks. Prefer
-  focused tests, typechecks, and builds.
+`docs/decisions/` contains historical ADRs. They explain why earlier choices were made, but may use superseded names. Current code and current documentation win when they disagree with an old ADR.
 
-## Agent Environment
+## Repository boundaries
 
-For one-shot commands, prefer the wrapper so Windows execution policy does not
-block the setup:
+```text
+apps/desktop      Electron + React application
+apps/backend      Python/FastAPI application
+apps/ocr-worker   standalone Windows OCR process
+
+packages/api-contract   generated TypeScript REST contract
+packages/ocr-protocol   versioned Python OCR stdio contract
+```
+
+Critical invariants:
+
+- Backend must **not** import `zml_ocr_worker` or native OCR dependencies.
+- `apps/backend/src/zml_backend/runtime/ocr_worker` owns process lifecycle/transport only.
+- OCR implementation and native libraries belong to `apps/ocr-worker`.
+- REST wire schemas come from FastAPI/OpenAPI through `packages/api-contract`.
+- `apps/desktop/shared` is desktop-internal shared code for Electron main/preload/renderer; it is not a cross-repository package.
+- SQLite writes go through `DbWriterWorker`.
+- High-frequency position telemetry is not persisted as a raw event stream.
+- Input `Signal` objects are transient; durable `Event` objects are persisted/projected.
+- Renderer code talks to privileged Electron code through the preload API/IPC, not direct Node access.
+
+The OCR protocol still contains versioned DTO names such as `AgentHello` / `BridgeToAgentMessage`. Do not rename protocol vocabulary casually; treat that as a protocol compatibility change.
+
+## Working rules
+
+- Inspect current code before changing it; do not reconstruct architecture from old docs or branch names.
+- Do not revert unrelated user changes.
+- Keep changes scoped to the owning component when possible.
+- Prefer the repository `just` interface over ad-hoc root npm or Python commands.
+- Do not edit generated API contract output by hand; regenerate it.
+- Keep code comments in English.
+- Avoid introducing a second source of truth for DTOs, paths, configuration, or lifecycle rules.
+- During iteration, prefer focused tests/typechecks for the changed component. CI is the complete repository gate.
+
+## Common commands
+
+From the repository root:
 
 ```powershell
-.\scripts\agent-env.cmd -- pnpm --filter @zml/desktop typecheck
-.\scripts\agent-env.cmd -- just test
-```
-
-For an interactive PowerShell session, initialize the repo-local agent
-environment first:
-
-```powershell
-Set-ExecutionPolicy -Scope Process Bypass
-. .\scripts\agent-env.ps1
-```
-
-This sets `UV_CACHE_DIR` to `apps/backend/.uv-cache`, keeps temporary files
-in repo-local `.tmp`, prefers local tools from `Y:\Software`, and defines
-`pnpm` as a `corepack pnpm` wrapper. For one-shot commands, use
-`scripts\agent-env.cmd`.
-
-## High-Level Architecture
-
-The backend has three important flows:
-
-1. High-frequency position telemetry:
-   - OCR position input
-   - `PositionTrackingService`
-   - WebSocket to Electron
-   - not persisted as a position stream
-
-2. Mining domain flow:
-   - OCR/chat/mock input signals
-   - `RuntimeInputChannel`
-   - `InputCoordinator`
-   - `MiningCoordinator`
-   - durable domain events
-   - `DbWriterWorker`
-   - SQLite event journal + projection tables
-   - SSE to Electron
-
-3. UI command flow:
-   - React renderer
-   - Electron IPC
-   - Electron REST client
-   - FastAPI route
-   - runtime command through the input queue when it changes mining state
-   - durable events through the DB writer when persistence is needed
-
-4. Desktop process lifecycle:
-   - Electron starts the default local backend from `.venv` in development
-   - packaged Electron starts `resources/backend/zml-backend.exe`
-   - backend shutdown travels through the parent stdin pipe and FastAPI lifespan
-   - explicit/custom backends remain externally owned
-
-See `docs/architecture.md` for details.
-
-## Core Naming Rules
-
-- `Signal`: an internal observation from OCR, chat, mock input, or another
-  noisy input source. Signals are not persisted.
-- `Event`: a durable domain fact. Events may be persisted, projected, and sent
-  to the UI.
-- `Command`: a user/API/runtime intent. Commands that affect mining state should
-  enter the runtime input queue and be handled by the coordinator/service layer.
-- `Projection`: a query table derived from durable events inside the DB writer
-  transaction. Projections are read models, not a second independent write path.
-
-## Important Boundaries
-
-- `inputs/*` parses or observes external sources and emits signals.
-- `application/*` contains business/application logic.
-- `domain/*` contains durable event/value objects and pure domain helpers.
-- `runtime/*` owns queues, workers, startup/shutdown, and threading.
-- `persistence/*` owns SQLite schema, event store, readers, projections, and
-  writer-side SQL.
-- `api/*` owns FastAPI routes, dependencies, schemas, and live channels.
-- `apps/desktop/shared/*` owns TypeScript models and IPC contracts shared by
-  Electron main/preload and renderer code. Backend REST wire schemas come from
-  `packages/api-contract` instead of being duplicated here.
-
-Avoid importing input-specific OCR models into `application/*`. Convert to an
-application/domain model first. `PositionProvider` is intentionally in
-`application.position`, not in mining claims.
-
-## SQLite And Threading
-
-- SQLite writes go through one writer thread: `DbWriterWorker`.
-- API reads open separate read connections via `api.dependencies`.
-- Runtime commands may synchronously wait for their durable events to be
-  persisted when the UI needs read-after-write behavior.
-- Do not add ad hoc SQLite writes from input threads, API handlers, or UI code.
-
-## Current Hot Areas
-
-Check `docs/current-state.md` and `ROADMAP_2025-05-26.md` before touching these:
-
-- run/segment correctness and setup snapshots
-- claim lifecycle and manual claim repair actions
-- loot aggregation vs raw `MiningItemReceivedEvent` spam
-- OCR finder/position stability
-- ROI calibration for finder and compass
-- Desktop map/dashboard polish
-
-## Useful Commands
-
-Root:
-
-```bash
-corepack pnpm dev
-corepack pnpm bridge:verify
-corepack pnpm frontend:verify
-corepack pnpm verify
-```
-
-Backend:
-
-```bash
-cd apps/backend
+just dev
+just verify
 just test
-just ocr
+just lint
+just build
+just package
 ```
 
-Frontend:
+Component commands:
 
-```bash
-corepack pnpm --filter @zml/desktop dev
-corepack pnpm --filter @zml/desktop typecheck
-corepack pnpm --filter @zml/desktop build
+```powershell
+just backend --list
+just ocr --list
+just protocol --list
+just api --list
+just desktop --list
 ```
 
-Use focused checks during agent work unless the user asks for full verification.
+Typical focused verification:
+
+```powershell
+just backend verify
+just ocr verify
+just protocol verify
+just api generate
+just desktop verify
+```
+
+On Windows agent environments, `scripts/agent-env.cmd` can wrap one-shot commands while keeping temp/cache directories inside the repository:
+
+```powershell
+.\scripts\agent-env.cmd -- just backend test
+.\scripts\agent-env.cmd -- pnpm --filter @zml/desktop typecheck
+```
+
+## Generated REST contract
+
+FastAPI/Pydantic is the source of truth:
+
+```text
+Backend schemas -> OpenAPI -> packages/api-contract/schema.d.ts -> Desktop
+```
+
+Run:
+
+```powershell
+just api generate
+```
+
+The generated `openapi.json` and `schema.d.ts` are local build artifacts and are intentionally ignored by Git.
+
+## Process ownership
+
+```mermaid
+flowchart LR
+    Desktop -->|spawns / supervises| Backend
+    Backend -->|spawns / supervises| Worker[OCR Worker]
+```
+
+When changing startup/shutdown behavior, preserve the existing ownership chain and packaged process-tree checks. The Windows packaging verification explicitly checks that the OCR child does not survive Backend shutdown.
+
+## Persistence ownership
+
+Do not add direct SQLite writes from API handlers, OCR/chat threads, or Electron. Durable writes belong to the single DB writer path; API routes may open read connections.
+
+## Where to document changes
+
+- Product/repository entry point: `README.md`
+- Cross-component architecture: `docs/architecture.md`
+- Developer workflow/tooling: `docs/development.md`
+- Release/build pipeline: `docs/packaging.md`
+- Short-lived project status/priorities: `docs/current-state.md`
+- Component-specific behavior: that component's `README.md`
+- Durable architecture rationale: a new ADR under `docs/decisions/`
+
+Do not create README files for ordinary source-code folders unless that subsystem becomes independently complex enough to justify its own maintained handbook.
