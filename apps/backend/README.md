@@ -7,13 +7,15 @@ It owns FastAPI, application/domain logic, runtime orchestration, SQLite persist
 ## Boundary
 
 ```mermaid
-flowchart LR
+flowchart TB
     Chat[chat.log] --> Inputs[Backend inputs]
     Worker[OCR Worker] -->|zml-ocr-protocol| Inputs
-    Inputs --> App[Application/domain]
-    App --> DB[(SQLite)]
-    App --> API[FastAPI]
-    DB --> API
+    Inputs --> App[Application / domain]
+
+    App -->|writes durable events + projections| DB[(SQLite)]
+    DB -.->|reads projections + history| API[FastAPI]
+    App -->|commands / live state| API
+
     API -->|REST / SSE / WebSocket| Desktop[Desktop]
 ```
 
@@ -37,7 +39,7 @@ See [`../../docs/architecture.md`](../../docs/architecture.md) for cross-compone
 ## Runtime flow
 
 ```mermaid
-flowchart LR
+flowchart TB
     Observations[OCR / chat / mock / UI command] --> Queue[RuntimeInputChannel]
     Queue --> Input[InputCoordinator]
     Input --> Mining[MiningCoordinator + services]
