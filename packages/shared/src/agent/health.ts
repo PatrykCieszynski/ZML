@@ -1,4 +1,6 @@
-export type WorkerHealthState = "running" | "degraded" | "crashed" | "stopped";
+import type { components } from "@zml/api-contract";
+
+export type WorkerHealthState = components["schemas"]["WorkerHealthDto"]["state"];
 
 export type WorkerHealthDto = {
     state: WorkerHealthState;
@@ -12,17 +14,8 @@ export type AgentHealthDto = {
     workers: Record<string, WorkerHealthDto>;
 };
 
-export type WorkerHealthWire = {
-    state: WorkerHealthState;
-    enabled: boolean;
-    last_error: string | null;
-    last_seen_ts_ms: number;
-};
-
-export type AgentHealthWire = {
-    status: WorkerHealthState;
-    workers: Record<string, WorkerHealthWire>;
-};
+export type WorkerHealthWire = components["schemas"]["WorkerHealthDto"];
+export type AgentHealthWire = components["schemas"]["HealthDto"];
 
 export function isAgentHealthWire(value: unknown): value is AgentHealthWire {
     if (!isRecord(value) || !isWorkerHealthState(value.status) || !isRecord(value.workers)) {
