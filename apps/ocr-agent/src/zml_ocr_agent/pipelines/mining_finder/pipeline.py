@@ -7,7 +7,6 @@ from typing import Protocol
 
 import numpy as np
 
-from zml_ocr_agent.models import MiningMode
 from zml_ocr_agent.pipelines.mining_finder.model import (
     FinderFeatures,
     FinderStatusKind,
@@ -17,6 +16,7 @@ from zml_ocr_agent.pipelines.mining_finder.vision import (
     FinderFeatureDetector,
     VisionFinderFeatureDetector,
 )
+from zml_ocr_agent.pipelines.model import MiningMode
 
 logger = logging.getLogger(__name__)
 

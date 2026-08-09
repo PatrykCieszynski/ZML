@@ -25,7 +25,6 @@ describe("createBackendLaunchSpec", () => {
     );
     expect(launch.args).toEqual(["serve", "--mode", "live"]);
     expect(launch.environment).toEqual({
-      ZML_OCR_TRANSPORT: "agent",
       ZML_OCR_AGENT_PATH: path.join(
         "C:",
         "Z Mining Log",
@@ -52,7 +51,13 @@ describe("createBackendLaunchSpec", () => {
       "--mode",
       "live",
     ]);
-    expect(launch.environment).toBeUndefined();
+    const ocrAgentDir = path.resolve(appRoot, "..", "ocr-agent");
+    expect(launch.environment).toEqual({
+      ZML_OCR_AGENT_PATH:
+        process.platform === "win32"
+          ? path.join(ocrAgentDir, ".venv", "Scripts", "zml-ocr-agent.exe")
+          : path.join(ocrAgentDir, ".venv", "bin", "zml-ocr-agent"),
+    });
   });
 });
 

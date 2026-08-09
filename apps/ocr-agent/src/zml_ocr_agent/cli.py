@@ -27,7 +27,7 @@ def main(argv: list[str] | None = None) -> int:
 
             return run_doctor()
         case "stdio":
-            from zml_ocr_agent.stdio import run_stdio
+            from zml_ocr_agent.runtime.stdio import run_stdio
 
             return run_stdio()
     raise RuntimeError(f"Unsupported command: {args.command}")

@@ -34,8 +34,8 @@ from zml_ocr_protocol.messages import (
 )
 
 from zml_ocr_agent.config import OcrRoiProfile
-from zml_ocr_agent.message_factory import AgentMessageFactory
-from zml_ocr_agent.stdio import AgentRuntimeState, ProtocolWriter, run_stdio
+from zml_ocr_agent.runtime.message_factory import AgentMessageFactory
+from zml_ocr_agent.runtime.stdio import AgentRuntimeState, ProtocolWriter, run_stdio
 
 
 def test_protocol_writer_assigns_wire_sequence_in_emission_order() -> None:
@@ -98,10 +98,10 @@ def test_stdio_applies_config_idempotently_rejects_stale_revision_and_shuts_down
         stop_event.wait(timeout=1.0)
 
     monkeypatch.setattr(
-        "zml_ocr_agent.stdio.preload_tesserocr_preserving_sigint_handler",
+        "zml_ocr_agent.runtime.stdio.preload_tesserocr_preserving_sigint_handler",
         lambda: None,
     )
-    monkeypatch.setattr("zml_ocr_agent.stdio.start_ocr_input", fake_runner)
+    monkeypatch.setattr("zml_ocr_agent.runtime.stdio.start_ocr_input", fake_runner)
     apply = _apply_config(tmp_path=tmp_path, revision=4, command_id="a" * 32)
     duplicate = apply.model_copy(update={"command_id": "b" * 32})
     stale = apply.model_copy(

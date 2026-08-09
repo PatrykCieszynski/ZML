@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 
-from zml_ocr_agent.models import MiningMode
 from zml_ocr_agent.pipelines.mining_finder.model import FinderFeatures
 from zml_ocr_agent.pipelines.mining_finder.parsing import (
     classify_status,
@@ -12,6 +11,7 @@ from zml_ocr_agent.pipelines.mining_finder.pipeline import (
     MiningFinderPipeline,
     MiningFinderPipelineConfig,
 )
+from zml_ocr_agent.pipelines.model import MiningMode
 
 
 class FakeFeatureDetector:

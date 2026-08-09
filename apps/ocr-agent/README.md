@@ -3,9 +3,8 @@
 Standalone Windows screen-capture and OCR component for Z Mining Log.
 
 The agent owns the native OCR stack and emits versioned NDJSON messages on
-stdout. Logs are written to stderr. Game Bridge can run the agent as a managed
-child with `ZML_OCR_TRANSPORT=agent`; the temporary embedded adapter remains the
-default rollback path during migration.
+stdout. Logs are written to stderr. Game Bridge always runs it as a managed
+child process and never imports this Python package.
 
 ```powershell
 uv run zml-ocr-agent --version
@@ -28,3 +27,13 @@ Windows `tesserocr` dependency is distributed as a CPython 3.13 wheel.
 `just package` creates `dist/zml-ocr-agent/zml-ocr-agent.exe` together with its
 private native OCR libraries and tessdata. Game Bridge packaging intentionally
 does not contain those files.
+
+The application is organized around the OCR pipeline rather than backend DDD
+layers:
+
+- `capture/`: Windows capture and capture models;
+- `pipelines/`: position/finder preprocessing, recognition, and observations;
+- `runtime/`: stdio command loop, runner lifecycle, message creation, profiling,
+  native Tesseract initialization, and runtime paths;
+- `config.py`: applied OCR configuration and ROI profile conversion;
+- `cli.py`, `doctor.py`, and `finder_debug.py`: process entrypoints and tools.

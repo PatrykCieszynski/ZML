@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import time
 
-from zml_ocr_agent.profiling import (
+from zml_ocr_agent.runtime.profiling import (
     OcrProfiler,
     OcrProfilingConfig,
     ocr_profiling_config_from_env,
@@ -43,7 +43,7 @@ def test_ocr_profiler_logs_scoped_summaries(caplog) -> None:
         scope = message.split("scope=", maxsplit=1)[1].split(" ", maxsplit=1)[0]
         records_by_scope[scope] = record
     assert set(records_by_scope) == {"all", "finder", "position"}
-    assert records_by_scope["all"].name == "zml_ocr_agent.profiling"
+    assert records_by_scope["all"].name == "zml_ocr_agent.runtime.profiling"
     assert records_by_scope["finder"].name.endswith(".profiling.finder")
     assert records_by_scope["position"].name.endswith(".profiling.position")
     assert "capture_count=1" in records_by_scope["all"].getMessage()

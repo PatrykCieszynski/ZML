@@ -42,10 +42,9 @@ def test_stdio_transport_writes_and_reads_protocol_lines() -> None:
 
 
 def test_normalize_command_rejects_an_empty_command() -> None:
-    assert normalize_command(["python", "", "  ", "-m", "zml_ocr_agent"]) == (
-        "python",
-        "-m",
-        "zml_ocr_agent",
+    assert normalize_command(["zml-ocr-agent", "", "  ", "stdio"]) == (
+        "zml-ocr-agent",
+        "stdio",
     )
     with pytest.raises(ValueError, match="cannot be empty"):
         normalize_command(["", "  "])

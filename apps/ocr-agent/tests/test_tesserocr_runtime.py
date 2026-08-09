@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import signal
 
-from zml_ocr_agent import tesserocr_runtime
+from zml_ocr_agent.runtime import tesserocr
 
 
 def test_main_thread_preload_restores_sigint_handler(monkeypatch) -> None:
@@ -23,9 +23,9 @@ def test_main_thread_preload_restores_sigint_handler(monkeypatch) -> None:
 
     try:
         signal.signal(signal.SIGINT, uvicorn_handler)
-        monkeypatch.setattr(tesserocr_runtime.importlib, "import_module", fake_import_module)
+        monkeypatch.setattr(tesserocr.importlib, "import_module", fake_import_module)
 
-        result = tesserocr_runtime.preload_tesserocr_preserving_sigint_handler()
+        result = tesserocr.preload_tesserocr_preserving_sigint_handler()
 
         assert result is sentinel
         assert signal.getsignal(signal.SIGINT) is uvicorn_handler

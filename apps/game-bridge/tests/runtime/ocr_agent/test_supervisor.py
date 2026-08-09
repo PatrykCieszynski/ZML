@@ -33,8 +33,8 @@ from zml_ocr_protocol.messages import (
 from zml_game_bridge.application.mining.signals.finder import FinderNoResourcesSignal
 from zml_game_bridge.application.position.model import PositionSnapshot
 from zml_game_bridge.events.base import SignalBase
-from zml_game_bridge.runtime.ocr_agent.config import build_desired_ocr_config
-from zml_game_bridge.runtime.ocr_agent.message_mapper import OcrAgentMessageMapper
+from zml_game_bridge.inputs.ocr_agent.config import build_desired_ocr_config
+from zml_game_bridge.inputs.ocr_agent.message_mapper import OcrAgentMessageMapper
 from zml_game_bridge.runtime.ocr_agent.process_transport import (
     OcrAgentProcessConfig,
     OcrProcessTransport,
@@ -152,6 +152,10 @@ def test_supervisor_restarts_agent_and_accepts_position_and_finder_after_restart
 
     supervisor = WorkerSupervisor()
     supervisor.register("ocr_worker", enabled=True)
+    mapper = OcrAgentMessageMapper(
+        position_sink=positions.append,
+        signal_sink=signal_sink,
+    )
     source = OcrAgentSupervisor(
         config=OcrAgentSupervisorConfig(
             enabled=True,
@@ -165,8 +169,8 @@ def test_supervisor_restarts_agent_and_accepts_position_and_finder_after_restart
             restart=RestartPolicy(delays_s=(0.0,), stable_reset_s=1.0),
         ),
         supervisor=supervisor,
-        position_sink=positions.append,
-        signal_sink=signal_sink,
+        position_message_sink=mapper.map_position,
+        finder_message_sink=mapper.map_finder,
         transport_factory=transport_factory,
     )
 
@@ -200,7 +204,8 @@ def _session(
         clock_ms=clock_ms,
     )
     session = _ProtocolSession(
-        mapper=mapper,
+        position_message_sink=mapper.map_position,
+        finder_message_sink=mapper.map_finder,
         supervisor=supervisor,
         monotonic=time.monotonic,
     )

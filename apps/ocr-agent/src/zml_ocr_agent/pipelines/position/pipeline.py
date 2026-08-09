@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from zml_ocr_agent.models import WorldPosition
+from zml_ocr_agent.pipelines.model import WorldPosition
 from zml_ocr_agent.pipelines.position.engine import TesserDigitsEngine
 from zml_ocr_agent.pipelines.position.model import OcrPosition, PositionRois
 from zml_ocr_agent.pipelines.position.preprocess import (
@@ -12,7 +12,7 @@ from zml_ocr_agent.pipelines.position.preprocess import (
     DigitsPreprocessor,
 )
 from zml_ocr_agent.pipelines.text import digits_only
-from zml_ocr_agent.profiling import OcrProfiler
+from zml_ocr_agent.runtime.profiling import OcrProfiler
 
 
 @dataclass(frozen=True, slots=True)

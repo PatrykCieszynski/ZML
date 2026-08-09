@@ -6,8 +6,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TextIO
 
-from zml_ocr_agent.paths import get_tessdata_dir
-from zml_ocr_agent.tesserocr_runtime import preload_tesserocr_preserving_sigint_handler
+from zml_ocr_agent.runtime.paths import get_tessdata_dir
+from zml_ocr_agent.runtime.tesserocr import preload_tesserocr_preserving_sigint_handler
 
 
 def run_doctor(*, output: TextIO = sys.stdout) -> int:

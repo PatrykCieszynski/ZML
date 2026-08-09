@@ -11,12 +11,10 @@ dependencies = [
     "rich>=14.2.0",
     "typer>=0.20.0",
     "uvicorn[standard]>=0.40.0",
-    "zml-ocr-agent==0.1.0",
     "zml-ocr-protocol==0.1.0",
 ]
 
 [tool.uv.sources]
-zml-ocr-agent = { path = "../ocr-agent", editable = true }
 zml-ocr-protocol = { path = "../../packages/ocr-protocol", editable = true }
 
 [dependency-groups]
