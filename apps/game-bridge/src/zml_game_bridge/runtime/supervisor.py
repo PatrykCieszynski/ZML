@@ -26,6 +26,9 @@ class WorkerSupervisor:
     def mark_crashed(self, name: str, exc: BaseException) -> None:
         self._health.mark_crashed(name, exc)
 
+    def mark_running(self, name: str) -> None:
+        self._health.mark_running(name)
+
     def mark_degraded(self, name: str, message: str) -> None:
         self._health.mark_degraded(name, message)
 

@@ -12,7 +12,10 @@ from pathlib import Path
 import numpy as np
 
 from zml_game_bridge.events.contracts import SignalSink
-from zml_game_bridge.inputs.ocr.capture.window_capturer import WindowCapturer
+from zml_game_bridge.inputs.ocr.capture.window_capturer import (
+    WindowCapturer,
+    WindowCaptureUnavailableError,
+)
 from zml_game_bridge.inputs.ocr.config import OcrRoiProfile, load_ocr_roi_profile
 from zml_game_bridge.inputs.ocr.pipelines.mining_finder.model import MiningFinderSignal
 from zml_game_bridge.inputs.ocr.pipelines.mining_finder.pipeline import (
@@ -45,13 +48,17 @@ from zml_game_bridge.inputs.ocr.profiling import (
 )
 
 PositionSink = Callable[[OcrPosition], None]
+CaptureStatusSink = Callable[[bool, str | None], None]
 logger = logging.getLogger(__name__)
+
+_TARGET_WINDOW_RETRY_INTERVAL_S = 1.0
 
 
 def start_ocr_input(
     *,
     position_sink: PositionSink,
     signal_sink: SignalSink | None = None,
+    capture_status_sink: CaptureStatusSink | None = None,
     stop_event: threading.Event,
     target_hz: float = 10.0,
     finder_debug_logging: bool | None = None,
@@ -165,6 +172,7 @@ def start_ocr_input(
     tick = 0
     finder_future: Future[list[MiningFinderSignal]] | None = None
     finder_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="zml-finder-ocr")
+    target_window_available: bool | None = None
 
     try:
         while not stop_event.is_set():
@@ -179,8 +187,22 @@ def start_ocr_input(
             tick += 1
 
             capture_started_at = time.perf_counter()
-            frame = cap.grab()
+            frame, capture_error = _try_grab_frame(cap)
             profiler.record_elapsed("capture", capture_started_at)
+            if frame is None:
+                if target_window_available is not False:
+                    logger.info("ocr_target_window_waiting error=%s", capture_error)
+                    if capture_status_sink is not None:
+                        capture_status_sink(False, capture_error)
+                target_window_available = False
+                stop_event.wait(_TARGET_WINDOW_RETRY_INTERVAL_S)
+                next_t = time.perf_counter()
+                continue
+            if target_window_available is not True:
+                logger.info("ocr_target_window_available")
+                if capture_status_sink is not None:
+                    capture_status_sink(True, None)
+            target_window_available = True
 
             ts_ms = time.time_ns() // 1_000_000
 
@@ -268,6 +290,16 @@ def start_ocr_input(
         cap.close()
         position_pipeline.close()
         finder_pipeline.close()
+
+
+def _try_grab_frame(
+    capturer: WindowCapturer,
+) -> tuple[np.ndarray | None, str | None]:
+    try:
+        return capturer.grab(), None
+    except WindowCaptureUnavailableError as exc:
+        capturer.close()
+        return None, str(exc)
 
 
 def _env_bool(name: str, *, default: bool) -> bool:

@@ -79,6 +79,12 @@ The backend has three important flows:
    - runtime command through the input queue when it changes mining state
    - durable events through the DB writer when persistence is needed
 
+4. Desktop process lifecycle:
+   - Electron starts the default local backend from `.venv` in development
+   - packaged Electron starts `resources/backend/zml-game-bridge.exe`
+   - backend shutdown travels through the parent stdin pipe and FastAPI lifespan
+   - explicit/custom backends remain externally owned
+
 See `docs/architecture.md` for details.
 
 ## Core Naming Rules

@@ -7,6 +7,7 @@ import {
   type PlanetId,
   type PlanetMapConfig,
 } from "@zml/shared";
+import { buildMapTileUrl } from "../mapTileUrl";
 
 function getAvailableTileKeys(planet: PlanetMapConfig): Set<string> {
   if (planet.availableTiles) {
@@ -37,11 +38,6 @@ export function createMapTileLayer(planetId: PlanetId): TileLayer<string | null>
   const planet = MAP_CONFIG.planets[planetId];
   const { width, height } = getMapSizePx(MAP_CONFIG, planetId);
   const availableTileKeys = getAvailableTileKeys(planet);
-  const base = encodeURI(
-    planet.tileFolder.startsWith("/")
-      ? planet.tileFolder
-      : `/${planet.tileFolder}`,
-  );
 
   return new TileLayer<string | null>({
     id: `${planetId}-map-tiles`,
@@ -64,7 +60,12 @@ export function createMapTileLayer(planetId: PlanetId): TileLayer<string | null>
         return null;
       }
 
-      return `${base}/x${index.x}_y${index.y}.webp`;
+      return buildMapTileUrl(
+        import.meta.env.BASE_URL,
+        planet.tileFolder,
+        index.x,
+        index.y,
+      );
     },
     onTileError: () => undefined,
     renderSubLayers: ({ data, tile }) => {

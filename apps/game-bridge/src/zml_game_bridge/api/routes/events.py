@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import AsyncIterator
+from contextlib import suppress
 from typing import Annotated
 
 from fastapi import APIRouter, Query, Request
@@ -61,19 +62,26 @@ async def events_stream(request: Request, runtime: RuntimeDep) -> StreamingRespo
     client = hub.register()
 
     async def gen() -> AsyncIterator[str]:
+        event_task = asyncio.create_task(client.queue.get())
+        shutdown_task = asyncio.create_task(runtime.shutdown_signal.wait())
         try:
             yield ": connected\n\n"
 
             while True:
-                if await request.is_disconnected():
+                done, _ = await asyncio.wait(
+                    (event_task, shutdown_task),
+                    timeout=15.0,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if shutdown_task in done:
+                    await shutdown_task
                     break
-
-                try:
-                    env: EventEnvelope = await asyncio.wait_for(client.queue.get(), timeout=15.0)
-                except TimeoutError:
+                if event_task not in done:
                     yield ": keep-alive\n\n"
                     continue
 
+                env: EventEnvelope = event_task.result()
+                event_task = asyncio.create_task(client.queue.get())
                 dto = _to_dto(env)
                 data = dto.model_dump_json(exclude={"event_id", "event_type"})
 
@@ -86,6 +94,12 @@ async def events_stream(request: Request, runtime: RuntimeDep) -> StreamingRespo
                 yield f"event: {dto.event_type}\n"
                 yield f"data: {data}\n\n"
         finally:
+            for task in (event_task, shutdown_task):
+                if not task.done():
+                    task.cancel()
+            for task in (event_task, shutdown_task):
+                with suppress(asyncio.CancelledError):
+                    await task
             hub.unregister(client.client_id)
 
     headers = {

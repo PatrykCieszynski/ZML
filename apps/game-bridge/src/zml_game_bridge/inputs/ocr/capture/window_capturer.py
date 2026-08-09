@@ -12,6 +12,10 @@ PW_CLIENTONLY = 0x00000001
 PW_RENDERFULLCONTENT = 0x00000002
 
 
+class WindowCaptureUnavailableError(RuntimeError):
+    """The target window cannot be captured right now, but may appear again."""
+
+
 def _find_window_by_title_contains(title_substr: str) -> int:
     found: list[int] = []
 
@@ -24,7 +28,7 @@ def _find_window_by_title_contains(title_substr: str) -> int:
 
     win32gui.EnumWindows(enum_cb, 0)
     if not found:
-        raise RuntimeError(f"Window not found (title contains): {title_substr!r}")
+        raise WindowCaptureUnavailableError(f"Window not found (title contains): {title_substr!r}")
     return found[0]
 
 
@@ -46,7 +50,6 @@ class WindowCapturer:
         self._title_contains = title_contains
         self._flags = flags
         self._state: _GdiState | None = None
-        self._ensure_open()
 
     def close(self) -> None:
         st = self._state
@@ -78,7 +81,7 @@ class WindowCapturer:
             # Fallback: some apps hate FULLCONTENT; try client-only
             ok2 = windll.user32.PrintWindow(st.hwnd, st.save_dc.GetSafeHdc(), PW_CLIENTONLY)
             if ok2 != 1:
-                raise RuntimeError(f"PrintWindow failed: {ok} / fallback {ok2}")
+                raise WindowCaptureUnavailableError(f"PrintWindow failed: {ok} / fallback {ok2}")
 
         bmpinfo = cast(dict[str, int], st.bitmap.GetInfo())
         bmpstr = cast(bytes, st.bitmap.GetBitmapBits(True))
@@ -87,11 +90,13 @@ class WindowCapturer:
         width = int(bmpinfo.get("bmWidth", 0))
 
         if width <= 0 or height <= 0:
-            raise RuntimeError("Window has non-positive client size.")
+            raise WindowCaptureUnavailableError("Window has non-positive client size.")
 
         expected = width * height * 4
         if len(bmpstr) < expected:
-            raise RuntimeError(f"Bitmap has non-positive size.: {len(bmpstr)} < {expected}")
+            raise WindowCaptureUnavailableError(
+                f"Bitmap buffer is too small: {len(bmpstr)} < {expected}"
+            )
 
         img = np.frombuffer(bmpstr, dtype=np.uint8).reshape((height, width, 4))
         # PrintWindow returns BGRA; drop alpha.
@@ -106,6 +111,8 @@ class WindowCapturer:
 
         hwnd = _find_window_by_title_contains(self._title_contains)
         w, h = self._get_client_size(hwnd)
+        if w <= 0 or h <= 0:
+            raise WindowCaptureUnavailableError(f"Window has non-positive client size: {w}x{h}")
 
         hwnd_dc: int = win32gui.GetWindowDC(hwnd)
         mfc_dc: Any = win32ui.CreateDCFromHandle(hwnd_dc)

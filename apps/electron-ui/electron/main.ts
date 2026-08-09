@@ -24,6 +24,11 @@ import { pushPosition } from "./ipc/pushPosition.ts";
 import { pushStatePatch } from "./ipc/pushStatePatch.ts";
 import { applyMiningEvent, replaceMiningClaims, replaceMiningDrops } from "./mining/miningDropsState.ts";
 import {
+  BackendProcessManager,
+  createBackendLaunchSpec,
+  shouldManageBackend,
+} from "./backend/backendProcessManager.ts";
+import {
   applyMiningLootEvent,
   replaceMiningLoot,
   replaceMiningLootTotals,
@@ -43,6 +48,19 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 
 
 const BACKEND_URL = process.env.ZML_BACKEND_URL ?? "http://127.0.0.1:17171";
 const UI_MOCKS_ENABLED = isUiMockMode();
+const MANAGE_BACKEND = shouldManageBackend({
+  mocksEnabled: UI_MOCKS_ENABLED,
+  backendUrlOverridden: process.env.ZML_BACKEND_URL !== undefined,
+  explicitValue: process.env.ZML_MANAGE_BACKEND,
+});
+const backendProcessManager = new BackendProcessManager({
+  baseUrl: BACKEND_URL,
+  launch: createBackendLaunchSpec({
+    isPackaged: app.isPackaged,
+    resourcesPath: process.resourcesPath,
+    appRoot: process.env.APP_ROOT,
+  }),
+});
 const agentRestClient = UI_MOCKS_ENABLED
   ? new MockAgentRestClient()
   : new AgentRestClient({ baseUrl: BACKEND_URL });
@@ -53,6 +71,8 @@ let overlayWin: BrowserWindow | null = null;
 let stopPositionStream: StopPositionSource | null = null;
 let stopEventStream: StopAgentEventStream | null = null;
 let appIsQuitting = false;
+let backendShutdownComplete = false;
+let backendShutdownPromise: Promise<void> | null = null;
 
 function handlePositionStatus(status: PositionSourceStatus, err?: string) {
   runtime.agent.status = status;
@@ -271,9 +291,33 @@ async function createWindows() {
   void refreshMiningToolSnapshot();
 }
 
-app.on("before-quit", () => {
+async function startApplication(): Promise<void> {
+  const backendStartup = MANAGE_BACKEND
+    ? backendProcessManager.start().catch((error: unknown) => {
+        console.error("[backend] failed to start managed backend", error);
+        return false;
+      })
+    : Promise.resolve(false);
+  await createWindows();
+  await backendStartup;
+}
+
+app.on("before-quit", (event) => {
+  if (!MANAGE_BACKEND || backendShutdownComplete) {
+    appIsQuitting = true;
+    stopPositionStreamIfRunning();
+    return;
+  }
+
+  event.preventDefault();
   appIsQuitting = true;
   stopPositionStreamIfRunning();
+  if (backendShutdownPromise !== null) return;
+
+  backendShutdownPromise = backendProcessManager.stop().finally(() => {
+    backendShutdownComplete = true;
+    app.quit();
+  });
 });
 
 // Quit when all windows are closed, except on macOS. There, it's common
@@ -296,4 +340,7 @@ app.on('activate', () => {
   }
 })
 
-app.whenReady().then(createWindows)
+void app.whenReady().then(startApplication).catch((error: unknown) => {
+  console.error("Application startup failed", error);
+  app.quit();
+})
