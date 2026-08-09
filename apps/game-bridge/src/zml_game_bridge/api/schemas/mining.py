@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, cast
 
 from pydantic import BaseModel, ConfigDict
 
@@ -156,7 +156,7 @@ class MiningClaimDto(BaseModel):
             position=_claim_position_dto(row.position),
             search_radius_m=row.search_radius_m,
             resource_name=row.resource_name,
-            mining_type=row.mining_type,
+            mining_type=cast(MiningResourceTypeDto | None, row.mining_type),
             size_label=row.size_label,
             size_index=row.size_index,
             expected_expires_ts_ms=row.expected_expires_ts_ms,
