@@ -3,7 +3,7 @@ name = "zml-ocr-protocol"
 version = "0.1.0"
 description = "Versioned stdio protocol shared by ZML Game Bridge and OCR Agent"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.13,<3.14"
 dependencies = [
     "pydantic>=2.12.5,<3",
 ]
@@ -28,7 +28,7 @@ where = ["src"]
 [tool.pyright]
 include = ["src", "tests"]
 pythonVersion = "3.13"
-venvPath = "."
+venvPath = "../.."
 venv = ".venv"
 
 [tool.pytest.ini_options]
