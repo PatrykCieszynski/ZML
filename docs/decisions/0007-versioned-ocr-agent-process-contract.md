@@ -46,8 +46,8 @@ in-memory OCR configuration, capture, pipelines, and native OCR dependencies.
 
 Move the six finder `SignalBase` classes to
 `application.mining.signals.finder` without changing their fields or behavior.
-The embedded OCR runner continues mapping its internal finder observations to
-those application signals until a later migration step.
+The OCR runner emits protocol observations. During the embedded migration
+phase, a Game Bridge adapter maps those observations to application signals.
 
 ## Consequences
 
@@ -60,5 +60,6 @@ those application signals until a later migration step.
 - The repository gains another small Python package and lock file.
 - Changes to required wire fields or semantics require an explicit protocol
   compatibility decision.
-- This decision does not yet move OCR pipelines, change runtime startup, or add
-  subprocess supervision.
+- The OCR pipelines now live in an independently verified `apps/ocr-agent`
+  project, while runtime startup remains embedded until subprocess supervision
+  is introduced.

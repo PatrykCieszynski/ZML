@@ -6,20 +6,17 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.128.0",
-    "mss>=10.1.0",
-    "numpy>=2.4.0",
     "pydantic>=2.12.5",
     "pydantic-settings>=2.12.0",
-    "pywin32==311; sys_platform == 'win32'",
     "rich>=14.2.0",
     "typer>=0.20.0",
-    "tesserocr @ https://github.com/simonflueckiger/tesserocr-windows_build/releases/download/tesserocr-v2.10.0-tesseract-5.5.2/tesserocr-2.10.0-cp313-cp313-win_amd64.whl ; sys_platform == 'win32' and platform_machine == 'AMD64'",
     "uvicorn[standard]>=0.40.0",
-    "opencv-python-headless>=4.13.0.92",
+    "zml-ocr-agent==0.1.0",
     "zml-ocr-protocol==0.1.0",
 ]
 
 [tool.uv.sources]
+zml-ocr-agent = { path = "../ocr-agent", editable = true }
 zml-ocr-protocol = { path = "../../packages/ocr-protocol", editable = true }
 
 [dependency-groups]
@@ -29,7 +26,6 @@ dev = [
     "pytest>=9.0.2",
     "pytest-timeout>=2.4.0",
     "ruff>=0.14.11",
-    "types-pywin32>=311.0.0.20260521",
 ]
 
 [build-system]

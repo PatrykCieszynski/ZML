@@ -13,6 +13,9 @@
     "bridge:package": "cd apps/game-bridge && just package",
     "bridge:verify": "cd apps/game-bridge && just verify",
 
+    "ocr-agent:format": "cd apps/ocr-agent && just format",
+    "ocr-agent:verify": "cd apps/ocr-agent && just verify",
+
     "backend:stage": "node scripts/stage-backend.mjs",
 
     "shared:verify": "pnpm --filter @zml/shared typecheck && pnpm --filter @zml/shared build",
@@ -21,10 +24,10 @@
     "frontend:build": "pnpm --filter @zml/shared build && pnpm --filter @zml/electron-ui build",
     "frontend:package": "pnpm --filter @zml/shared build && pnpm --filter @zml/electron-ui package",
 
-    "verify": "pnpm bridge:verify && pnpm frontend:verify",
+    "verify": "pnpm ocr-agent:verify && pnpm bridge:verify && pnpm frontend:verify",
     "build": "pnpm frontend:build",
     "package": "pnpm bridge:package && pnpm backend:stage && pnpm frontend:package",
-    "lint": "cd apps/game-bridge && just lint && pnpm --filter @zml/electron-ui lint"
+    "lint": "cd apps/ocr-agent && just lint && cd ../game-bridge && just lint && cd ../.. && pnpm --filter @zml/electron-ui lint"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

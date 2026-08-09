@@ -7,13 +7,27 @@ from pathlib import Path
 from threading import Event
 from typing import Any
 
-from zml_game_bridge.application.position.model import PositionSnapshot
-from zml_game_bridge.events.contracts import SignalSink
-from zml_game_bridge.inputs.ocr.pipelines.position.model import OcrPosition
-from zml_game_bridge.inputs.ocr.runner import start_ocr_input
-from zml_game_bridge.inputs.ocr.tesserocr_runtime import (
-    preload_tesserocr_preserving_sigint_handler,
+from zml_ocr_agent.runner import start_ocr_input
+from zml_ocr_agent.tesserocr_runtime import preload_tesserocr_preserving_sigint_handler
+from zml_ocr_protocol import (
+    AgentToBridgeMessage,
+    FinderSignalMessage,
+    PositionMessage,
+    StatusMessage,
 )
+
+from zml_game_bridge.application.mining.signals.finder import (
+    FinderHitHintSignal,
+    FinderModeInvalidatedSignal,
+    FinderModesChangedSignal,
+    FinderNoResourcesSignal,
+    FinderUnitsChangedSignal,
+    ProbeFiredSignal,
+)
+from zml_game_bridge.application.position.model import PositionSnapshot
+from zml_game_bridge.domain.position import WorldPos
+from zml_game_bridge.events.base import SignalBase
+from zml_game_bridge.events.contracts import SignalSink
 from zml_game_bridge.runtime.supervisor import WorkerSupervisor
 
 _OCR_WORKER_NAME = "ocr_worker"
@@ -79,9 +93,7 @@ class EmbeddedOcrInputSource:
             name=_OCR_WORKER_NAME,
             target=self._runner,
             worker_kwargs={
-                "position_sink": self._on_position,
-                "signal_sink": self._signal_sink,
-                "capture_status_sink": self._on_capture_status,
+                "message_sink": self._on_message,
                 "stop_event": stop_event,
                 "roi_profile_path": self._config.roi_profile_path,
                 "finder_recording_modes": self._config.finder_recording_modes,
@@ -104,25 +116,99 @@ class EmbeddedOcrInputSource:
         if self._config.enabled:
             self._supervisor.join_thread(_OCR_WORKER_NAME)
 
-    def _on_position(self, position: OcrPosition) -> None:
+    def _on_message(self, message: AgentToBridgeMessage) -> None:
+        if isinstance(message, PositionMessage):
+            self._on_position(message)
+            return
+        if isinstance(message, FinderSignalMessage):
+            self._signal_sink(_to_finder_signal(message))
+            return
+        if isinstance(message, StatusMessage):
+            self._on_status(message)
+
+    def _on_position(self, message: PositionMessage) -> None:
+        position = message.payload.position
         self._position_sink(
             PositionSnapshot(
-                observed_ts_ms=position.ts_ms,
+                observed_ts_ms=message.observed_ts_ms,
                 received_ts_ms=self._clock_ms(),
-                position=position.position,
+                position=WorldPos(
+                    planet_name=position.planet_name,
+                    x=position.x,
+                    y=position.y,
+                    z=position.z,
+                ),
                 source="ocr",
             )
         )
 
-    def _on_capture_status(self, available: bool, error: str | None) -> None:
-        if available:
+    def _on_status(self, message: StatusMessage) -> None:
+        if message.payload.state == "running":
             self._supervisor.mark_running(_OCR_WORKER_NAME)
             return
         self._supervisor.mark_degraded(
             _OCR_WORKER_NAME,
-            error or "Entropia Universe window is unavailable",
+            message.payload.detail or "Entropia Universe window is unavailable",
         )
 
 
 def _now_ms() -> int:
     return time.time_ns() // 1_000_000
+
+
+def _to_finder_signal(message: FinderSignalMessage) -> SignalBase:
+    payload = message.payload
+    match payload.kind:
+        case "probe_fired":
+            return ProbeFiredSignal(
+                ts_ms=message.observed_ts_ms,
+                # The runtime coordinator snapshots current position through PositionProvider.
+                position=None,
+                modes_mask=payload.modes_mask,
+                probes_per_drop=payload.probes_per_drop,
+                ammo_per_drop=payload.ammo_per_drop,
+                raw_status_text=payload.raw_status_text,
+                roi_name=payload.roi_name,
+                debug=payload.debug,
+            )
+        case "finder_modes_changed":
+            return FinderModesChangedSignal(
+                ts_ms=message.observed_ts_ms,
+                modes_mask=payload.modes_mask,
+                previous_modes_mask=payload.previous_modes_mask,
+                roi_name=payload.roi_name,
+                debug=payload.debug,
+            )
+        case "finder_mode_invalidated":
+            return FinderModeInvalidatedSignal(
+                ts_ms=message.observed_ts_ms,
+                previous_modes_mask=payload.previous_modes_mask,
+                roi_name=payload.roi_name,
+                debug=payload.debug,
+            )
+        case "finder_units_changed":
+            return FinderUnitsChangedSignal(
+                ts_ms=message.observed_ts_ms,
+                probes_per_drop=payload.probes_per_drop,
+                ammo_per_drop=payload.ammo_per_drop,
+                raw_text=payload.raw_units_text,
+                roi_name=payload.roi_name,
+            )
+        case "finder_hit_hint":
+            return FinderHitHintSignal(
+                ts_ms=message.observed_ts_ms,
+                size_label=payload.size_label,
+                size_index=payload.size_index,
+                resource_name=payload.resource_name,
+                range_m=payload.range_m,
+                depth_m=payload.depth_m,
+                raw_status_text=payload.raw_status_text,
+                raw_details_text=payload.raw_details_text,
+                roi_name=payload.roi_name,
+            )
+        case "finder_no_resources":
+            return FinderNoResourcesSignal(
+                ts_ms=message.observed_ts_ms,
+                raw_status_text=payload.raw_status_text,
+                roi_name=payload.roi_name,
+            )

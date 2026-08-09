@@ -608,15 +608,6 @@ wheels = [
 ]
 
 [[package]]
-name = "types-pywin32"
-version = "311.0.0.20260521"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/fb/6f/11dac73bc7755bfed5e66e09d338d75de2b304ebc6704571d06ea659bb65/types_pywin32-311.0.0.20260521.tar.gz", hash = "sha256:e3fb48ef40a83b9798402312c02f96e30cf97d79584a83c36b0a32ce8d93c5ff", size = 334309, upload-time = "2026-05-21T05:59:21.617Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/e2/ce/e725390a5790f41bc85ded170d4b15b54a63d8edf5ca2928a93681704145/types_pywin32-311.0.0.20260521-py3-none-any.whl", hash = "sha256:0a5d6e96983eb38da7d7fd5712e15d3066a02d64a09c234bad9c655539bed8a9", size = 396800, upload-time = "2026-05-21T05:59:19.914Z" },
-]
-
-[[package]]
 name = "typing-extensions"
 version = "4.15.0"
 source = { registry = "https://pypi.org/simple" }
@@ -801,16 +792,12 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
-    { name = "mss" },
-    { name = "numpy" },
-    { name = "opencv-python-headless" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
-    { name = "pywin32", marker = "sys_platform == 'win32'" },
     { name = "rich" },
-    { name = "tesserocr", marker = "platform_machine == 'AMD64' and sys_platform == 'win32'" },
     { name = "typer" },
     { name = "uvicorn", extra = ["standard"] },
+    { name = "zml-ocr-agent" },
     { name = "zml-ocr-protocol" },
 ]
 
@@ -821,28 +808,54 @@ dev = [
     { name = "pytest" },
     { name = "pytest-timeout" },
     { name = "ruff" },
-    { name = "types-pywin32" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.128.0" },
-    { name = "mss", specifier = ">=10.1.0" },
-    { name = "numpy", specifier = ">=2.4.0" },
-    { name = "opencv-python-headless", specifier = ">=4.13.0.92" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pydantic-settings", specifier = ">=2.12.0" },
-    { name = "pywin32", marker = "sys_platform == 'win32'", specifier = "==311" },
     { name = "rich", specifier = ">=14.2.0" },
-    { name = "tesserocr", marker = "platform_machine == 'AMD64' and sys_platform == 'win32'", url = "https://github.com/simonflueckiger/tesserocr-windows_build/releases/download/tesserocr-v2.10.0-tesseract-5.5.2/tesserocr-2.10.0-cp313-cp313-win_amd64.whl" },
     { name = "typer", specifier = ">=0.20.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.40.0" },
+    { name = "zml-ocr-agent", editable = "../ocr-agent" },
     { name = "zml-ocr-protocol", editable = "../../packages/ocr-protocol" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "pyinstaller", specifier = ">=6.20.0" },
+    { name = "pyright", specifier = ">=1.1.408" },
+    { name = "pytest", specifier = ">=9.0.2" },
+    { name = "pytest-timeout", specifier = ">=2.4.0" },
+    { name = "ruff", specifier = ">=0.14.11" },
+]
+
+[[package]]
+name = "zml-ocr-agent"
+version = "0.1.0"
+source = { editable = "../ocr-agent" }
+dependencies = [
+    { name = "mss" },
+    { name = "numpy" },
+    { name = "opencv-python-headless" },
+    { name = "pywin32", marker = "sys_platform == 'win32'" },
+    { name = "tesserocr", marker = "platform_machine == 'AMD64' and sys_platform == 'win32'" },
+    { name = "zml-ocr-protocol" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "mss", specifier = ">=10.1.0" },
+    { name = "numpy", specifier = ">=2.4.0" },
+    { name = "opencv-python-headless", specifier = ">=4.13.0.92" },
+    { name = "pywin32", marker = "sys_platform == 'win32'", specifier = "==311" },
+    { name = "tesserocr", marker = "platform_machine == 'AMD64' and sys_platform == 'win32'", url = "https://github.com/simonflueckiger/tesserocr-windows_build/releases/download/tesserocr-v2.10.0-tesseract-5.5.2/tesserocr-2.10.0-cp313-cp313-win_amd64.whl" },
+    { name = "zml-ocr-protocol", editable = "../../packages/ocr-protocol" },
+]
+
+[package.metadata.requires-dev]
+dev = [
     { name = "pyright", specifier = ">=1.1.408" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "pytest-timeout", specifier = ">=2.4.0" },
