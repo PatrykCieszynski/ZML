@@ -11,6 +11,14 @@ from pathlib import Path
 
 import numpy as np
 
+from zml_game_bridge.application.mining.signals.finder import (
+    FinderHitHintSignal,
+    FinderModeInvalidatedSignal,
+    FinderModesChangedSignal,
+    FinderNoResourcesSignal,
+    FinderUnitsChangedSignal,
+    ProbeFiredSignal,
+)
 from zml_game_bridge.events.contracts import SignalSink
 from zml_game_bridge.inputs.ocr.capture.window_capturer import (
     WindowCapturer,
@@ -26,14 +34,6 @@ from zml_game_bridge.inputs.ocr.pipelines.mining_finder.presence import FinderPr
 from zml_game_bridge.inputs.ocr.pipelines.mining_finder.recording import (
     FinderCropRecorder,
     finder_recording_config_from_env,
-)
-from zml_game_bridge.inputs.ocr.pipelines.mining_finder.signals import (
-    FinderHitHintSignal,
-    FinderModeInvalidatedSignal,
-    FinderModesChangedSignal,
-    FinderNoResourcesSignal,
-    FinderUnitsChangedSignal,
-    ProbeFiredSignal,
 )
 from zml_game_bridge.inputs.ocr.pipelines.mining_finder.vision import VisionFinderFeatureDetector
 from zml_game_bridge.inputs.ocr.pipelines.position.model import OcrPosition

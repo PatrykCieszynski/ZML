@@ -16,7 +16,11 @@ dependencies = [
     "tesserocr @ https://github.com/simonflueckiger/tesserocr-windows_build/releases/download/tesserocr-v2.10.0-tesseract-5.5.2/tesserocr-2.10.0-cp313-cp313-win_amd64.whl ; sys_platform == 'win32' and platform_machine == 'AMD64'",
     "uvicorn[standard]>=0.40.0",
     "opencv-python-headless>=4.13.0.92",
+    "zml-ocr-protocol==0.1.0",
 ]
+
+[tool.uv.sources]
+zml-ocr-protocol = { path = "../../packages/ocr-protocol", editable = true }
 
 [dependency-groups]
 dev = [

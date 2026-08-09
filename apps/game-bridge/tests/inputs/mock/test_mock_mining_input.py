@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from zml_game_bridge.inputs.mock.mining import iter_mock_mining_signals
-from zml_game_bridge.inputs.ocr.pipelines.mining_finder.signals import (
+from zml_game_bridge.application.mining.signals.finder import (
     FinderHitHintSignal,
     FinderModesChangedSignal,
     FinderNoResourcesSignal,
     FinderUnitsChangedSignal,
     ProbeFiredSignal,
 )
+from zml_game_bridge.inputs.mock.mining import iter_mock_mining_signals
 
 
 def test_iter_mock_mining_signals_emits_setup_and_predictable_drop_results() -> None:

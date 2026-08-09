@@ -55,7 +55,11 @@ Z Mining Log is now a working local mining tracker prototype:
   - finder OCR migrated toward `tesserocr` wrapper;
   - profiling and finder crop recording hooks exist;
   - position outlier filtering exists;
-  - missing/lost Entropia window degrades health and retries instead of crashing OCR.
+  - missing/lost Entropia window degrades health and retries instead of crashing OCR;
+  - OCR still runs in-process, but `packages/ocr-protocol` now defines the
+    strict version 1 DTO and NDJSON boundary for the planned OCR Agent;
+  - finder application signals live under `application.mining.signals.finder`,
+    so mining logic no longer imports signal types from `inputs.ocr`.
 - Desktop lifecycle and packaging:
   - Electron starts the local backend from `.venv` in development;
   - packaged Electron starts the bundled PyInstaller backend;
@@ -75,18 +79,24 @@ Z Mining Log is now a working local mining tracker prototype:
 
 See `ROADMAP_2025-05-26.md` for the ordered roadmap. The highest-value items are:
 
-1. Runtime config and live settings:
+1. Managed OCR Agent migration:
+   - create the standalone OCR Agent application;
+   - add the embedded adapter and then subprocess supervisor behind a rollback flag;
+   - synchronize full configuration snapshots and validate real-game behavior;
+   - package both executables before removing embedded OCR.
+
+2. Runtime config and live settings:
    - move safe OCR/runtime options beyond env-only configuration;
    - expose controlled apply/restart behavior from UI.
 
-2. ROI calibration:
+3. ROI calibration:
    - finish finder calibration UX;
    - add separate compass/Lon/Lat calibration and presets.
 
-3. Debug/operator UX:
+4. Debug/operator UX:
    - replace the JSON-heavy debug tab with worker, OCR, run, event, and warning panels.
 
-4. Persistence cleanup:
+5. Persistence cleanup:
    - decide whether unused 3D claim fields should remain;
    - keep the event journal focused on durable reconstruction facts.
 
@@ -125,6 +135,8 @@ These decisions were made after several design turns and real-game testing:
 
 ## Validation Preference
 
-The user prefers not to spend local time/tokens on broad lint/pyright runs
-unless requested. Use focused tests for touched backend behavior and TypeScript
-checks for touched UI contracts/components. Full verification is expected in CI.
+The user permits tests, Ruff, lint, and typechecks for the project/package being
+changed, but not broad verification of the entire monorepo by default. Use
+focused backend tests and package-scoped Python checks, or focused TypeScript
+checks for touched UI contracts/components. Full monorepo verification remains
+a CI concern unless explicitly requested.
