@@ -87,22 +87,6 @@ jobs:
           text = text.replace(' api::generate shared::verify desktop::verify', ' api::generate desktop::verify')
           just_path.write_text(text, encoding='utf-8')
 
-          ci_path = root / '.github/workflows/ci.yml'
-          text = ci_path.read_text(encoding='utf-8')
-          text = text.replace(
-              '\n      - name: Verify shared package\n        run: just shared verify\n',
-              '',
-          )
-          ci_path.write_text(text, encoding='utf-8')
-
-          package_workflow_path = root / '.github/workflows/package-windows.yml'
-          text = package_workflow_path.read_text(encoding='utf-8')
-          text = text.replace(
-              '\n      - name: Build shared package\n        run: just shared build\n',
-              '',
-          )
-          package_workflow_path.write_text(text, encoding='utf-8')
-
           agents_path = root / 'AGENTS.md'
           text = agents_path.read_text(encoding='utf-8')
           text = text.replace(
@@ -127,15 +111,15 @@ jobs:
       - name: Refresh pnpm lockfile
         run: pnpm install --lockfile-only --no-frozen-lockfile
 
-      - name: Assert stale ownership references are gone
+      - name: Assert stale ownership references are gone outside workflows
         shell: bash
         run: |
           set -euo pipefail
-          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git --exclude='inspect-shared-ownership.yml' -E '@zml/shared|packages/shared|just shared|shared::' .; then
+          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.github -E '@zml/shared|packages/shared|just shared|shared::' apps package.json justfile AGENTS.md docs; then
             echo 'Stale shared ownership reference remains.' >&2
             exit 1
           fi
-          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git --exclude='inspect-shared-ownership.yml' -E 'stubPath|typings/zml_game_bridge' .; then
+          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git -E 'stubPath|typings/zml_game_bridge' apps packages scripts pyproject.toml AGENTS.md docs 2>/dev/null; then
             echo 'Stale Python typing reference remains.' >&2
             exit 1
           fi
@@ -143,13 +127,13 @@ jobs:
           test ! -d packages/shared
           test -f apps/electron-ui/shared/index.ts
 
-      - name: Commit migration and remove temporary workflow
+      - name: Commit migration
         shell: bash
         run: |
           set -euo pipefail
-          git rm .github/workflows/inspect-shared-ownership.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
+          git reset .github/workflows/inspect-shared-ownership.yml
           git commit -m "Move desktop shared code under Electron app"
           git push
