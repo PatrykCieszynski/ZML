@@ -7,14 +7,21 @@ PROJECT_ROOT = Path(__file__).parents[1]
 SOURCE_ROOT = PROJECT_ROOT / "src" / "zml_game_bridge"
 
 
-def test_game_bridge_has_no_python_dependency_on_ocr_agent() -> None:
+def test_game_bridge_declares_only_protocol_as_ocr_dependency() -> None:
     pyproject = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     dependencies = pyproject["project"]["dependencies"]
-    uv_sources = pyproject["tool"]["uv"]["sources"]
+    dependency_text = "\n".join(dependencies)
 
-    assert "zml-ocr-protocol" in "\n".join(dependencies)
-    assert all("zml-ocr-agent" not in dependency for dependency in dependencies)
-    assert "zml-ocr-agent" not in uv_sources
+    assert "zml-ocr-protocol" in dependency_text
+    forbidden_dependencies = (
+        "zml-ocr-agent",
+        "mss",
+        "numpy",
+        "opencv-python",
+        "pywin32",
+        "tesserocr",
+    )
+    assert all(package not in dependency_text for package in forbidden_dependencies)
 
 
 def test_game_bridge_source_never_imports_ocr_agent_package() -> None:
@@ -25,20 +32,6 @@ def test_game_bridge_source_never_imports_ocr_agent_package() -> None:
     ]
 
     assert offenders == []
-
-
-def test_game_bridge_lock_has_no_ocr_agent_or_native_ocr_dependencies() -> None:
-    lockfile = (PROJECT_ROOT / "uv.lock").read_text(encoding="utf-8")
-    forbidden_packages = (
-        'name = "zml-ocr-agent"',
-        'name = "mss"',
-        'name = "numpy"',
-        'name = "opencv-python"',
-        'name = "pywin32"',
-        'name = "tesserocr"',
-    )
-
-    assert all(package not in lockfile for package in forbidden_packages)
 
 
 def test_backend_ocr_runtime_contains_only_process_lifecycle_code() -> None:
