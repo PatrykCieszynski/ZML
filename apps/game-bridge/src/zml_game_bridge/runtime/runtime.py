@@ -19,11 +19,17 @@ from zml_game_bridge.inputs.chat.runner import start_chat_input
 from zml_game_bridge.inputs.mock.mining import start_mock_mining_input
 from zml_game_bridge.inputs.ocr.pipelines.position.model import OcrPosition
 from zml_game_bridge.inputs.ocr.runner import start_ocr_input
-from zml_game_bridge.inputs.ocr.tesserocr_runtime import preload_tesserocr
+from zml_game_bridge.inputs.ocr.tesserocr_runtime import (
+    preload_tesserocr_preserving_sigint_handler,
+)
 from zml_game_bridge.runtime.bootstrap import RuntimeComponents
 from zml_game_bridge.runtime.channels import ChannelClosedError
 from zml_game_bridge.runtime.db_commands import DbCommand
 from zml_game_bridge.runtime.runtime_commands import RuntimeCommand, RuntimeCommandRequest
+from zml_game_bridge.runtime.shutdown_signal import (
+    RuntimeShutdownSignal,
+    process_shutdown_signal,
+)
 from zml_game_bridge.runtime.supervisor import WorkerSupervisor
 from zml_game_bridge.settings import Settings
 
@@ -39,6 +45,7 @@ class AppRuntime:
         supervisor: WorkerSupervisor,
         sse_hub: SseHub | None = None,
         position_hub: PositionHub | None = None,
+        shutdown_signal: RuntimeShutdownSignal = process_shutdown_signal,
     ) -> None:
         self._settings = settings
         self._components = components
@@ -47,6 +54,7 @@ class AppRuntime:
         self._sub_sse = None
         self._sse_hub = sse_hub
         self._position_hub = position_hub
+        self._shutdown_signal = shutdown_signal
         self._started = False
         self._components.position_service.set_publisher(
             None if position_hub is None else position_hub.publish_threadsafe
@@ -65,6 +73,10 @@ class AppRuntime:
     @property
     def sse_hub(self) -> SseHub | None:
         return self._sse_hub
+
+    @property
+    def shutdown_signal(self) -> RuntimeShutdownSignal:
+        return self._shutdown_signal
 
     @property
     def position_service(self) -> PositionTrackingService:
@@ -106,6 +118,7 @@ class AppRuntime:
     def start(self) -> None:
         if self._started:
             return
+        self._shutdown_signal.install_signal_forwarders()
         if self._components.pending_inputs.is_closed():
             raise RuntimeError("Runtime cannot be restarted after shutdown")
         if self._settings.chat_log_path is None:
@@ -164,7 +177,7 @@ class AppRuntime:
         if self._settings.ocr_enabled:
             try:
                 # Needed for 'tesserocr import failed: signal only works in main thread of the main interpreter'
-                preload_tesserocr()
+                preload_tesserocr_preserving_sigint_handler()
             except Exception as exc:
                 self._supervisor.mark_crashed("ocr_worker", exc)
                 raise
@@ -175,6 +188,7 @@ class AppRuntime:
                 worker_kwargs={
                     "position_sink": self._on_position,
                     "signal_sink": self._components.pending_inputs.emit,
+                    "capture_status_sink": self._on_ocr_capture_status,
                     "stop_event": self._stop_event,
                     "roi_profile_path": self._settings.ocr_profile_path,
                     "finder_recording_modes": self._settings.finder_recording_modes,
@@ -217,6 +231,15 @@ class AppRuntime:
                 position=position.position,
                 source="ocr",
             )
+        )
+
+    def _on_ocr_capture_status(self, available: bool, error: str | None) -> None:
+        if available:
+            self._supervisor.mark_running("ocr_worker")
+            return
+        self._supervisor.mark_degraded(
+            "ocr_worker",
+            error or "Entropia Universe window is unavailable",
         )
 
     def _run_claim_expiration_maintenance(self, *, stop_event: threading.Event) -> None:

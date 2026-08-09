@@ -307,17 +307,13 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_mining_claims_expired ON mining_claims(expired_event_id)"
     )
-    if user_version < 14 and not _column_exists(
-        conn, "mining_drops", "total_tt_cost_mpec"
-    ):
+    if user_version < 14 and not _column_exists(conn, "mining_drops", "total_tt_cost_mpec"):
         conn.execute(
             "ALTER TABLE mining_drops ADD COLUMN total_tt_cost_mpec INTEGER NOT NULL DEFAULT 0"
         )
         # Legacy drops only persisted the effective cost. Preserve that value as
         # the safest available TT fallback; all new drops store the exact split.
-        conn.execute(
-            "UPDATE mining_drops SET total_tt_cost_mpec = total_cost_mpec"
-        )
+        conn.execute("UPDATE mining_drops SET total_tt_cost_mpec = total_cost_mpec")
     if user_version < SCHEMA_VERSION:
         conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
     conn.commit()

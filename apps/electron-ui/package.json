@@ -1,20 +1,18 @@
 {
   "name": "@zml/electron-ui",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "description": "Local-first Entropia Universe mining tracker",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "dev:mocks": "node ./scripts/dev-with-mocks.mjs",
-
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-
     "build:web": "vite build",
     "build:desktop": "tsc -p tsconfig.json",
     "build": "pnpm build:web && pnpm build:desktop",
-
     "package": "pnpm build && electron-builder"
   },
   "dependencies": {
@@ -24,10 +22,8 @@
     "@deck.gl/react": "^9.3.2",
     "@types/ws": "^8.18.1",
     "@zml/shared": "workspace:*",
-    "bufferutil": "^4.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "utf-8-validate": "^6.0.6",
     "ws": "^8.19.0"
   },
   "devDependencies": {

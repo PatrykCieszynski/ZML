@@ -44,18 +44,12 @@ importers:
       '@zml/shared':
         specifier: workspace:*
         version: link:../../packages/shared
-      bufferutil:
-        specifier: ^4.1.0
-        version: 4.1.0
       react:
         specifier: ^18.2.0
         version: 18.3.1
       react-dom:
         specifier: ^18.2.0
         version: 18.3.1(react@18.3.1)
-      utf-8-validate:
-        specifier: ^6.0.6
-        version: 6.0.6
       ws:
         specifier: ^8.19.0
         version: 8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
@@ -4569,6 +4563,7 @@ snapshots:
   bufferutil@4.1.0:
     dependencies:
       node-gyp-build: 4.8.4
+    optional: true
 
   builder-util-runtime@9.2.4:
     dependencies:
@@ -5671,7 +5666,8 @@ snapshots:
   node-addon-api@1.7.2:
     optional: true
 
-  node-gyp-build@4.8.4: {}
+  node-gyp-build@4.8.4:
+    optional: true
 
   node-releases@2.0.27: {}
 
@@ -6134,6 +6130,7 @@ snapshots:
   utf-8-validate@6.0.6:
     dependencies:
       node-gyp-build: 4.8.4
+    optional: true
 
   utf8-byte-length@1.0.5: {}
 

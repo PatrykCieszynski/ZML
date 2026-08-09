@@ -7,10 +7,13 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "concurrently -n bridge,web -c cyan,magenta \"cd apps/game-bridge && just ocr\" \"pnpm --filter @zml/electron-ui dev\"",
+    "dev": "pnpm --filter @zml/electron-ui dev",
 
     "bridge:format": "cd apps/game-bridge && just format",
+    "bridge:package": "cd apps/game-bridge && just package",
     "bridge:verify": "cd apps/game-bridge && just verify",
+
+    "backend:stage": "node scripts/stage-backend.mjs",
 
     "shared:verify": "pnpm --filter @zml/shared typecheck && pnpm --filter @zml/shared build",
 
@@ -20,7 +23,7 @@
 
     "verify": "pnpm bridge:verify && pnpm frontend:verify",
     "build": "pnpm frontend:build",
-    "package": "pnpm frontend:package",
+    "package": "pnpm bridge:package && pnpm backend:stage && pnpm frontend:package",
     "lint": "cd apps/game-bridge && just lint && pnpm --filter @zml/electron-ui lint"
   },
   "devDependencies": {

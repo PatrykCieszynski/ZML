@@ -55,3 +55,17 @@ def test_worker_supervisor_marks_worker_stopped_after_clean_return() -> None:
     snapshot = supervisor.health()
     workers = cast(dict[str, dict[str, Any]], snapshot["workers"])
     assert workers["worker"]["state"] == "stopped"
+
+
+def test_worker_supervisor_can_recover_degraded_worker() -> None:
+    supervisor = WorkerSupervisor()
+    supervisor.register("ocr_worker", enabled=True)
+
+    supervisor.mark_degraded("ocr_worker", "target window unavailable")
+    supervisor.mark_running("ocr_worker")
+
+    snapshot = supervisor.health()
+    workers = cast(dict[str, dict[str, Any]], snapshot["workers"])
+    assert snapshot["status"] == "running"
+    assert workers["ocr_worker"]["state"] == "running"
+    assert workers["ocr_worker"]["last_error"] is None

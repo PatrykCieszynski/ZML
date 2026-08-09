@@ -1,6 +1,6 @@
 # Current State
 
-Updated: 2026-06-01
+Updated: 2026-08-09
 
 This file is a compact handoff for future conversations. It should be updated
 when a branch lands a meaningful architecture or product change.
@@ -54,52 +54,41 @@ Z Mining Log is now a working local mining tracker prototype:
 - OCR backend:
   - finder OCR migrated toward `tesserocr` wrapper;
   - profiling and finder crop recording hooks exist;
-  - position outlier filtering exists.
-
-## Current Worktree Note
-
-At the time this document was added, there was a pre-existing local modification
-in:
-
-```text
-apps/electron-ui/src/windows/mapWindow.tsx
-```
-
-Treat it as user work unless proven otherwise.
+  - position outlier filtering exists;
+  - missing/lost Entropia window degrades health and retries instead of crashing OCR.
+- Desktop lifecycle and packaging:
+  - Electron starts the local backend from `.venv` in development;
+  - packaged Electron starts the bundled PyInstaller backend;
+  - backend exits through FastAPI lifespan when Electron sends `shutdown` on the parent pipe;
+  - parent-pipe reads are non-blocking and Ctrl+C retains Uvicorn's handler despite
+    `tesserocr`/`cysignals` initialization;
+  - a runtime shutdown signal releases long-lived WS/SSE streams before connection drain;
+  - unexpected backend exits use a bounded restart policy;
+  - Windows release workflow builds and smoke-tests one NSIS installer.
+- Run accounting and utilities:
+  - drop costs distinguish TT from markup-adjusted totals;
+  - duplicate drop observations have a five-second lock;
+  - run loot can be copied as Excel-ready TSV;
+  - `/pos` planet information remains sticky across planet-less OCR positions.
 
 ## Important Open Problems
 
 See `ROADMAP_2025-05-26.md` for the ordered roadmap. The highest-value items are:
 
-1. Backend/Electron shutdown:
-   - no orphan backend process;
-   - no hanging DB connection;
-   - clean close/restart from Electron.
+1. Runtime config and live settings:
+   - move safe OCR/runtime options beyond env-only configuration;
+   - expose controlled apply/restart behavior from UI.
 
-2. Drop + segment correctness:
-   - segment is a setup bucket, not just a chronological episode;
-   - same setup inside one run should reuse the existing segment;
-   - segment should be created/reused on valid drop, not on noisy finder changes;
-   - `ammo_per_drop = 0` should be invalid/fallback, not a real zero-cost drop.
+2. ROI calibration:
+   - finish finder calibration UX;
+   - add separate compass/Lon/Lat calibration and presets.
 
-3. Event context completeness:
-   - mining events need `run_id` / `segment_id` where possible;
-   - event log should support emergency reconstruction.
+3. Debug/operator UX:
+   - replace the JSON-heavy debug tab with worker, OCR, run, event, and warning panels.
 
-4. Claim hardening:
-   - active claims should expire automatically after expected expiry;
-   - maintenance should run inside runtime through DbWriter, not an external cron.
-
-5. Loot aggregation:
-   - raw `MiningItemReceivedEvent` spam is too noisy long term;
-   - target is run/segment item totals with debounced UI updates.
-
-6. OCR stability:
-   - FinderPresenceCheck before expensive finder OCR;
-   - treasure mode classifier states;
-   - compass latest-wins;
-   - manual ROI calibration for finder and compass;
-   - `/pos` chat event support.
+4. Persistence cleanup:
+   - decide whether unused 3D claim fields should remain;
+   - keep the event journal focused on durable reconstruction facts.
 
 ## What Not To Rebuild Lightly
 
@@ -125,6 +114,7 @@ These decisions were made after several design turns and real-game testing:
 ## Current UI Entry Points
 
 - `apps/electron-ui/electron/main.ts`
+- `apps/electron-ui/electron/backend/backendProcessManager.ts`
 - `apps/electron-ui/electron/runtime.ts`
 - `apps/electron-ui/electron/ipc/registerIpc.ts`
 - `apps/electron-ui/electron/agent/restClient.ts`
@@ -138,4 +128,3 @@ These decisions were made after several design turns and real-game testing:
 The user prefers not to spend local time/tokens on broad lint/pyright runs
 unless requested. Use focused tests for touched backend behavior and TypeScript
 checks for touched UI contracts/components. Full verification is expected in CI.
-

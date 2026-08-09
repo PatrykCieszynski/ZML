@@ -1,6 +1,6 @@
 # Architecture
 
-Updated: 2026-06-01
+Updated: 2026-08-09
 
 Z Mining Log is a local desktop application. The Python backend observes the
 game, derives durable mining facts, persists them to SQLite, and streams live
@@ -182,6 +182,39 @@ Main Electron windows:
 The map uses deck.gl with raster tile layers and custom overlays for player,
 drops, claims, hexgrid, context menu, and follow mode.
 
+## Desktop Process Lifecycle
+
+Electron main owns the default local Python backend process:
+
+```mermaid
+sequenceDiagram
+    participant Electron as Electron main
+    participant Bridge as Python bridge
+    participant API as FastAPI lifespan
+    Electron->>Bridge: spawn serve --mode live
+    Electron->>API: poll GET /health
+    API-->>Electron: ready (running or degraded)
+    Electron->>Bridge: shutdown via stdin pipe
+    Bridge->>API: request RuntimeShutdownSignal + uvicorn should_exit
+    API->>API: close long-lived WS/SSE handlers
+    API->>API: AppRuntime.stop()
+    Bridge-->>Electron: process closed
+```
+
+- Development resolves `apps/game-bridge/.venv` directly.
+- Packaged builds resolve `resources/backend/zml-game-bridge.exe`.
+- `ZML_MANAGE_BACKEND=0` leaves lifecycle ownership to the developer.
+- An explicit `ZML_BACKEND_URL` is treated as external by default.
+- If a managed backend exits unexpectedly, Electron retries with bounded backoff.
+- The parent pipe is polled in non-blocking mode. Closing it also requests backend shutdown,
+  covering abrupt Electron exits without blocking Python startup.
+- `RuntimeShutdownSignal` lets WS/SSE handlers finish before Uvicorn waits for active
+  connections, avoiding a circular graceful-shutdown wait.
+- The main-thread `tesserocr` preload preserves Uvicorn's `SIGINT` handler; otherwise
+  bundled `cysignals` replaces it and a single Ctrl+C ends in `KeyboardInterrupt`.
+- Absence of the Entropia window is not a process failure. OCR reports `degraded`, retries
+  capture, and returns to `running` when the window becomes available.
+
 ## Read/Write Split
 
 - Writes: one writer thread via `DbWriterWorker`.
@@ -199,4 +232,3 @@ drops, claims, hexgrid, context menu, and follow mode.
 - Segment correctness is still being refined: segment should be a setup bucket
   inside a run, and same setup should reuse the same segment in that run.
 - OCR ROI calibration is not yet user-driven.
-

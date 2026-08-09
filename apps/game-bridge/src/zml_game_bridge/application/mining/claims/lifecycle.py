@@ -511,25 +511,21 @@ def _distance_xy(left: WorldPos, right: WorldPos) -> float:
 def _same_context(drop: MiningDropEvent, deed: MiningClaimDeedReceivedEvent) -> bool:
     if drop.run_id is not None and deed.run_id is not None and drop.run_id != deed.run_id:
         return False
-    if (
+    return not (
         drop.segment_id is not None
         and deed.segment_id is not None
         and drop.segment_id != deed.segment_id
-    ):
-        return False
-    return True
+    )
 
 
 def _same_claim_context(claim: ActiveClaim, deed: MiningClaimDeedReceivedEvent) -> bool:
     if claim.run_id is not None and deed.run_id is not None and claim.run_id != deed.run_id:
         return False
-    if (
+    return not (
         claim.segment_id is not None
         and deed.segment_id is not None
         and claim.segment_id != deed.segment_id
-    ):
-        return False
-    return True
+    )
 
 
 def _same_or_missing_resource(left: str | None, right: str | None) -> bool:

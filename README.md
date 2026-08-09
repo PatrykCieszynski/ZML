@@ -4,7 +4,8 @@ Local-first desktop mining assistant for **Entropia Universe**.
 
 Z Mining Log tracks mining activity by combining OCR, chat log parsing, a Python/FastAPI backend, SQLite persistence, and an Electron/React map UI. The goal is to turn noisy in-game signals into reliable drop, claim, loot, run, and position data without sending gameplay data to an external service.
 
-> Status: active work-in-progress prototype. Core backend and UI flows are working, but the app is not packaged as a public release yet.
+> Status: active work-in-progress prototype. Core backend/UI flows work and a Windows installer
+> pipeline is available; signing, application icon, and public release polish are still pending.
 
 ---
 
@@ -65,6 +66,8 @@ The main challenge is not just rendering a map. The harder part is coordinating 
 - WebSocket stream for high-frequency position updates.
 - Shared TypeScript DTO package for Electron main, renderer, and backend contracts.
 - Mock mining input for development without the game running.
+- Electron-managed Python backend lifecycle with bounded crash restart and graceful shutdown.
+- Windows NSIS packaging with the Python bridge bundled into one installer.
 
 ---
 
@@ -234,6 +237,34 @@ docs/
 AGENTS.md           Agent/developer handoff
 README.md           Main project overview
 ```
+
+---
+
+## Development And Packaging
+
+After installing Python and pnpm dependencies, start the desktop app from the repository root:
+
+```bash
+pnpm dev
+```
+
+Electron starts the backend automatically from `apps/game-bridge/.venv`. If Entropia is not
+open yet, the OCR worker remains alive in `degraded` state and checks again automatically.
+
+For a separately managed backend, set `ZML_MANAGE_BACKEND=0` before starting Electron. Setting
+an explicit `ZML_BACKEND_URL` also disables local process ownership unless management is
+explicitly re-enabled.
+
+Build the complete Windows package with:
+
+```bash
+pnpm package
+```
+
+This packages the Python bridge, stages it under Electron resources, and creates an NSIS
+installer under `apps/electron-ui/release/<version>/`. The GitHub Actions Windows packaging
+workflow uploads installers for manual/snapshot builds. A tag matching the desktop version,
+for example `v0.1.0`, additionally creates a GitHub Release.
 
 ---
 
