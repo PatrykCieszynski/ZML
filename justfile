@@ -31,5 +31,6 @@ stage-python:
     node scripts/stage-python-components.mjs
 
 # Package both Python processes, stage them, then build the desktop installer.
-package: ocr::package backend::package shared::build && desktop::package
+package: ocr::package backend::package shared::build
     node scripts/stage-python-components.mjs
+    just desktop package
