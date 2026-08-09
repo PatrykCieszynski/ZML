@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass
 from typing import Literal
 
 WorkerState = Literal["running", "degraded", "crashed", "stopped"]
+HealthDetail = str | int | float | bool | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -14,6 +15,7 @@ class WorkerHealthSnapshot:
     enabled: bool
     last_error: str | None
     last_seen_ts_ms: int
+    details: dict[str, HealthDetail]
 
 
 class WorkerHealthRegistry:
@@ -30,6 +32,7 @@ class WorkerHealthRegistry:
                 enabled=enabled,
                 last_error=None,
                 last_seen_ts_ms=_now_ms(),
+                details={},
             )
 
     def mark_running(self, name: str) -> None:
@@ -43,6 +46,27 @@ class WorkerHealthRegistry:
 
     def mark_crashed(self, name: str, error: BaseException) -> None:
         self._set_state(name, state="crashed", last_error=f"{type(error).__name__}: {error}")
+
+    def update_details(self, name: str, **details: HealthDetail) -> None:
+        with self._lock:
+            previous = self._workers.get(name)
+            if previous is None:
+                previous = WorkerHealthSnapshot(
+                    state="stopped",
+                    enabled=True,
+                    last_error=None,
+                    last_seen_ts_ms=_now_ms(),
+                    details={},
+                )
+            merged = dict(previous.details)
+            merged.update(details)
+            self._workers[name] = WorkerHealthSnapshot(
+                state=previous.state,
+                enabled=previous.enabled,
+                last_error=previous.last_error,
+                last_seen_ts_ms=_now_ms(),
+                details=merged,
+            )
 
     def snapshot(self) -> dict[str, WorkerHealthSnapshot]:
         with self._lock:
@@ -65,11 +89,13 @@ class WorkerHealthRegistry:
         with self._lock:
             previous = self._workers.get(name)
             enabled = previous.enabled if previous is not None else True
+            details = dict(previous.details) if previous is not None else {}
             self._workers[name] = WorkerHealthSnapshot(
                 state=state,
                 enabled=enabled,
                 last_error=last_error,
                 last_seen_ts_ms=_now_ms(),
+                details=details,
             )
 
 

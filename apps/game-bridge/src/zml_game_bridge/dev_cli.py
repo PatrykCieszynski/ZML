@@ -130,6 +130,8 @@ def _settings_table(settings: Settings) -> Table:
     )
     table.add_row("chat_start_at_end", _format_bool(settings.chat_start_at_end))
     table.add_row("ocr_enabled", _format_bool(settings.ocr_enabled))
+    table.add_row("ocr_transport", settings.ocr_transport)
+    table.add_row("ocr_agent_path", _format_path(settings.ocr_agent_path))
     table.add_row("mock_inputs_enabled", _format_bool(settings.mock_inputs_enabled))
     table.add_row("mock_mining_interval_ms", str(settings.mock_mining_interval_ms))
     table.add_row(

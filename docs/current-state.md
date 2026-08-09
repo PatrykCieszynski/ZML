@@ -60,8 +60,14 @@ Z Mining Log is now a working local mining tracker prototype:
   - profiling and finder crop recording hooks exist;
   - position outlier filtering exists;
   - missing/lost Entropia window degrades health and retries instead of crashing OCR;
-  - OCR still runs in-process by default, but the runner now emits strict
-    version 1 `packages/ocr-protocol` messages and imports no Game Bridge code;
+  - OCR still runs in-process by default, but `ZML_OCR_TRANSPORT=agent` now
+    selects a managed child process and `ZML_OCR_AGENT_PATH` can select its executable;
+  - the subprocess supervisor validates `hello`, drains both output pipes,
+    monitors heartbeats, maps observations, and restarts with bounded backoff;
+  - structured worker health distinguishes process/protocol failure and restart
+    state from an unavailable Entropia capture window;
+  - the runner emits strict version 1 `packages/ocr-protocol` messages and
+    imports no Game Bridge code;
   - `AppRuntime` owns only the `OcrInputSource` lifecycle while
     `EmbeddedOcrInputSource` maps agent messages to position snapshots, finder
     signals, preload, and worker health without changing runtime behavior;
@@ -87,7 +93,6 @@ Z Mining Log is now a working local mining tracker prototype:
 See `ROADMAP_2025-05-26.md` for the ordered roadmap. The highest-value items are:
 
 1. Managed OCR Agent migration:
-   - add the subprocess supervisor behind a rollback flag;
    - synchronize full configuration snapshots and validate real-game behavior;
    - package both executables before removing embedded OCR.
 

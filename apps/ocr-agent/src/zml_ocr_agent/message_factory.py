@@ -20,6 +20,8 @@ from zml_ocr_protocol.messages import (
     FinderObservationPayload,
     FinderSignalMessage,
     FinderUnitsChangedPayload,
+    HeartbeatMessage,
+    HeartbeatPayload,
     HelloMessage,
     HelloPayload,
     PositionMessage,
@@ -70,7 +72,7 @@ class AgentMessageFactory:
                 agent_version=self._agent_version,
                 pid=self._pid,
                 started_ts_ms=self._started_ts_ms,
-                capabilities=["stdio", "position", "finder", "status"],
+                capabilities=["stdio", "position", "finder", "status", "heartbeat"],
             ),
         )
 
@@ -135,6 +137,26 @@ class AgentMessageFactory:
                 applied_revision=None,
                 code=code,
                 detail=detail,
+            ),
+        )
+
+    def heartbeat(
+        self,
+        *,
+        state: AgentStatusState,
+        capture_available: bool,
+    ) -> HeartbeatMessage:
+        message_id, sequence_id, emitted_ts_ms = self._metadata()
+        return HeartbeatMessage(
+            protocol_version=PROTOCOL_VERSION,
+            type="heartbeat",
+            message_id=message_id,
+            sequence_id=sequence_id,
+            emitted_ts_ms=emitted_ts_ms,
+            payload=HeartbeatPayload(
+                state=state,
+                capture_available=capture_available,
+                applied_revision=None,
             ),
         )
 

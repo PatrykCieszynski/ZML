@@ -1,7 +1,13 @@
 from __future__ import annotations
 
 import pytest
-from zml_ocr_protocol import FinderSignalMessage, HelloMessage, PositionMessage, StatusMessage
+from zml_ocr_protocol import (
+    FinderSignalMessage,
+    HeartbeatMessage,
+    HelloMessage,
+    PositionMessage,
+    StatusMessage,
+)
 
 from zml_ocr_agent.message_factory import AgentMessageFactory
 from zml_ocr_agent.models import WorldPosition
@@ -9,9 +15,9 @@ from zml_ocr_agent.pipelines.mining_finder.model import MiningFinderSignal
 from zml_ocr_agent.pipelines.position.model import OcrPosition
 
 
-def test_factory_emits_ordered_hello_position_and_status_messages() -> None:
-    timestamps = iter([100, 101, 102, 103])
-    message_ids = iter(["a" * 32, "b" * 32, "c" * 32])
+def test_factory_emits_ordered_hello_position_status_and_heartbeat_messages() -> None:
+    timestamps = iter([100, 101, 102, 103, 104])
+    message_ids = iter(["a" * 32, "b" * 32, "c" * 32, "d" * 32])
     factory = AgentMessageFactory(
         clock_ms=lambda: next(timestamps),
         message_id_factory=lambda: next(message_ids),
@@ -33,11 +39,16 @@ def test_factory_emits_ordered_hello_position_and_status_messages() -> None:
         code="window_unavailable",
         detail="window missing",
     )
+    heartbeat = factory.heartbeat(
+        state="waiting_for_window",
+        capture_available=False,
+    )
 
     assert isinstance(hello, HelloMessage)
     assert hello.sequence_id == 0
     assert hello.payload.agent_version == "9.8.7"
     assert hello.payload.pid == 123
+    assert "heartbeat" in hello.payload.capabilities
     assert isinstance(position, PositionMessage)
     assert position.sequence_id == 1
     assert position.observed_ts_ms == 1_000
@@ -45,6 +56,9 @@ def test_factory_emits_ordered_hello_position_and_status_messages() -> None:
     assert isinstance(status, StatusMessage)
     assert status.sequence_id == 2
     assert status.payload.state == "waiting_for_window"
+    assert isinstance(heartbeat, HeartbeatMessage)
+    assert heartbeat.sequence_id == 3
+    assert heartbeat.payload.state == "waiting_for_window"
 
 
 @pytest.mark.parametrize(

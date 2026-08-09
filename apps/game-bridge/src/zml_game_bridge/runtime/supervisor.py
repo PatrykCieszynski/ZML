@@ -5,7 +5,7 @@ from collections.abc import Callable
 from threading import Thread
 from typing import Any
 
-from zml_game_bridge.runtime.worker_health import WorkerHealthRegistry
+from zml_game_bridge.runtime.worker_health import HealthDetail, WorkerHealthRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +31,9 @@ class WorkerSupervisor:
 
     def mark_degraded(self, name: str, message: str) -> None:
         self._health.mark_degraded(name, message)
+
+    def update_details(self, name: str, **details: HealthDetail) -> None:
+        self._health.update_details(name, **details)
 
     def start_thread(
         self,

@@ -57,6 +57,9 @@ Input modes:
 - `ZML_MINING_RESOURCE_CATALOG_PATH`: optional override for learned/user mining resources JSON.
 - `ZML_CHAT_START_AT_END`: start tailing from the end of the file, defaults to `true`.
 - `ZML_OCR_ENABLED`: enable live OCR input.
+- `ZML_OCR_TRANSPORT`: `embedded` (default rollback path) or `agent` (managed child process).
+- `ZML_OCR_AGENT_PATH`: optional path to a standalone OCR Agent executable; source runs use the
+  current Python environment and `python -m zml_ocr_agent stdio` when this is unset.
 - `ZML_MOCK_INPUTS`: enable mock mining input.
 - `ZML_MOCK_MINING_INTERVAL_MS`: mock drop interval.
 - `ZML_FINDER_DEBUG`: enable detailed finder OCR debug logging.
