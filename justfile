@@ -1,4 +1,5 @@
-set default-list := true
+default:
+    just --list
 
 # Component task modules. Each module runs from its own project directory.
 mod backend 'apps/game-bridge'
