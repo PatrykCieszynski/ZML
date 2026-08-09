@@ -117,6 +117,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Set up just
+        uses: extractions/setup-just@v4
+
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
 
@@ -130,5 +133,8 @@ jobs:
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Verify frontend
-        run: pnpm frontend:verify
+      - name: Verify shared package
+        run: just shared verify
+
+      - name: Verify desktop
+        run: just desktop verify
