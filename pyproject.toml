@@ -12,7 +12,7 @@ zml-ocr-protocol = { workspace = true }
 
 [tool.uv.workspace]
 members = [
-    "apps/game-bridge",
-    "apps/ocr-agent",
+    "apps/backend",
+    "apps/ocr-worker",
     "packages/ocr-protocol",
 ]

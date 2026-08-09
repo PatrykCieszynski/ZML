@@ -223,8 +223,8 @@ Profit tracking is intended to aggregate primarily by run and segment, not by in
 
 ```text
 apps/
-  game-bridge/      Python backend: inputs, runtime, persistence, REST/SSE/WS API
-  electron-ui/      Electron main process and React renderer
+  backend/      Python backend: inputs, runtime, persistence, REST/SSE/WS API
+  desktop/      Electron main process and React renderer
 
 packages/
   shared/           Shared TypeScript DTOs and IPC contracts
@@ -248,7 +248,7 @@ After installing Python and pnpm dependencies, start the desktop app from the re
 pnpm dev
 ```
 
-Electron starts the backend automatically from `apps/game-bridge/.venv`. If Entropia is not
+Electron starts the backend automatically from `apps/backend/.venv`. If Entropia is not
 open yet, the OCR worker remains alive in `degraded` state and checks again automatically.
 
 Development state is isolated from the installed application:
@@ -273,7 +273,7 @@ pnpm package
 ```
 
 This packages the Python bridge, stages it under Electron resources, and creates an NSIS
-installer under `apps/electron-ui/release/<version>/`. The GitHub Actions Windows packaging
+installer under `apps/desktop/release/<version>/`. The GitHub Actions Windows packaging
 workflow uploads installers for manual/snapshot builds. A tag matching the desktop version,
 for example `v0.1.0`, additionally creates a GitHub Release.
 

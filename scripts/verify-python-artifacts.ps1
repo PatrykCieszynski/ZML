@@ -1,6 +1,6 @@
 param(
     [string]$RepoRoot = (Split-Path -Parent $PSScriptRoot),
-    [string]$BridgeArtifactDir,
+    [string]$BackendArtifactDir,
     [string]$AgentArtifactDir,
     [switch]$SkipProcessTree
 )
@@ -8,38 +8,38 @@ param(
 $ErrorActionPreference = "Stop"
 
 $resolvedRepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
-$bridgeDir = if ($BridgeArtifactDir) {
-    (Resolve-Path -LiteralPath $BridgeArtifactDir).Path
+$backendDir = if ($BackendArtifactDir) {
+    (Resolve-Path -LiteralPath $BackendArtifactDir).Path
 } else {
-    Join-Path $resolvedRepoRoot "apps/game-bridge/dist/zml-game-bridge"
+    Join-Path $resolvedRepoRoot "apps/backend/dist/zml-backend"
 }
 $agentDir = if ($AgentArtifactDir) {
     (Resolve-Path -LiteralPath $AgentArtifactDir).Path
 } else {
-    Join-Path $resolvedRepoRoot "apps/ocr-agent/dist/zml-ocr-agent"
+    Join-Path $resolvedRepoRoot "apps/ocr-worker/dist/zml-ocr-worker"
 }
-$bridgeExe = Join-Path $bridgeDir "zml-game-bridge.exe"
-$agentExe = Join-Path $agentDir "zml-ocr-agent.exe"
+$backendExe = Join-Path $backendDir "zml-backend.exe"
+$agentExe = Join-Path $agentDir "zml-ocr-worker.exe"
 
-foreach ($requiredPath in @($bridgeExe, $agentExe)) {
+foreach ($requiredPath in @($backendExe, $agentExe)) {
     if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
         throw "Required packaged executable is missing: $requiredPath"
     }
 }
 
 $forbiddenBridgeEntries = @(
-    Get-ChildItem -LiteralPath $bridgeDir -Recurse -Force |
+    Get-ChildItem -LiteralPath $backendDir -Recurse -Force |
         Where-Object { $_.Name -match "^(cv2|mss|numpy|opencv|tesserocr|tessdata|win32gui|win32ui)(\.|$)" }
 )
 if ($forbiddenBridgeEntries.Count -gt 0) {
     $paths = $forbiddenBridgeEntries.FullName -join [Environment]::NewLine
-    throw "Game Bridge still contains OCR-native artifacts:$([Environment]::NewLine)$paths"
+    throw "Backend still contains OCR-native artifacts:$([Environment]::NewLine)$paths"
 }
 
 foreach ($trainedData in @("eng.traineddata", "osd.traineddata")) {
     $path = Join-Path $agentDir "_internal/tessdata/$trainedData"
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-        throw "OCR Agent tessdata is missing: $path"
+        throw "OCR Worker tessdata is missing: $path"
     }
 }
 
@@ -58,7 +58,7 @@ function Invoke-PackagedCommand {
 
 Invoke-PackagedCommand -Executable $agentExe -Arguments @("--version")
 Invoke-PackagedCommand -Executable $agentExe -Arguments @("doctor")
-Invoke-PackagedCommand -Executable $bridgeExe -Arguments @("config")
+Invoke-PackagedCommand -Executable $backendExe -Arguments @("config")
 
 function Test-AgentProtocol {
     $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
@@ -73,7 +73,7 @@ function Test-AgentProtocol {
     $process = [System.Diagnostics.Process]::new()
     $process.StartInfo = $startInfo
     if (-not $process.Start()) {
-        throw "Failed to start packaged OCR Agent"
+        throw "Failed to start packaged OCR Worker"
     }
 
     $helloLine = $process.StandardOutput.ReadLine()
@@ -96,13 +96,13 @@ function Test-AgentProtocol {
     if (-not $process.WaitForExit(15000)) {
         $process.Kill()
         $process.WaitForExit()
-        throw "Packaged OCR Agent did not accept shutdown"
+        throw "Packaged OCR Worker did not accept shutdown"
     }
 
     $remainingOutput = $process.StandardOutput.ReadToEnd()
     $standardError = $process.StandardError.ReadToEnd()
     if ($process.ExitCode -ne 0) {
-        throw "Packaged OCR Agent exited with $($process.ExitCode): $standardError"
+        throw "Packaged OCR Worker exited with $($process.ExitCode): $standardError"
     }
 
     $messages = @(
@@ -116,7 +116,7 @@ function Test-AgentProtocol {
         $_.payload.status -eq "ok"
     }
     if (-not $shutdownResult) {
-        throw "Packaged OCR Agent did not emit a successful shutdown result: $remainingOutput"
+        throw "Packaged OCR Worker did not emit a successful shutdown result: $remainingOutput"
     }
 }
 
@@ -128,9 +128,9 @@ if (-not $SkipProcessTree) {
     New-Item -ItemType Directory -Path $smokeData -Force | Out-Null
 
     $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
-    $startInfo.FileName = $bridgeExe
+    $startInfo.FileName = $backendExe
     $startInfo.Arguments = "serve --mode live"
-    $startInfo.WorkingDirectory = $bridgeDir
+    $startInfo.WorkingDirectory = $backendDir
     $startInfo.UseShellExecute = $false
     $startInfo.CreateNoWindow = $true
     $startInfo.RedirectStandardInput = $true
@@ -139,13 +139,13 @@ if (-not $SkipProcessTree) {
     $startInfo.EnvironmentVariables["ZML_APP_DATA_DIR"] = $smokeData
     $startInfo.EnvironmentVariables["ZML_CHAT_LOG_PATH"] = Join-Path $smokeData "chat.log"
     $startInfo.EnvironmentVariables["ZML_OCR_CAPTURE_HZ"] = "1"
-    $startInfo.EnvironmentVariables["ZML_OCR_AGENT_PATH"] = $agentExe
+    $startInfo.EnvironmentVariables["ZML_OCR_WORKER_PATH"] = $agentExe
     $startInfo.EnvironmentVariables["ZML_PARENT_MANAGED"] = "1"
 
     $process = [System.Diagnostics.Process]::new()
     $process.StartInfo = $startInfo
     if (-not $process.Start()) {
-        throw "Failed to start packaged Game Bridge"
+        throw "Failed to start packaged Backend"
     }
 
     try {
@@ -175,11 +175,11 @@ if (-not $SkipProcessTree) {
         $process.StandardInput.WriteLine("shutdown")
         $process.StandardInput.Flush()
         if (-not $process.WaitForExit(30000)) {
-            throw "Packaged Game Bridge did not stop after the parent shutdown command"
+            throw "Packaged Backend did not stop after the parent shutdown command"
         }
         $process.WaitForExit()
         if ($process.ExitCode -ne 0) {
-            throw "Packaged Game Bridge exited with $($process.ExitCode)"
+            throw "Packaged Backend exited with $($process.ExitCode)"
         }
 
         $agentDeadline = [DateTime]::UtcNow.AddSeconds(5)
@@ -190,7 +190,7 @@ if (-not $SkipProcessTree) {
             Start-Sleep -Milliseconds 100
         }
         if (Get-Process -Id $agentPid -ErrorAction SilentlyContinue) {
-            throw "OCR Agent process $agentPid survived Game Bridge shutdown"
+            throw "OCR Worker process $agentPid survived Backend shutdown"
         }
     } finally {
         if (-not $process.HasExited) {

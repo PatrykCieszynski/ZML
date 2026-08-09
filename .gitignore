@@ -231,12 +231,12 @@ __marimo__/
 /identifier.sqlite
 
 # Python bridge build artifacts
-apps/game-bridge/build/
-apps/game-bridge/dist/
-apps/game-bridge/*.spec
-apps/electron-ui/resources/backend/
-apps/electron-ui/resources/ocr-agent/
+apps/backend/build/
+apps/backend/dist/
+apps/backend/*.spec
+apps/desktop/resources/backend/
+apps/desktop/resources/ocr-worker/
 
 # Python bridge local pytest/cache artifacts
-apps/game-bridge/.pytest-*/
-apps/game-bridge/pytest-*/
+apps/backend/.pytest-*/
+apps/backend/pytest-*/

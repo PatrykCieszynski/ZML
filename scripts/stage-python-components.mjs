@@ -8,27 +8,27 @@ const repoRoot = path.resolve(
 );
 const components = [
   {
-    name: "Game Bridge",
+    name: "Backend",
     source: path.join(
       repoRoot,
       "apps",
-      "game-bridge",
+      "backend",
       "dist",
-      "zml-game-bridge",
+      "zml-backend",
     ),
-    executable: "zml-game-bridge.exe",
-    target: path.join(repoRoot, "apps", "electron-ui", "resources", "backend"),
+    executable: "zml-backend.exe",
+    target: path.join(repoRoot, "apps", "desktop", "resources", "backend"),
   },
   {
-    name: "OCR Agent",
-    source: path.join(repoRoot, "apps", "ocr-agent", "dist", "zml-ocr-agent"),
-    executable: "zml-ocr-agent.exe",
+    name: "OCR Worker",
+    source: path.join(repoRoot, "apps", "ocr-worker", "dist", "zml-ocr-worker"),
+    executable: "zml-ocr-worker.exe",
     target: path.join(
       repoRoot,
       "apps",
-      "electron-ui",
+      "desktop",
       "resources",
-      "ocr-agent",
+      "ocr-worker",
     ),
   },
 ];

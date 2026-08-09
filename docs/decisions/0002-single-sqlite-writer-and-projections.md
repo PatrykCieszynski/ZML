@@ -9,7 +9,7 @@ Accepted.
 ## Context
 
 The app has multiple concurrent inputs: OCR, chat tailing, mock input, REST API,
-SSE, WebSocket position updates, and Electron UI commands. SQLite allows many
+SSE, WebSocket position updates, and Desktop commands. SQLite allows many
 readers but only one writer at a time. Direct writes from multiple threads risk
 `database is locked` errors and inconsistent state.
 

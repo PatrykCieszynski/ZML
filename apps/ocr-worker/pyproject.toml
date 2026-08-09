@@ -1,0 +1,64 @@
+[project]
+name = "zml-ocr-worker"
+version = "0.1.0"
+description = "Standalone screen capture and OCR process for Z Mining Log"
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "mss>=10.1.0",
+    "numpy>=2.4.0",
+    "opencv-python-headless>=4.13.0.92",
+    "pywin32==311; sys_platform == 'win32'",
+    "tesserocr @ https://github.com/simonflueckiger/tesserocr-windows_build/releases/download/tesserocr-v2.10.0-tesseract-5.5.2/tesserocr-2.10.0-cp313-cp313-win_amd64.whl ; sys_platform == 'win32' and platform_machine == 'AMD64'",
+    "zml-ocr-protocol==0.1.0",
+]
+
+[dependency-groups]
+dev = [
+    "pyinstaller>=6.20.0",
+    "pyright>=1.1.408",
+    "pytest>=9.0.2",
+    "pytest-timeout>=2.4.0",
+    "ruff>=0.14.11",
+    "types-pywin32>=311.0.0.20260521",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project.scripts]
+zml-ocr-worker = "zml_ocr_worker.cli:main"
+zml-ocr-finder-debug = "zml_ocr_worker.finder_debug:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pyright]
+include = ["src", "tests"]
+pythonVersion = "3.13"
+venvPath = "../.."
+venv = ".venv"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = [
+    "-q",
+    "--basetemp=../../.tmp/pytest-ocr-worker",
+]
+timeout = 3
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

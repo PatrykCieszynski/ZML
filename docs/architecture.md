@@ -11,9 +11,9 @@ dashboard, map, overlay, and tool setup UI.
 
 ```text
 apps/
-  game-bridge/       Python backend: inputs, runtime, API, persistence
-  ocr-agent/         Screen capture, OCR pipelines, diagnostics, stdio runner
-  electron-ui/       Electron main process and React renderer
+  backend/       Python backend: inputs, runtime, API, persistence
+  ocr-worker/         Screen capture, OCR pipelines, diagnostics, stdio runner
+  desktop/       Electron main process and React renderer
 
 packages/
   ocr-protocol/      Versioned Python DTOs and NDJSON codec
@@ -62,21 +62,21 @@ domain -> no app/runtime/persistence imports
 
 ## OCR Implementation Boundary
 
-`apps/ocr-agent` owns Windows capture, ROI models, finder and position
+`apps/ocr-worker` owns Windows capture, ROI models, finder and position
 pipelines, recording/profiling tools, `tesserocr`, OpenCV, numpy, and tessdata.
 It is organized around `capture`, `pipelines`, `runtime`, and config rather than
 backend DDD layers. Its runner emits `zml-ocr-protocol` messages and imports no
-Game Bridge modules.
+Backend modules.
 
-Game Bridge depends only on `zml-ocr-protocol`; the Agent executable is a
-runtime dependency, not a Python package dependency. `OcrAgentSupervisor`
+Backend depends only on `zml-ocr-protocol`; the Agent executable is a
+runtime dependency, not a Python package dependency. `OcrWorkerSupervisor`
 starts its `stdio` entrypoint, validates the initial `hello`, drains
 stdout/stderr concurrently, monitors heartbeats, and restarts failed processes
-with bounded exponential backoff. `runtime/ocr_agent` contains only that process
-lifecycle and transport. `inputs/ocr_agent` owns translation between protocol
+with bounded exponential backoff. `runtime/ocr_worker` contains only that process
+lifecycle and transport. `inputs/ocr_worker` owns translation between protocol
 DTOs, backend settings, position snapshots, and finder application signals.
 
-Game Bridge owns one complete desired configuration snapshot. It
+Backend owns one complete desired configuration snapshot. It
 sends revisioned `apply_config` after each `hello` and accepts OCR observations
 only after the matching `command_result` acknowledges that revision. A restarted
 agent therefore receives the same full snapshot before capture resumes; it does
@@ -92,14 +92,14 @@ through wait, terminate, and kill if the child does not exit. The agent also
 exits cleanly when it observes stdin EOF.
 
 Windows packaging produces independent one-directory PyInstaller artifacts for
-Game Bridge and OCR Agent. The Bridge artifact excludes `zml_ocr_agent`, Windows
+Backend and OCR Worker. The Bridge artifact excludes `zml_ocr_worker`, Windows
 capture bindings (`win32gui`/`win32ui`), and the native OCR stack (`tesserocr`,
 OpenCV, numpy, mss, and tessdata); those files are owned only by the Agent
 artifact. The staging script copies both artifacts into separate Electron
 resources. Packaged Electron passes the bundled Agent executable path.
 Development Electron passes the
 standalone Agent virtualenv executable; direct backend runs use
-`ZML_OCR_AGENT_PATH` or resolve `zml-ocr-agent` from `PATH`. Packaging
+`ZML_OCR_WORKER_PATH` or resolve `zml-ocr-worker` from `PATH`. Packaging
 verification checks the
 artifact boundary, protocol startup, config acknowledgement, and full
 Bridge-to-Agent shutdown without an orphan child process.
@@ -215,7 +215,7 @@ Live updates:
 - React reads from `zmlRendererStore`.
 
 Desktop-internal contracts shared by Electron main/preload and renderers live in
-`apps/electron-ui/shared`. Backend REST wire schemas come from FastAPI/OpenAPI via
+`apps/desktop/shared`. Backend REST wire schemas come from FastAPI/OpenAPI via
 `packages/api-contract`; do not duplicate those schemas in desktop shared code.
 
 ## Windows
@@ -248,9 +248,9 @@ sequenceDiagram
     Bridge-->>Electron: process closed
 ```
 
-- Development resolves `apps/game-bridge/.venv` directly.
-- Packaged builds resolve `resources/backend/zml-game-bridge.exe` and configure
-  it to supervise `resources/ocr-agent/zml-ocr-agent.exe`.
+- Development resolves `apps/backend/.venv` directly.
+- Packaged builds resolve `resources/backend/zml-backend.exe` and configure
+  it to supervise `resources/ocr-worker/zml-ocr-worker.exe`.
 - `ZML_MANAGE_BACKEND=0` leaves lifecycle ownership to the developer.
 - An explicit `ZML_BACKEND_URL` is treated as external by default.
 - If a managed backend exits unexpectedly, Electron retries with bounded backoff.
@@ -259,7 +259,7 @@ sequenceDiagram
 - `RuntimeShutdownSignal` lets WS/SSE handlers finish before Uvicorn waits for active
   connections, avoiding a circular graceful-shutdown wait.
 - Native OCR initialization exists only in the Agent child process and cannot
-  replace Uvicorn's signal handlers in Game Bridge.
+  replace Uvicorn's signal handlers in Backend.
 - Absence of the Entropia window is not a process failure. OCR reports `degraded`, retries
   capture, and returns to `running` when the window becomes available.
 
