@@ -1,4 +1,4 @@
-name: Inspect final rename scope
+name: Apply final repository renames
 
 on:
   push:
@@ -6,24 +6,156 @@ on:
       - agent/final-repository-cleanup
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  inspect:
+  migrate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Inspect legacy names and package metadata
+        with:
+          ref: agent/final-repository-cleanup
+
+      - uses: astral-sh/setup-uv@v8.1.0
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Rename applications, Python modules, and desktop backend vocabulary
         shell: bash
         run: |
           set -euo pipefail
-          echo '=== legacy path/name references ==='
-          grep -RIn --exclude-dir=node_modules --exclude-dir=.git --exclude='inspect-final-renames.yml' -E 'electron-ui|game-bridge|ocr-agent|zml_game_bridge|zml_ocr_agent|@zml/electron-ui|zml-game-bridge|zml-ocr-agent' . || true
-          echo '=== Python source roots ==='
-          find apps/game-bridge apps/ocr-agent -maxdepth 4 -type f \( -name 'pyproject.toml' -o -name '*.spec' -o -name '__init__.py' \) -print 2>/dev/null || true
-          echo '=== package files ==='
-          sed -n '1,220p' apps/game-bridge/pyproject.toml
-          sed -n '1,220p' apps/ocr-agent/pyproject.toml
-          sed -n '1,220p' apps/electron-ui/package.json
-          echo '=== root package ==='
-          cat package.json
+
+          git mv apps/electron-ui apps/desktop
+          git mv apps/game-bridge apps/backend
+          git mv apps/ocr-agent apps/ocr-worker
+
+          git mv apps/backend/src/zml_game_bridge apps/backend/src/zml_backend
+          git mv apps/ocr-worker/src/zml_ocr_agent apps/ocr-worker/src/zml_ocr_worker
+          git mv apps/backend/src/zml_backend/inputs/ocr_agent apps/backend/src/zml_backend/inputs/ocr_worker
+          git mv apps/backend/src/zml_backend/runtime/ocr_agent apps/backend/src/zml_backend/runtime/ocr_worker
+          git mv apps/backend/tests/inputs/ocr_agent apps/backend/tests/inputs/ocr_worker
+          git mv apps/backend/tests/runtime/ocr_agent apps/backend/tests/runtime/ocr_worker
+
+          git mv apps/desktop/electron/agent/eventStreamClient.ts apps/desktop/electron/backend/eventStreamClient.ts
+          git mv apps/desktop/electron/agent/positionSource.ts apps/desktop/electron/backend/positionSource.ts
+          git mv apps/desktop/electron/agent/positionWsClient.ts apps/desktop/electron/backend/positionWsClient.ts
+          git mv apps/desktop/electron/agent/restClient.ts apps/desktop/electron/backend/restClient.ts
+          rmdir apps/desktop/electron/agent
+          git mv apps/desktop/shared/agent apps/desktop/shared/backend
+
+          if test -f docs/decisions/0007-versioned-ocr-agent-process-contract.md; then
+            git mv docs/decisions/0007-versioned-ocr-agent-process-contract.md docs/decisions/0007-versioned-ocr-worker-process-contract.md
+          fi
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import subprocess
+
+          replacements = [
+              ('@zml/electron-ui', '@zml/desktop'),
+              ('apps/electron-ui', 'apps/desktop'),
+              ('apps/game-bridge', 'apps/backend'),
+              ('apps/ocr-agent', 'apps/ocr-worker'),
+              ('zml_game_bridge', 'zml_backend'),
+              ('zml_ocr_agent', 'zml_ocr_worker'),
+              ('zml-game-bridge', 'zml-backend'),
+              ('zml-ocr-agent', 'zml-ocr-worker'),
+              ('ZML_OCR_AGENT_PATH', 'ZML_OCR_WORKER_PATH'),
+              ('OcrAgent', 'OcrWorker'),
+              ('ocr_agent', 'ocr_worker'),
+              ('OCR Agent', 'OCR Worker'),
+              ('OCR agent', 'OCR worker'),
+              ('ocr-agent', 'ocr-worker'),
+              ('Game Bridge', 'Backend'),
+              ('Electron UI', 'Desktop'),
+              ('electron-ui', 'desktop'),
+              ('AgentRestClientOptions', 'BackendRestClientOptions'),
+              ('AgentRestClient', 'BackendRestClient'),
+              ('AgentClient', 'BackendClient'),
+              ('AgentHealthWire', 'BackendHealthWire'),
+              ('AgentHealthDto', 'BackendHealthDto'),
+              ('isAgentHealthWire', 'isBackendHealthWire'),
+              ('wireToAgentHealthDto', 'wireToBackendHealthDto'),
+              ('AgentEventEnvelope', 'BackendEventEnvelope'),
+              ('agentRestClient', 'backendRestClient'),
+              ('agentClient', 'backendClient'),
+              ('agentBaseUrl', 'backendBaseUrl'),
+              ('agentUrl', 'backendUrl'),
+              ('BridgeArtifactDir', 'BackendArtifactDir'),
+              ('bridgeDir', 'backendDir'),
+              ('bridgeExe', 'backendExe'),
+              ('bridge_root', 'backend_root'),
+              ('./agent/', './backend/'),
+              ('../agent/', '../backend/'),
+          ]
+
+          tracked = subprocess.check_output(['git', 'ls-files', '-z']).split(b'\0')
+          for raw in tracked:
+              if not raw:
+                  continue
+              path = Path(raw.decode())
+              if str(path).startswith('.github/'):
+                  continue
+              try:
+                  text = path.read_text(encoding='utf-8')
+              except (UnicodeDecodeError, IsADirectoryError):
+                  continue
+              updated = text
+              for old, new in replacements:
+                  updated = updated.replace(old, new)
+              if updated != text:
+                  path.write_text(updated, encoding='utf-8')
+
+          root_package = {
+              'name': 'zml',
+              'private': True,
+              'packageManager': 'pnpm@10.27.0',
+          }
+          Path('package.json').write_text(json.dumps(root_package, indent=2) + '\n', encoding='utf-8')
+
+          agent_env_cmd = Path('scripts/agent-env.cmd')
+          if agent_env_cmd.exists():
+              text = agent_env_cmd.read_text(encoding='utf-8')
+              text = text.replace('%REPO_ROOT%\\apps\\backend\\.uv-cache', '%REPO_ROOT%\\.uv-cache')
+              agent_env_cmd.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Refresh Python and pnpm locks
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv lock
+          pnpm install --lockfile-only --no-frozen-lockfile
+
+      - name: Guard against stale implementation names outside workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.github -E 'electron-ui|game-bridge|ocr-agent|zml_game_bridge|zml_ocr_agent|@zml/electron-ui|zml-game-bridge|zml-ocr-agent|ZML_OCR_AGENT_PATH|OcrAgent|OCR Agent|AgentRestClient|AgentClient|AgentHealth|AgentEventEnvelope' .; then
+            echo 'Stale implementation name remains outside workflow files.' >&2
+            exit 1
+          fi
+          test -d apps/desktop
+          test -d apps/backend/src/zml_backend
+          test -d apps/ocr-worker/src/zml_ocr_worker
+          test ! -e apps/electron-ui
+          test ! -e apps/game-bridge
+          test ! -e apps/ocr-agent
+
+      - name: Commit migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git reset .github/workflows/inspect-final-renames.yml
+          git commit -m "Rename applications and finalize repository layout"
+          git push
