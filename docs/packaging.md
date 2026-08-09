@@ -7,15 +7,19 @@ The supported release pipeline is Windows-first and produces one Electron/NSIS i
 ## Build overview
 
 ```mermaid
-flowchart LR
+flowchart TB
     BackendSrc[apps/backend] --> BackendExe[PyInstaller: zml-backend]
     WorkerSrc[apps/ocr-worker] --> WorkerExe[PyInstaller: zml-ocr-worker]
-    BackendExe --> Verify[process/artifact verification]
+
+    BackendExe --> Verify[process / artifact verification]
     WorkerExe --> Verify
+
     Verify --> Stage[stage into apps/desktop/resources]
+
     Api[FastAPI OpenAPI] --> Contract[generated TS contract]
     Contract --> DesktopBuild[Electron build]
     Stage --> DesktopBuild
+
     DesktopBuild --> Installer[NSIS installer]
     Installer --> BundledVerify[bundled process-tree verification]
 ```
