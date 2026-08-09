@@ -24,28 +24,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Set up bridge
-        uses: ./.github/actions/setup-bridge
+      - name: Set up just
+        uses: extractions/setup-just@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install
+
+      - name: Sync Python workspace
+        run: uv sync --locked --all-packages
 
       - name: Verify bridge
-        working-directory: apps/game-bridge
-        run: just verify
-
-      - name: Install OCR Agent dependencies
-        working-directory: apps/ocr-agent
-        run: uv sync --locked --dev
+        run: just backend verify
 
       - name: Verify OCR Agent
-        working-directory: apps/ocr-agent
-        run: just verify
+        run: just ocr verify
 
       - name: Package OCR Agent
-        working-directory: apps/ocr-agent
-        run: just package
+        run: just ocr package
 
       - name: Package bridge
-        working-directory: apps/game-bridge
-        run: just package
+        run: just backend package
 
       - name: Verify packaged process tree
         shell: pwsh
