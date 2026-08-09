@@ -1,0 +1,7 @@
+default:
+    just --list
+
+# Regenerate TypeScript wire types from the FastAPI OpenAPI schema.
+generate:
+    uv run --project ../../apps/game-bridge python -m zml_game_bridge.api.export_openapi --output openapi.json
+    pnpm dlx openapi-typescript@7.13.0 openapi.json -o schema.d.ts

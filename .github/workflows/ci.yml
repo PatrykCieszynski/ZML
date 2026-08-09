@@ -129,6 +129,17 @@ jobs:
       - name: Set up just
         uses: extractions/setup-just@v4
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install
+
+      - name: Sync bridge dependencies
+        run: uv sync --locked --package zml-game-bridge
+
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
 
@@ -141,6 +152,9 @@ jobs:
 
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Generate API contract
+        run: just api generate
 
       - name: Verify shared package
         run: just shared verify

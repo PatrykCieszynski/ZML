@@ -1,7 +1,8 @@
+import type { components } from "@zml/api-contract";
 import type { WorldPosDTO } from "./worldPos";
 
-export type MiningClaimStatus = "active" | "depleted" | "ignored" | "expired";
-export type MiningResourceType = "ore" | "enmatter" | "treasure" | "other" | "unknown";
+export type MiningClaimStatus = components["schemas"]["MiningClaimDto"]["status"];
+export type MiningResourceType = NonNullable<components["schemas"]["MiningClaimDto"]["mining_type"]>;
 
 export type MiningClaimPositionDto = WorldPosDTO;
 
@@ -29,36 +30,8 @@ export type MiningClaimDto = {
     depletedDistanceM: number | null;
 };
 
-export type MiningClaimPositionWire = {
-    planet_name: string | null;
-    x: number;
-    y: number;
-    z?: number | null;
-};
-
-export type MiningClaimWire = {
-    claim_id: string;
-    created_event_id: number;
-    hit_id: string | null;
-    drop_id: string | null;
-    run_id: number | null;
-    segment_id: string | null;
-    observed_ts_ms: number;
-    position: MiningClaimPositionWire | null;
-    search_radius_m: number | null;
-    resource_name: string | null;
-    mining_type?: MiningResourceType | null;
-    size_label: string | null;
-    size_index: number | null;
-    expected_expires_ts_ms: number | null;
-    range_m: number | null;
-    depth_m: number | null;
-    status: MiningClaimStatus;
-    depleted_event_id: number | null;
-    depleted_event_dt: string | null;
-    depleted_position: MiningClaimPositionWire | null;
-    depleted_distance_m: number | null;
-};
+export type MiningClaimPositionWire = components["schemas"]["MiningClaimPositionDto"];
+export type MiningClaimWire = components["schemas"]["MiningClaimDto"];
 
 export type MiningClaimCreatedEventWire = {
     claim_id: string;
@@ -135,7 +108,7 @@ export function isMiningClaimWire(value: unknown): value is MiningClaimWire {
         isNullablePositionWire(value.position) &&
         isNullableNumber(value.search_radius_m) &&
         isNullableString(value.resource_name) &&
-        (value.mining_type === undefined || isNullableMiningResourceType(value.mining_type)) &&
+        isNullableMiningResourceType(value.mining_type) &&
         isNullableString(value.size_label) &&
         isNullableNumber(value.size_index) &&
         isNullableNumber(value.expected_expires_ts_ms) &&
@@ -249,7 +222,7 @@ export function wireToMiningClaimDto(wire: MiningClaimWire): MiningClaimDto {
         position: wire.position ? wireToPositionDto(wire.position) : null,
         searchRadiusM: wire.search_radius_m,
         resourceName: wire.resource_name,
-        miningType: wire.mining_type ?? null,
+        miningType: wire.mining_type,
         sizeLabel: wire.size_label,
         sizeIndex: wire.size_index,
         expectedExpiresTsMs: wire.expected_expires_ts_ms,

@@ -81,6 +81,12 @@ jobs:
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Generate API contract
+        run: just api generate
+
+      - name: Build shared package
+        run: just shared build
+
       - name: Stage Python components in Electron resources
         run: just stage-python
 

@@ -1,4 +1,6 @@
-export type MiningToolKind = "finder" | "amp" | "extractor";
+import type { components } from "@zml/api-contract";
+
+export type MiningToolKind = components["schemas"]["MiningToolProfileDto"]["kind"];
 
 export type MiningToolProfileDto = {
     toolId: string;
@@ -33,38 +35,12 @@ export type SetActiveMiningToolsRequest = {
     finderRangeEnhancerCount: number;
 };
 
-export type MiningToolProfileWire = {
-    tool_id: string;
-    kind: MiningToolKind;
-    name: string;
-    decay_mpec: number;
-    markup_percent: string;
-    radius_m: number | null;
-};
-
-export type ActiveMiningToolsWire = {
-    finder_id: string | null;
-    amp_id: string | null;
-    extractor_id: string | null;
-    finder_range_enhancer_count: number;
-    effective_finder_radius_m: number | null;
-    extraction_cost_mpec: number | null;
-};
-
-export type CreateMiningToolProfileRequestWire = {
-    kind: MiningToolKind;
-    name: string;
-    decay_mpec: number;
-    markup_percent: string;
-    radius_m: number | null;
-};
-
-export type SetActiveMiningToolsRequestWire = {
-    finder_id: string | null;
-    amp_id: string | null;
-    extractor_id: string | null;
-    finder_range_enhancer_count: number;
-};
+export type MiningToolProfileWire = components["schemas"]["MiningToolProfileDto"];
+export type ActiveMiningToolsWire = components["schemas"]["ActiveMiningToolsDto"];
+export type CreateMiningToolProfileRequestWire =
+    components["schemas"]["CreateMiningToolProfileRequestDto"];
+export type SetActiveMiningToolsRequestWire =
+    components["schemas"]["SetActiveMiningToolsRequestDto"];
 
 export function isMiningToolProfileWire(value: unknown): value is MiningToolProfileWire {
     if (!isRecord(value)) return false;
@@ -120,7 +96,7 @@ export function wireToMiningToolProfileDto(wire: MiningToolProfileWire): MiningT
         name: wire.name,
         decayMpec: wire.decay_mpec,
         markupPercent: wire.markup_percent,
-        radiusM: wire.radius_m,
+        radiusM: wire.radius_m ?? null,
     };
 }
 
