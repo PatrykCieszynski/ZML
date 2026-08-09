@@ -5,7 +5,7 @@ The OCR Worker is a standalone Windows process responsible for screen capture an
 ## Boundary
 
 ```mermaid
-flowchart LR
+flowchart TB
     Window[Entropia window] --> Capture[Windows capture]
     Capture --> Pipelines[Position + finder OCR]
     Pipelines --> Runner[stdio runner]
