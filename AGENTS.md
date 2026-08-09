@@ -108,7 +108,7 @@ The generated `openapi.json` and `schema.d.ts` are local build artifacts and are
 ## Process ownership
 
 ```mermaid
-flowchart LR
+flowchart TB
     Desktop -->|spawns / supervises| Backend
     Backend -->|spawns / supervises| Worker[OCR Worker]
 ```
