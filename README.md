@@ -251,6 +251,17 @@ pnpm dev
 Electron starts the backend automatically from `apps/game-bridge/.venv`. If Entropia is not
 open yet, the OCR worker remains alive in `degraded` state and checks again automatically.
 
+Development state is isolated from the installed application:
+
+```text
+<repo>/.tmp/appdata/backend/   SQLite, mining tools, resources, and OCR profile
+<repo>/.tmp/appdata/electron/  renderer storage, preferences, and window state
+```
+
+The packaged application continues to keep backend data under
+`%LOCALAPPDATA%/z-mining-log`. Set `ZML_APP_DATA_DIR` to explicitly select a different
+backend data directory. Individual path overrides such as `ZML_DB_PATH` still take priority.
+
 For a separately managed backend, set `ZML_MANAGE_BACKEND=0` before starting Electron. Setting
 an explicit `ZML_BACKEND_URL` also disables local process ownership unless management is
 explicitly re-enabled.
@@ -358,6 +369,7 @@ Useful environment variables:
 
 ```text
 ZML_LOG_LEVEL
+ZML_APP_DATA_DIR
 ZML_ERROR_LOG_PATH
 ZML_DB_PATH
 ZML_CHAT_LOG_PATH

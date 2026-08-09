@@ -50,6 +50,7 @@ Input modes:
 ## Useful Environment Variables
 
 - `ZML_LOG_LEVEL`: console log level, defaults to `INFO`.
+- `ZML_APP_DATA_DIR`: optional override for the directory containing backend DB, config, logs, and OCR captures.
 - `ZML_ERROR_LOG_PATH`: optional override for error-only log file.
 - `ZML_DB_PATH`: optional override for SQLite DB path.
 - `ZML_CHAT_LOG_PATH`: optional override for Entropia `chat.log`.
@@ -68,7 +69,19 @@ Input modes:
 
 For manual finder recording, enable `manual` mode and create a `record-now.flag` file in `ZML_FINDER_RECORDING_DIR`; the OCR worker consumes the flag on the next finder frame.
 
-By default, error logs are written to:
+Source development runs keep their state inside the repository:
+
+```text
+<repo>/.tmp/appdata/backend
+```
+
+The packaged backend keeps live application state under:
+
+```text
+%LOCALAPPDATA%\z-mining-log
+```
+
+Consequently, packaged error logs are written to:
 
 ```text
 %LOCALAPPDATA%\z-mining-log\logs\errors.log

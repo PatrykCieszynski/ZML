@@ -2,6 +2,7 @@ import { app, BrowserWindow } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
+import { resolveDevelopmentAppDataPaths } from "./appDataPaths.ts";
 import { registerIpc } from "./ipc/registerIpc";
 import { createMainWindow } from "./windows/createMainWindow";
 import { createMapWindow } from "./windows/createMapWindow";
@@ -39,6 +40,12 @@ import type { PositionSourceOptions, PositionSourceStatus, StopPositionSource } 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 process.env.APP_ROOT = path.join(__dirname, '..')
+
+if (!app.isPackaged) {
+  const devAppData = resolveDevelopmentAppDataPaths(process.env.APP_ROOT);
+  app.setPath("userData", devAppData.electron);
+  process.env.ZML_APP_DATA_DIR ??= devAppData.backend;
+}
 
 export const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
 export const MAIN_DIST = path.join(process.env.APP_ROOT, 'dist-electron')

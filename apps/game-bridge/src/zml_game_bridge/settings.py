@@ -9,7 +9,7 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from types import TracebackType
 
-APP_DATA_DIR_NAME = "z-mining-log"
+from zml_game_bridge.paths import get_app_data_dir
 
 
 def get_documents_dir() -> Path:
@@ -104,8 +104,7 @@ def _default_db_path() -> Path:
     if env_path is not None:
         return env_path
 
-    app_data = os.getenv("LOCALAPPDATA") or os.getenv("APPDATA") or str(Path.home())
-    return Path(app_data) / APP_DATA_DIR_NAME / "db" / "z-mining-log.sqlite3"
+    return get_app_data_dir() / "db" / "z-mining-log.sqlite3"
 
 
 def _default_error_log_path() -> Path:
@@ -113,8 +112,7 @@ def _default_error_log_path() -> Path:
     if env_path is not None:
         return env_path
 
-    app_data = os.getenv("LOCALAPPDATA") or os.getenv("APPDATA") or str(Path.home())
-    return Path(app_data) / APP_DATA_DIR_NAME / "logs" / "errors.log"
+    return get_app_data_dir() / "logs" / "errors.log"
 
 
 def _default_mining_resource_catalog_path() -> Path:
@@ -122,8 +120,7 @@ def _default_mining_resource_catalog_path() -> Path:
     if env_path is not None:
         return env_path
 
-    app_data = os.getenv("LOCALAPPDATA") or os.getenv("APPDATA") or str(Path.home())
-    return Path(app_data) / APP_DATA_DIR_NAME / "config" / "mining_resources.json"
+    return get_app_data_dir() / "config" / "mining_resources.json"
 
 
 def _default_mining_tools_path() -> Path:
@@ -131,8 +128,7 @@ def _default_mining_tools_path() -> Path:
     if env_path is not None:
         return env_path
 
-    app_data = os.getenv("LOCALAPPDATA") or os.getenv("APPDATA") or str(Path.home())
-    return Path(app_data) / APP_DATA_DIR_NAME / "config" / "mining_tools.json"
+    return get_app_data_dir() / "config" / "mining_tools.json"
 
 
 def _default_ocr_profile_path() -> Path:
@@ -140,8 +136,7 @@ def _default_ocr_profile_path() -> Path:
     if env_path is not None:
         return env_path
 
-    app_data = os.getenv("LOCALAPPDATA") or os.getenv("APPDATA") or str(Path.home())
-    return Path(app_data) / APP_DATA_DIR_NAME / "config" / "ocr_profile.json"
+    return get_app_data_dir() / "config" / "ocr_profile.json"
 
 
 def _default_chat_log_path() -> Path | None:
@@ -209,8 +204,7 @@ def _default_finder_recording_dir() -> Path:
     if env_path is not None:
         return env_path
 
-    app_data = os.getenv("LOCALAPPDATA") or os.getenv("APPDATA") or str(Path.home())
-    return Path(app_data) / APP_DATA_DIR_NAME / "ocr" / "finder-crops"
+    return get_app_data_dir() / "ocr" / "finder-crops"
 
 
 def _default_finder_recording_interval_s() -> float:
@@ -234,8 +228,7 @@ def _default_position_roi_snapshot_dir() -> Path:
     if env_path is not None:
         return env_path
 
-    app_data = os.getenv("LOCALAPPDATA") or os.getenv("APPDATA") or str(Path.home())
-    return Path(app_data) / APP_DATA_DIR_NAME / "ocr" / "position-roi"
+    return get_app_data_dir() / "ocr" / "position-roi"
 
 
 def _default_position_roi_snapshot_interval_s() -> float:

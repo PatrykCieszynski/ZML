@@ -15,6 +15,7 @@ from zml_game_bridge.inputs.ocr.pipelines.mining_finder.model import (
     FinderFeatures,
     MiningFinderSignal,
 )
+from zml_game_bridge.paths import get_app_data_dir
 
 logger = logging.getLogger(__name__)
 
@@ -234,8 +235,7 @@ def _signal_to_json(signal: MiningFinderSignal) -> dict[str, object]:
 
 
 def default_finder_recording_dir() -> Path:
-    app_data = os.getenv("LOCALAPPDATA") or os.getenv("APPDATA") or str(Path.home())
-    return Path(app_data) / "z-mining-log" / "ocr" / "finder-crops"
+    return get_app_data_dir() / "ocr" / "finder-crops"
 
 
 def _env_path(name: str) -> Path | None:

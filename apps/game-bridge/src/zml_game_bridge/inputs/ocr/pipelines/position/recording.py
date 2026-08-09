@@ -9,6 +9,7 @@ import cv2
 import numpy as np
 
 from zml_game_bridge.inputs.ocr.pipelines.position.model import PositionRois
+from zml_game_bridge.paths import get_app_data_dir
 
 logger = logging.getLogger(__name__)
 
@@ -95,8 +96,7 @@ def position_roi_snapshot_config_from_env(
 
 
 def default_position_roi_snapshot_dir() -> Path:
-    app_data = os.getenv("LOCALAPPDATA") or os.getenv("APPDATA") or str(Path.home())
-    return Path(app_data) / "z-mining-log" / "ocr" / "position-roi"
+    return get_app_data_dir() / "ocr" / "position-roi"
 
 
 def _env_bool(name: str, *, default: bool) -> bool:
