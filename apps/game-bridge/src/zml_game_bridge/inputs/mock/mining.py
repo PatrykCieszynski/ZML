@@ -5,16 +5,16 @@ import threading
 import time
 from collections.abc import Iterator
 
-from zml_game_bridge.domain.mining import MiningMode
-from zml_game_bridge.domain.position import WorldPos
-from zml_game_bridge.events.contracts import SignalSink
-from zml_game_bridge.inputs.ocr.pipelines.mining_finder.signals import (
+from zml_game_bridge.application.mining.signals.finder import (
     FinderHitHintSignal,
     FinderModesChangedSignal,
     FinderNoResourcesSignal,
     FinderUnitsChangedSignal,
     ProbeFiredSignal,
 )
+from zml_game_bridge.domain.mining import MiningMode
+from zml_game_bridge.domain.position import WorldPos
+from zml_game_bridge.events.contracts import SignalSink
 
 MOCK_ROI_NAME = "mock_mining_input"
 DEFAULT_INTERVAL_MS = 3_000

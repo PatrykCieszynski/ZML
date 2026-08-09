@@ -9,6 +9,14 @@ from zml_game_bridge.application.mining.settings import (
     IdFactory,
     MiningCoordinatorConfig,
 )
+from zml_game_bridge.application.mining.signals.finder import (
+    FinderHitHintSignal,
+    FinderModeInvalidatedSignal,
+    FinderModesChangedSignal,
+    FinderNoResourcesSignal,
+    FinderUnitsChangedSignal,
+    ProbeFiredSignal,
+)
 from zml_game_bridge.application.position.provider import PositionProvider
 from zml_game_bridge.domain.claim_size import expected_claim_expires_ts_ms
 from zml_game_bridge.domain.mining_cost import (
@@ -23,14 +31,6 @@ from zml_game_bridge.domain.mining_events import (
 )
 from zml_game_bridge.domain.position import WorldPos
 from zml_game_bridge.events.base import EventBase, SignalBase
-from zml_game_bridge.inputs.ocr.pipelines.mining_finder.signals import (
-    FinderHitHintSignal,
-    FinderModeInvalidatedSignal,
-    FinderModesChangedSignal,
-    FinderNoResourcesSignal,
-    FinderUnitsChangedSignal,
-    ProbeFiredSignal,
-)
 
 logger = logging.getLogger(__name__)
 MiningEquipmentProfileProvider = Callable[[], MiningEquipmentProfile]

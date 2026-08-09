@@ -16,6 +16,13 @@ from zml_game_bridge.application.mining.claims.commands import (
 )
 from zml_game_bridge.application.mining.claims.lifecycle import ActiveClaim
 from zml_game_bridge.application.mining.segments.session import DropRunContext, MiningSegmentSetup
+from zml_game_bridge.application.mining.signals.finder import (
+    FinderHitHintSignal,
+    FinderModesChangedSignal,
+    FinderNoResourcesSignal,
+    FinderUnitsChangedSignal,
+    ProbeFiredSignal,
+)
 from zml_game_bridge.domain.mining import MiningMode
 from zml_game_bridge.domain.mining_cost import (
     FinderRangeEnhancerLoadout,
@@ -45,13 +52,6 @@ from zml_game_bridge.inputs.chat.signals import (
     ItemReceivedSignal,
     ResourceClaimedSignal,
     ResourceDepletedSignal,
-)
-from zml_game_bridge.inputs.ocr.pipelines.mining_finder.signals import (
-    FinderHitHintSignal,
-    FinderModesChangedSignal,
-    FinderNoResourcesSignal,
-    FinderUnitsChangedSignal,
-    ProbeFiredSignal,
 )
 from zml_game_bridge.persistence.mining_loot import (
     MiningLootItemRow,

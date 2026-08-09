@@ -1,0 +1,2 @@
+{"command_id":"22222222222222222222222222222222","payload":{"purpose":"calibration","region":"window"},"protocol_version":1,"sent_ts_ms":1780000000000,"type":"capture_frame"}
+{"command_id":"22222222222222222222222222222222","payload":{"reason":"backend_shutdown"},"protocol_version":1,"sent_ts_ms":1780000000000,"type":"shutdown"}

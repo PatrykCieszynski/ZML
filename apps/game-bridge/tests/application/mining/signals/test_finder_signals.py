@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from zml_game_bridge.events.base import SignalBase, should_persist_event
-from zml_game_bridge.inputs.ocr.pipelines.mining_finder.signals import (
+from zml_game_bridge.application.mining.signals.finder import (
     FinderHitHintSignal,
     FinderModeInvalidatedSignal,
     FinderModesChangedSignal,
@@ -9,9 +8,10 @@ from zml_game_bridge.inputs.ocr.pipelines.mining_finder.signals import (
     FinderUnitsChangedSignal,
     ProbeFiredSignal,
 )
+from zml_game_bridge.events.base import SignalBase, should_persist_event
 
 
-def test_finder_ocr_signals_are_transient() -> None:
+def test_finder_signals_are_transient() -> None:
     signals = [
         ProbeFiredSignal(ts_ms=1, position=None, modes_mask=1, ammo_per_drop=1_000),
         FinderModesChangedSignal(ts_ms=1, modes_mask=1, previous_modes_mask=None),

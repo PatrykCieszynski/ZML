@@ -5,7 +5,7 @@ import { resolveDevelopmentAppDataPaths } from "./appDataPaths";
 
 describe("resolveDevelopmentAppDataPaths", () => {
   it("keeps backend and Electron development state inside the workspace", () => {
-    const workspaceRoot = path.join("C:", "repo");
+    const workspaceRoot = path.resolve("repo");
     const electronUiRoot = path.join(workspaceRoot, "apps", "electron-ui");
 
     expect(resolveDevelopmentAppDataPaths(electronUiRoot)).toEqual({
