@@ -26,7 +26,8 @@ class MiningDropCostDto(BaseModel):
     finder_decay_mpec: int
     finder_enhancer_decay_mpec: int
     amp_decay_mpec: int
-    total_mpec: int
+    total_tt_mpec: int
+    total_with_markup_mpec: int
 
 
 class MiningDropDto(BaseModel):
@@ -84,7 +85,8 @@ class MiningDropDto(BaseModel):
                 finder_decay_mpec=mpec_to_int(row.finder_decay_mpec),
                 finder_enhancer_decay_mpec=mpec_to_int(row.finder_enhancer_decay_mpec),
                 amp_decay_mpec=mpec_to_int(row.amp_decay_mpec),
-                total_mpec=mpec_to_int(row.total_cost_mpec),
+                total_tt_mpec=mpec_to_int(row.total_tt_cost_mpec),
+                total_with_markup_mpec=mpec_to_int(row.total_with_markup_cost_mpec),
             ),
             result=row.result,
             result_event_id=row.result_event_id,

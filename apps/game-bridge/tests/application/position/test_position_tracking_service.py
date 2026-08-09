@@ -126,6 +126,27 @@ def test_position_tracking_service_trusts_non_ocr_snapshot() -> None:
     assert service.get_latest() == manual_reset
 
 
+def test_position_tracking_service_keeps_trusted_planet_for_following_ocr_positions() -> None:
+    service = PositionTrackingService()
+    chat_position = _position(
+        ts_ms=1_000,
+        x=58_000,
+        y=84_000,
+        planet="Calypso",
+        source="chat",
+    )
+    ocr_position = _position(ts_ms=2_000, x=58_010, y=84_005)
+
+    service.ingest_snapshot(chat_position)
+    decision = service.ingest_snapshot(ocr_position)
+
+    assert decision.kind == "accepted"
+    assert decision.snapshot is not None
+    assert decision.snapshot.position.planet_name == "Calypso"
+    assert service.get_latest() == decision.snapshot
+    assert ocr_position.position.planet_name == ""
+
+
 def test_position_tracking_service_prunes_history_by_window_and_limit() -> None:
     service = PositionTrackingService(
         config=PositionTrackingConfig(

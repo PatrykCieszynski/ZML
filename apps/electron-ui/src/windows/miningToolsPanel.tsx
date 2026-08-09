@@ -42,6 +42,7 @@ export function MiningToolsPanel({
   const [kind, setKind] = useState<MiningToolKind>("finder");
   const [name, setName] = useState("");
   const [decayMpec, setDecayMpec] = useState("0");
+  const [decayPec, setDecayPec] = useState("");
   const [markupPercent, setMarkupPercent] = useState("100");
   const [radiusM, setRadiusM] = useState("55");
   const [formError, setFormError] = useState<string | null>(null);
@@ -73,6 +74,7 @@ export function MiningToolsPanel({
       extractor: tools.filter((tool) => tool.kind === "extractor"),
     };
   }, [tools]);
+  const pecConversion = useMemo(() => parsePecConversion(decayPec), [decayPec]);
 
   const handleCreateTool = () => {
     const parsed = parseToolForm({ kind, name, decayMpec, markupPercent, radiusM });
@@ -242,6 +244,43 @@ export function MiningToolsPanel({
               style={inputStyle}
             />
           </label>
+          <div style={converterStyle}>
+            <label style={labelStyle}>
+              Wiki decay (PEC)
+              <input
+                type="text"
+                inputMode="decimal"
+                placeholder="3.96"
+                value={decayPec}
+                onChange={(event) => {
+                  const { value } = event.currentTarget;
+                  setDecayPec(value);
+                }}
+                disabled={pending}
+                style={inputStyle}
+              />
+            </label>
+            <div style={converterResultStyle}>
+              <span>
+                {decayPec.trim() === ""
+                  ? "PEC to mPEC"
+                  : pecConversion === null
+                    ? "Invalid PEC value"
+                    : `${pecConversion.mpec} mPEC / ${formatPedDecimal(pecConversion.mpec)} PED`}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  if (pecConversion !== null) {
+                    setDecayMpec(String(pecConversion.mpec));
+                  }
+                }}
+                disabled={pending || pecConversion === null}
+              >
+                Use as decay
+              </button>
+            </div>
+          </div>
           <label style={labelStyle}>
             Markup percent
             <input
@@ -350,6 +389,20 @@ function emptyToNull(value: string): string | null {
   return value === "" ? null : value;
 }
 
+function parsePecConversion(value: string): { mpec: number } | null {
+  const normalized = value.trim().replace(",", ".");
+  if (!/^\d+(?:\.\d+)?$/.test(normalized)) return null;
+
+  const pec = Number(normalized);
+  const mpec = Math.round(pec * 1_000);
+  if (!Number.isFinite(pec) || pec < 0 || !Number.isSafeInteger(mpec)) return null;
+  return { mpec };
+}
+
+function formatPedDecimal(valueMpec: number): string {
+  return (valueMpec / 100_000).toFixed(5).replace(/0+$/, "").replace(/\.$/, "");
+}
+
 function formatMpec(value: number | null | undefined): string {
   if (value === null || value === undefined) return "-";
   return `${(value / 100_000).toFixed(4)} PED`;
@@ -408,6 +461,23 @@ const metricsStyle = {
   gap: 12,
   color: "#a7d7ff",
   fontSize: 13,
+} satisfies CSSProperties;
+
+const converterStyle = {
+  display: "grid",
+  gap: 6,
+  paddingTop: 8,
+  borderTop: "1px solid #2c2c2c",
+} satisfies CSSProperties;
+
+const converterResultStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 8,
+  minHeight: 28,
+  color: "#a7d7ff",
+  fontSize: 12,
 } satisfies CSSProperties;
 
 const toolListStyle = {

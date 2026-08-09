@@ -39,6 +39,9 @@ class MiningLifecycleRestorer:
                 position=row.position,
                 search_radius_m=row.search_radius_m,
                 expected_expires_ts_ms=row.expected_expires_ts_ms,
+                observed_ts_ms=row.observed_ts_ms,
+                resource_name=row.resource_name,
+                mining_type=row.mining_type,
             )
             for row in rows
         )

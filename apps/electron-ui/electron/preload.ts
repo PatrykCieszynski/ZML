@@ -26,6 +26,7 @@ type Unsubscribe = () => void;
 type ZmlApi = {
   getBootstrapState: (windowType: WindowType) => Promise<BootstrapState>;
   getAgentHealth: () => Promise<AgentHealthDto>;
+  copyText: (text: string) => Promise<void>;
   getActiveRun: () => Promise<RunDto | null>;
   listRuns: () => Promise<RunDto[]>;
   resumeRun: (runId: number) => Promise<RunDto>;
@@ -56,6 +57,10 @@ const api: ZmlApi = {
 
   async getAgentHealth() {
     return ipcRenderer.invoke(IPC_CMD.GET_AGENT_HEALTH) as Promise<AgentHealthDto>;
+  },
+
+  async copyText(text) {
+    return ipcRenderer.invoke(IPC_CMD.COPY_TEXT, text) as Promise<void>;
   },
 
   async getActiveRun() {

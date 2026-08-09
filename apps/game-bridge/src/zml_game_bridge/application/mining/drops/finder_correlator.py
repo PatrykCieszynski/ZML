@@ -59,6 +59,7 @@ class FinderDropCorrelator:
         self._probes_per_drop: int | None = None
         self._ammo_per_drop: int | None = None
         self._pending_drop: MiningDropEvent | None = None
+        self._last_accepted_probe_ts_ms: int | None = None
 
     def process_signal(self, signal: SignalBase) -> list[EventBase]:
         if isinstance(signal, FinderModesChangedSignal):
@@ -104,6 +105,9 @@ class FinderDropCorrelator:
         return []
 
     def _record_drop(self, signal: ProbeFiredSignal) -> list[EventBase]:
+        if self._probe_signal_is_locked(signal.ts_ms):
+            return []
+
         position = self._position_provider()
         if position is None:
             logger.warning("drop_without_position signal=%s", signal)
@@ -152,10 +156,11 @@ class FinderDropCorrelator:
             run_id=run_context.run_id,
             segment_id=run_context.segment_id,
         )
+        self._last_accepted_probe_ts_ms = signal.ts_ms
         self._pending_drop = event
         logger.debug(
             "probe_fired_signal_processed event_type=%s drop_id=%s ts=%s position=%s "
-            "modes=%s ammo=%s probes=%s total_mpec=%s",
+            "modes=%s ammo=%s probes=%s total_tt_mpec=%s total_with_markup_mpec=%s",
             type(event).__name__,
             event.drop_id,
             event.observed_ts_ms,
@@ -163,9 +168,29 @@ class FinderDropCorrelator:
             event.modes_mask,
             event.ammo_per_drop,
             event.probes_per_drop,
-            event.cost.total_mpec,
+            event.cost.total_tt_mpec,
+            event.cost.total_with_markup_mpec,
         )
         return [*run_context.lifecycle_events, event]
+
+    def _probe_signal_is_locked(self, observed_ts_ms: int) -> bool:
+        previous_ts_ms = self._last_accepted_probe_ts_ms
+        if previous_ts_ms is None or self._config.probe_fired_lock_ms <= 0:
+            return False
+
+        elapsed_ms = observed_ts_ms - previous_ts_ms
+        if elapsed_ms >= self._config.probe_fired_lock_ms:
+            return False
+
+        logger.debug(
+            "probe_fired_signal_ignored reason=%s ts=%s previous_ts=%s elapsed_ms=%s lock_ms=%s",
+            "stale" if elapsed_ms < 0 else "locked",
+            observed_ts_ms,
+            previous_ts_ms,
+            elapsed_ms,
+            self._config.probe_fired_lock_ms,
+        )
+        return True
 
     def _resolve_drop_units(self, signal: ProbeFiredSignal) -> tuple[int | None, int | None]:
         remembered = self._remember_units(

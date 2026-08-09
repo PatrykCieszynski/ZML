@@ -10,6 +10,7 @@ from zml_game_bridge.domain.mining_events import (
     MiningClaimDepletedEvent,
     MiningClaimExpiredEvent,
     MiningClaimIgnoredEvent,
+    MiningClaimUpdatedEvent,
 )
 from zml_game_bridge.domain.position import WorldPos
 from zml_game_bridge.events.base import EventBase
@@ -120,6 +121,8 @@ class MiningClaimProjector(EventProjector):
         writer = _MiningClaimProjectionWriter(conn)
         if isinstance(event, MiningClaimCreatedEvent):
             writer.upsert_claim(event=event, event_id=envelope.event_id)
+        elif isinstance(event, MiningClaimUpdatedEvent):
+            writer.update_claim(event=event)
         elif isinstance(event, MiningClaimDepletedEvent):
             writer.mark_depleted(event=event, event_id=envelope.event_id)
         elif isinstance(event, MiningClaimIgnoredEvent):
@@ -196,6 +199,33 @@ class _MiningClaimProjectionWriter:
                 event.expected_expires_ts_ms,
                 event.range_m,
                 event.depth_m,
+            ),
+        )
+
+    def update_claim(self, *, event: MiningClaimUpdatedEvent) -> None:
+        self._conn.execute(
+            """
+            UPDATE mining_claims
+            SET hit_id = COALESCE(?, hit_id),
+                resource_name = COALESCE(?, resource_name),
+                mining_type = COALESCE(?, mining_type),
+                size_label = COALESCE(?, size_label),
+                size_index = COALESCE(?, size_index),
+                expected_expires_ts_ms = COALESCE(?, expected_expires_ts_ms),
+                range_m = COALESCE(?, range_m),
+                depth_m = COALESCE(?, depth_m)
+            WHERE claim_id = ?
+            """,
+            (
+                event.hit_id,
+                event.resource_name,
+                event.mining_type,
+                event.size_label,
+                event.size_index,
+                event.expected_expires_ts_ms,
+                event.range_m,
+                event.depth_m,
+                event.claim_id,
             ),
         )
 

@@ -34,3 +34,8 @@ class IgnoreMiningClaimCommand(RuntimeCommand[None]):
 @dataclass(frozen=True, slots=True)
 class ExpireMiningClaimsCommand(RuntimeCommand[int]):
     now_ts_ms: int
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvePendingDropResultsCommand(RuntimeCommand[int]):
+    now_ts_ms: int

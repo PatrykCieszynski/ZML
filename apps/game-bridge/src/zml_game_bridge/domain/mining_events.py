@@ -94,6 +94,23 @@ class MiningClaimCreatedEvent(EventBase):
 
 
 @dataclass(frozen=True, slots=True)
+class MiningClaimUpdatedEvent(EventBase):
+    claim_id: str
+    updated_ts_ms: int
+    hit_id: str | None = None
+    drop_id: str | None = None
+    resource_name: str | None = None
+    mining_type: str | None = None
+    size_label: str | None = None
+    size_index: int | None = None
+    expected_expires_ts_ms: int | None = None
+    range_m: float | None = None
+    depth_m: float | None = None
+    run_id: int | None = None
+    segment_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class MiningItemReceivedEvent(EventBase):
     persist: ClassVar[bool] = False
 

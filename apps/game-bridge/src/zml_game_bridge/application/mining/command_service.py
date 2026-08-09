@@ -7,6 +7,7 @@ from zml_game_bridge.application.mining.claims.commands import (
     ExpireMiningClaimsCommand,
     IgnoreMiningClaimCommand,
     MarkMiningClaimDepletedCommand,
+    ResolvePendingDropResultsCommand,
 )
 from zml_game_bridge.application.mining.claims.lifecycle import ClaimLifecycleCorrelator
 from zml_game_bridge.application.mining.equipment.commands import (
@@ -80,6 +81,14 @@ class MiningCommandService:
         if isinstance(command, ExpireMiningClaimsCommand):
             claim_lifecycle = self._require_claim_lifecycle(command)
             events = claim_lifecycle.expire_claims(command)
+            return cast(
+                RuntimeCommandResult[T],
+                RuntimeCommandResult[int](value=len(events), events=tuple(events)),
+            )
+
+        if isinstance(command, ResolvePendingDropResultsCommand):
+            claim_lifecycle = self._require_claim_lifecycle(command)
+            events = claim_lifecycle.resolve_pending_drop_results(command)
             return cast(
                 RuntimeCommandResult[T],
                 RuntimeCommandResult[int](value=len(events), events=tuple(events)),

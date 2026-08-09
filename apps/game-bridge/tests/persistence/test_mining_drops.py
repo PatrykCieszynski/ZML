@@ -5,6 +5,7 @@ from pathlib import Path
 
 from zml_game_bridge.domain.mining_cost import DropCostBreakdown, DropUnitCost
 from zml_game_bridge.domain.mining_events import (
+    MiningClaimCreatedEvent,
     MiningDropEvent,
     MiningHitHintEvent,
     MiningNoResourcesEvent,
@@ -39,7 +40,8 @@ def test_mining_drop_projector_stores_drop_read_model(tmp_path: Path) -> None:
         assert row.drop_radius_m == 54.0
         assert row.modes_mask == 1
         assert row.ammo_per_drop == 1_000
-        assert row.total_cost_mpec == 10_100
+        assert row.total_tt_cost_mpec == 10_100
+        assert row.total_with_markup_cost_mpec == 10_100
         assert row.result == "pending"
         assert row.resource_name is None
     finally:
@@ -108,6 +110,73 @@ def test_mining_drop_projector_marks_no_resources_result(tmp_path: Path) -> None
         conn.close()
 
 
+def test_mining_drop_projector_marks_hit_from_claim_created(tmp_path: Path) -> None:
+    conn = _open_test_db(tmp_path)
+    try:
+        writer = EventWriter(conn, projector=MiningDropProjector())
+
+        writer.write(_drop_event(drop_id="drop-1"))
+        claim_env = writer.write(
+            MiningClaimCreatedEvent(
+                claim_id="claim-1",
+                hit_id=None,
+                drop_id="drop-1",
+                observed_ts_ms=1_000,
+                position=WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None),
+                search_radius_m=55.0,
+                resource_name="Narcanisum Stone",
+                mining_type="ore",
+                size_label=None,
+                size_index=None,
+                expected_expires_ts_ms=None,
+            )
+        )
+
+        row = MiningDropReader(conn).get("drop-1")
+        assert row is not None
+        assert row.result == "hit"
+        assert row.result_event_id == claim_env.event_id
+        assert row.result_observed_ts_ms == 1_000
+        assert row.resource_name == "Narcanisum Stone"
+        assert row.size_label is None
+    finally:
+        conn.close()
+
+
+def test_mining_drop_projector_does_not_overwrite_hit_with_no_resources(tmp_path: Path) -> None:
+    conn = _open_test_db(tmp_path)
+    try:
+        writer = EventWriter(conn, projector=MiningDropProjector())
+
+        writer.write(_drop_event(drop_id="drop-1"))
+        hit_env = writer.write(
+            MiningHitHintEvent(
+                hit_id="hit-1",
+                drop_id="drop-1",
+                observed_ts_ms=2_000,
+                position=WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None),
+                size_label="Minimal",
+                size_index=1,
+                resource_name="Lysterium Stone",
+            )
+        )
+        writer.write(
+            MiningNoResourcesEvent(
+                drop_id="drop-1",
+                observed_ts_ms=3_000,
+                position=WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None),
+            )
+        )
+
+        row = MiningDropReader(conn).get("drop-1")
+        assert row is not None
+        assert row.result == "hit"
+        assert row.result_event_id == hit_env.event_id
+        assert row.resource_name == "Lysterium Stone"
+    finally:
+        conn.close()
+
+
 def test_mining_drop_projector_ignores_unlinked_result(tmp_path: Path) -> None:
     conn = _open_test_db(tmp_path)
     try:
@@ -169,7 +238,8 @@ def _drop_event(
             probes=DropUnitCost(quantity=None, cost_mpec=Mpec(0), source="missing"),
             finder_decay_mpec=Mpec(100),
             amp_decay_mpec=Mpec(0),
-            total_mpec=Mpec(10_100),
+            total_tt_mpec=Mpec(10_100),
+            total_with_markup_mpec=Mpec(10_100),
         ),
         drop_radius_m=54.0,
         run_id=run_id,

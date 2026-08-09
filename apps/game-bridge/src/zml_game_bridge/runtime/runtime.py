@@ -7,7 +7,10 @@ from pathlib import Path
 
 from zml_game_bridge.api.channels.position_hub import PositionHub
 from zml_game_bridge.api.channels.sse_hub import SseHub
-from zml_game_bridge.application.mining.claims.commands import ExpireMiningClaimsCommand
+from zml_game_bridge.application.mining.claims.commands import (
+    ExpireMiningClaimsCommand,
+    ResolvePendingDropResultsCommand,
+)
 from zml_game_bridge.application.mining.equipment.service import MiningEquipmentService
 from zml_game_bridge.application.mining.segments.session import RunSessionService
 from zml_game_bridge.application.position.model import PositionSnapshot
@@ -225,6 +228,11 @@ class AppRuntime:
             try:
                 self._components.pending_inputs.emit(request)
                 expired_count = request.result(timeout_s=10.0)
+                pending_request = RuntimeCommandRequest(
+                    ResolvePendingDropResultsCommand(now_ts_ms=now_ts_ms)
+                )
+                self._components.pending_inputs.emit(pending_request)
+                resolved_drop_count = pending_request.result(timeout_s=10.0)
             except ChannelClosedError:
                 if stop_event.is_set():
                     break
@@ -238,6 +246,12 @@ class AppRuntime:
                     logger.info(
                         "claim_expiration_maintenance_expired count=%s now_ts_ms=%s",
                         expired_count,
+                        now_ts_ms,
+                    )
+                if resolved_drop_count:
+                    logger.info(
+                        "claim_expiration_maintenance_resolved_pending_drops count=%s now_ts_ms=%s",
+                        resolved_drop_count,
                         now_ts_ms,
                     )
             stop_event.wait(interval_s)

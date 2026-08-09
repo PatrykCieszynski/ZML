@@ -9,6 +9,7 @@ from zml_game_bridge.domain.mining_events import (
     MiningClaimDepletedEvent,
     MiningClaimExpiredEvent,
     MiningClaimIgnoredEvent,
+    MiningClaimUpdatedEvent,
 )
 from zml_game_bridge.domain.position import WorldPos
 from zml_game_bridge.persistence.event_writer import EventWriter
@@ -85,6 +86,58 @@ def test_mining_claim_projector_marks_claim_depleted(tmp_path: Path) -> None:
         )
         assert row.depleted_distance_m == 5.0
         assert MiningClaimReader(conn).list_active(now_ts_ms=2_500) == []
+    finally:
+        conn.close()
+
+
+def test_mining_claim_projector_updates_claim_from_later_hint(tmp_path: Path) -> None:
+    conn = _open_test_db(tmp_path)
+    try:
+        writer = EventWriter(conn, projector=MiningClaimProjector())
+        writer.write(
+            MiningClaimCreatedEvent(
+                claim_id="claim-1",
+                hit_id=None,
+                drop_id="drop-1",
+                run_id=1,
+                segment_id="segment-1",
+                observed_ts_ms=1_000,
+                position=WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None),
+                search_radius_m=55.0,
+                resource_name="Narcanisum Stone",
+                mining_type="ore",
+                size_label=None,
+                size_index=None,
+                expected_expires_ts_ms=None,
+            )
+        )
+
+        writer.write(
+            MiningClaimUpdatedEvent(
+                claim_id="claim-1",
+                updated_ts_ms=2_000,
+                hit_id="hit-1",
+                drop_id="drop-1",
+                resource_name="Narcanisum Stone",
+                mining_type="ore",
+                size_label="Tiny",
+                size_index=2,
+                expected_expires_ts_ms=3_602_000,
+                range_m=51.14,
+                depth_m=53.0,
+            )
+        )
+
+        row = MiningClaimReader(conn).get("claim-1")
+        assert row is not None
+        assert row.hit_id == "hit-1"
+        assert row.resource_name == "Narcanisum Stone"
+        assert row.mining_type == "ore"
+        assert row.size_label == "Tiny"
+        assert row.size_index == 2
+        assert row.expected_expires_ts_ms == 3_602_000
+        assert row.range_m == 51.14
+        assert row.depth_m == 53.0
     finally:
         conn.close()
 

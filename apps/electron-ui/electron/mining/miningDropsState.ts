@@ -3,11 +3,14 @@ import {
     isMiningClaimDepletedEventWire,
     isMiningClaimExpiredEventWire,
     isMiningClaimIgnoredEventWire,
+    isMiningClaimUpdatedEventWire,
     isMiningDropEventWire,
     isMiningHitHintEventWire,
     isMiningNoResourcesEventWire,
     miningClaimDtoFromCreatedEventWire,
+    miningClaimDtoWithUpdatedEventWire,
     miningDropDtoFromMiningDropEventWire,
+    miningDropDtoWithClaimCreated,
     miningDropDtoWithHitHint,
     miningDropDtoWithNoResources,
     type AgentEventEnvelope,
@@ -44,7 +47,21 @@ export function applyMiningEvent(event: AgentEventEnvelope<string, unknown>): vo
     }
 
     if (event.type === "MiningClaimCreatedEvent" && isMiningClaimCreatedEventWire(event.payload)) {
-        upsertMiningClaim(miningClaimDtoFromCreatedEventWire(event.payload, event.eventId));
+        const payload = event.payload;
+        upsertMiningClaim(miningClaimDtoFromCreatedEventWire(payload, event.eventId));
+        if (payload.drop_id !== null) {
+            updateMiningDrop(payload.drop_id, (drop) =>
+                miningDropDtoWithClaimCreated(drop, payload, event.eventId)
+            );
+        }
+        return;
+    }
+
+    if (event.type === "MiningClaimUpdatedEvent" && isMiningClaimUpdatedEventWire(event.payload)) {
+        const payload = event.payload;
+        updateMiningClaim(payload.claim_id, (claim) =>
+            miningClaimDtoWithUpdatedEventWire(claim, payload)
+        );
         return;
     }
 
@@ -73,6 +90,23 @@ function upsertMiningClaim(claim: MiningClaimDto): void {
     const withoutCurrent = runtime.miningClaims.filter((item) => item.claimId !== claim.claimId);
     runtime.miningClaims = sortClaims([claim, ...withoutCurrent]);
     pushStatePatch({ miningClaims: runtime.miningClaims });
+}
+
+function updateMiningClaim(
+    claimId: string,
+    update: (claim: MiningClaimDto) => MiningClaimDto,
+): void {
+    let changed = false;
+    runtime.miningClaims = runtime.miningClaims.map((claim) => {
+        if (claim.claimId !== claimId) return claim;
+        changed = true;
+        return update(claim);
+    });
+
+    if (changed) {
+        runtime.miningClaims = sortClaims(runtime.miningClaims);
+        pushStatePatch({ miningClaims: runtime.miningClaims });
+    }
 }
 
 function markMiningClaimDepleted(

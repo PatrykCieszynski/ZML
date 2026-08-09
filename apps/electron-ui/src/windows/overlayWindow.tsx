@@ -20,25 +20,39 @@ export function OverlayWindow() {
     const runLootTotals = state.miningLootTotals.filter(
       (item) => item.scope === "run" && (activeRunId === null || item.runId === activeRunId),
     );
-    const dropCostMpec = state.miningDrops.reduce((sum, drop) => sum + drop.cost.totalMpec, 0);
+    const dropTtCostMpec = state.miningDrops.reduce(
+      (sum, drop) => sum + drop.cost.totalTtMpec,
+      0,
+    );
+    const dropWithMarkupCostMpec = state.miningDrops.reduce(
+      (sum, drop) => sum + drop.cost.totalWithMarkupMpec,
+      0,
+    );
     const extractionCostMpec = runLootTotals.reduce(
       (sum, item) => sum + item.extractionCostMpec,
       0,
     );
-    const costMpec = dropCostMpec + extractionCostMpec;
+    const ttCostMpec = dropTtCostMpec + extractionCostMpec;
+    const withMarkupCostMpec = dropWithMarkupCostMpec + extractionCostMpec;
     const returnMpec = runLootTotals.reduce((sum, item) => sum + item.valueMpec, 0);
     const hitCount = state.miningDrops.filter((drop) => drop.result === "hit").length;
     return {
-      costMpec,
+      ttCostMpec,
+      withMarkupCostMpec,
       returnMpec,
-      profitMpec: returnMpec - costMpec,
+      profitMpec: returnMpec - withMarkupCostMpec,
       hitRate: state.miningDrops.length === 0 ? null : hitCount / state.miningDrops.length,
     };
   }, [state.activeRun?.runId, state.miningDrops, state.miningLootTotals]);
   const metrics = useMemo<OverlayMetric[]>(
     () => {
       const allMetrics: OverlayMetric[] = [
-        { key: "cost", label: "Cost", value: formatPed(stats.costMpec) },
+        { key: "costTt", label: "Cost TT", value: formatPed(stats.ttCostMpec) },
+        {
+          key: "costWithMarkup",
+          label: "Cost MU",
+          value: formatPed(stats.withMarkupCostMpec),
+        },
         { key: "return", label: "Return", value: formatPed(stats.returnMpec), tone: "gain" },
         {
           key: "profit",

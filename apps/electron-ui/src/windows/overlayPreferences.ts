@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-export type OverlayMetricKey = "cost" | "return" | "profit" | "hitRate";
+export type OverlayMetricKey = "costTt" | "costWithMarkup" | "return" | "profit" | "hitRate";
 
 export type OverlayPreferences = {
   fontSizePx: number;
@@ -19,7 +19,8 @@ export const DEFAULT_OVERLAY_PREFERENCES: OverlayPreferences = {
   showRunName: true,
   showStatus: true,
   metrics: {
-    cost: true,
+    costTt: true,
+    costWithMarkup: true,
     return: true,
     profit: true,
     hitRate: true,
@@ -71,6 +72,7 @@ function readOverlayPreferences(): OverlayPreferences {
 function normalizePreferences(value: unknown): OverlayPreferences {
   if (!isRecord(value)) return DEFAULT_OVERLAY_PREFERENCES;
   const metrics = isRecord(value.metrics) ? value.metrics : {};
+  const legacyCost = readBoolean(metrics.cost, true);
   return {
     fontSizePx: clampFontSize(value.fontSizePx),
     showRunName: typeof value.showRunName === "boolean"
@@ -80,7 +82,8 @@ function normalizePreferences(value: unknown): OverlayPreferences {
       ? value.showStatus
       : DEFAULT_OVERLAY_PREFERENCES.showStatus,
     metrics: {
-      cost: readBoolean(metrics.cost, DEFAULT_OVERLAY_PREFERENCES.metrics.cost),
+      costTt: readBoolean(metrics.costTt, legacyCost),
+      costWithMarkup: readBoolean(metrics.costWithMarkup, legacyCost),
       return: readBoolean(metrics.return, DEFAULT_OVERLAY_PREFERENCES.metrics.return),
       profit: readBoolean(metrics.profit, DEFAULT_OVERLAY_PREFERENCES.metrics.profit),
       hitRate: readBoolean(metrics.hitRate, DEFAULT_OVERLAY_PREFERENCES.metrics.hitRate),
