@@ -32,7 +32,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         run: |
-          $package = Get-Content apps/electron-ui/package.json | ConvertFrom-Json
+          $package = Get-Content apps/desktop/package.json | ConvertFrom-Json
           $expectedTag = "v$($package.version)"
           if ($env:GITHUB_REF_NAME -ne $expectedTag) {
             throw "Release tag $env:GITHUB_REF_NAME does not match desktop version $expectedTag"
@@ -52,16 +52,16 @@ jobs:
       - name: Sync Python workspace
         run: uv sync --locked --all-packages
 
-      - name: Verify bridge
+      - name: Verify backend
         run: just backend verify
 
-      - name: Verify OCR Agent
+      - name: Verify OCR Worker
         run: just ocr verify
 
-      - name: Package OCR Agent
+      - name: Package OCR Worker
         run: just ocr package
 
-      - name: Package bridge
+      - name: Package backend
         run: just backend package
 
       - name: Verify packaged process tree
@@ -84,35 +84,35 @@ jobs:
       - name: Generate API contract
         run: just api generate
 
-      - name: Stage Python components in Electron resources
+      - name: Stage Python components in desktop resources
         run: just stage-python
 
-      - name: Package Electron application
+      - name: Package desktop application
         run: just desktop package
 
       - name: Verify bundled Python process tree
         shell: pwsh
         run: |
-          $backend = Get-ChildItem apps/electron-ui/release -Recurse -Filter zml-game-bridge.exe |
+          $backend = Get-ChildItem apps/desktop/release -Recurse -Filter zml-backend.exe |
             Where-Object { $_.FullName -match 'win-unpacked[\\/]+resources[\\/]+backend' } |
             Select-Object -First 1
-          $agent = Get-ChildItem apps/electron-ui/release -Recurse -Filter zml-ocr-agent.exe |
-            Where-Object { $_.FullName -match 'win-unpacked[\\/]+resources[\\/]+ocr-agent' } |
+          $worker = Get-ChildItem apps/desktop/release -Recurse -Filter zml-ocr-worker.exe |
+            Where-Object { $_.FullName -match 'win-unpacked[\\/]+resources[\\/]+ocr-worker' } |
             Select-Object -First 1
           if ($null -eq $backend) {
             throw "Bundled backend executable was not found in win-unpacked resources"
           }
-          if ($null -eq $agent) {
-            throw "Bundled OCR Agent executable was not found in win-unpacked resources"
+          if ($null -eq $worker) {
+            throw "Bundled OCR Worker executable was not found in win-unpacked resources"
           }
           & ./scripts/verify-python-artifacts.ps1 `
-            -BridgeArtifactDir $backend.Directory.FullName `
-            -AgentArtifactDir $agent.Directory.FullName
+            -BackendArtifactDir $backend.Directory.FullName `
+            -WorkerArtifactDir $worker.Directory.FullName
 
       - name: Verify installer artifact
         shell: pwsh
         run: |
-          $installer = Get-ChildItem apps/electron-ui/release -Recurse -Filter 'Z-Mining-Log-Windows-*-Setup.exe' |
+          $installer = Get-ChildItem apps/desktop/release -Recurse -Filter 'Z-Mining-Log-Windows-*-Setup.exe' |
             Select-Object -First 1
           if ($null -eq $installer) {
             throw "Windows installer was not produced"
@@ -123,7 +123,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: z-mining-log-windows-${{ github.event.inputs.build_name || github.ref_name }}
-          path: apps/electron-ui/release/**/Z-Mining-Log-Windows-*-Setup.exe
+          path: apps/desktop/release/**/Z-Mining-Log-Windows-*-Setup.exe
           if-no-files-found: error
           retention-days: 14
 
@@ -133,4 +133,4 @@ jobs:
         with:
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}
-          files: apps/electron-ui/release/**/Z-Mining-Log-Windows-*-Setup.exe
+          files: apps/desktop/release/**/Z-Mining-Log-Windows-*-Setup.exe

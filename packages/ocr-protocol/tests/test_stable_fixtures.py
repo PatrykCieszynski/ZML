@@ -62,5 +62,5 @@ if loaded:
 def test_protocol_source_does_not_import_either_application() -> None:
     source = "\n".join(path.read_text(encoding="utf-8") for path in SOURCE_DIR.glob("*.py"))
 
-    assert "zml_game_bridge" not in source
-    assert "zml_ocr_agent" not in source
+    assert "zml_backend" not in source
+    assert "zml_ocr_worker" not in source

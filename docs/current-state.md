@@ -52,9 +52,9 @@ Z Mining Log is now a working local mining tracker prototype:
   - segments have setup snapshots;
   - drop/claim/loot projections are exposed to UI.
 - OCR backend:
-  - `apps/ocr-agent` now owns capture, pipelines, recording/profiling,
+  - `apps/ocr-worker` now owns capture, pipelines, recording/profiling,
     finder debug tooling, native OCR dependencies, and tessdata;
-  - OCR Agent has independent Ruff, Pyright, unit tests, `doctor`, `--version`,
+  - OCR Worker has independent Ruff, Pyright, unit tests, `doctor`, `--version`,
     and `stdio` commands; protocol mode emits `hello`, waits for revisioned full
     configuration, and handles `shutdown` or stdin EOF;
   - finder OCR migrated toward `tesserocr` wrapper;
@@ -63,7 +63,7 @@ Z Mining Log is now a working local mining tracker prototype:
   - missing/lost Entropia window degrades health and retries instead of crashing OCR;
   - OCR always runs as a managed child process; the embedded adapter and
     transport-selection flag have been removed;
-  - Game Bridge depends only on `zml-ocr-protocol`, while `ZML_OCR_AGENT_PATH`
+  - Backend depends only on `zml-ocr-protocol`, while `ZML_OCR_WORKER_PATH`
     or `PATH` supplies the runtime executable;
   - Electron passes the standalone Agent path in both development and packaged runs;
   - the subprocess supervisor validates `hello`, drains both output pipes,
@@ -77,16 +77,16 @@ Z Mining Log is now a working local mining tracker prototype:
   - structured worker health distinguishes process/protocol failure and restart
     state from an unavailable Entropia capture window;
   - the runner emits strict version 1 `packages/ocr-protocol` messages and
-    imports no Game Bridge code;
-  - `runtime/ocr_agent` owns only stdio transport, handshake, health, restart,
+    imports no Backend code;
+  - `runtime/ocr_worker` owns only stdio transport, handshake, health, restart,
     and shutdown; protocol-to-application mapping and desired config adaptation
-    live under `inputs/ocr_agent`;
+    live under `inputs/ocr_worker`;
   - finder application signals live under `application.mining.signals.finder`,
     so mining logic no longer imports signal types from `inputs.ocr`.
 - Desktop lifecycle and packaging:
   - Electron starts the local backend from `.venv` in development;
-  - development Electron passes the separate OCR Agent `.venv` executable;
-  - Windows builds produce separate PyInstaller artifacts for Game Bridge and OCR Agent;
+  - development Electron passes the separate OCR Worker `.venv` executable;
+  - Windows builds produce separate PyInstaller artifacts for Backend and OCR Worker;
   - the Bridge artifact excludes the Agent package, Windows capture bindings,
     native OCR libraries, and tessdata;
   - packaged Electron stages both artifacts separately, starts the bundled Bridge,
@@ -109,7 +109,7 @@ Z Mining Log is now a working local mining tracker prototype:
 
 See `ROADMAP_2025-05-26.md` for the ordered roadmap. The highest-value items are:
 
-1. Managed OCR Agent migration:
+1. Managed OCR Worker migration:
    - run a packaged gameplay smoke and soak for operational validation;
    - keep process diagnostics and restart behavior observable while tuning OCR.
 
@@ -142,24 +142,24 @@ These decisions were made after several design turns and real-game testing:
 
 ## Current Backend Entry Points
 
-- `zml_game_bridge.api.app.create_app`
-- `zml_game_bridge.runtime.runtime.AppRuntime`
-- `zml_game_bridge.runtime.bootstrap.build_runtime_components`
-- `zml_game_bridge.application.mining.coordinator.MiningCoordinator`
-- `zml_game_bridge.application.position.tracking.PositionTrackingService`
-- `zml_game_bridge.runtime.db_writer.DbWriterWorker`
+- `zml_backend.api.app.create_app`
+- `zml_backend.runtime.runtime.AppRuntime`
+- `zml_backend.runtime.bootstrap.build_runtime_components`
+- `zml_backend.application.mining.coordinator.MiningCoordinator`
+- `zml_backend.application.position.tracking.PositionTrackingService`
+- `zml_backend.runtime.db_writer.DbWriterWorker`
 
 ## Current UI Entry Points
 
-- `apps/electron-ui/electron/main.ts`
-- `apps/electron-ui/electron/backend/backendProcessManager.ts`
-- `apps/electron-ui/electron/runtime.ts`
-- `apps/electron-ui/electron/ipc/registerIpc.ts`
-- `apps/electron-ui/electron/agent/restClient.ts`
-- `apps/electron-ui/src/state/zmlRendererStore.ts`
-- `apps/electron-ui/src/windows/mainWindow.tsx`
-- `apps/electron-ui/src/windows/mapWindow.tsx`
-- `apps/electron-ui/src/widgets/map/mapViewport.tsx`
+- `apps/desktop/electron/main.ts`
+- `apps/desktop/electron/backend/backendProcessManager.ts`
+- `apps/desktop/electron/runtime.ts`
+- `apps/desktop/electron/ipc/registerIpc.ts`
+- `apps/desktop/electron/agent/restClient.ts`
+- `apps/desktop/src/state/zmlRendererStore.ts`
+- `apps/desktop/src/windows/mainWindow.tsx`
+- `apps/desktop/src/windows/mapWindow.tsx`
+- `apps/desktop/src/widgets/map/mapViewport.tsx`
 
 ## Validation Preference
 

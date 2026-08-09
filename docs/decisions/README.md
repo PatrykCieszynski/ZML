@@ -12,4 +12,4 @@ current shape exists without replaying the whole conversation.
 - `0004-position-telemetry-is-ephemeral.md`
 - `0005-run-segments-are-setup-buckets.md`
 - `0006-manual-claim-repair-actions.md`
-- `0007-versioned-ocr-agent-process-contract.md`
+- `0007-versioned-ocr-worker-process-contract.md`

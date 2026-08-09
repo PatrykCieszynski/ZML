@@ -1,14 +1,14 @@
 @startuml
-title ZML Game Bridge — Runtime Flow
+title ZML Backend — Runtime Flow
 
 left to right direction
 skinparam componentStyle rectangle
 
-rectangle "Electron UI" as ElectronUI {
+rectangle "Desktop" as ElectronUI {
   component "UI" as UI
 }
 
-rectangle "Game Bridge Backend" as Backend {
+rectangle "Backend Backend" as Backend {
   component "HTTP API / WS API" as API
   component "Read API\nread-only SQLite" as ReadAPI
 

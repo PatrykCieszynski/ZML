@@ -1,0 +1,222 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime
+from typing import ClassVar
+
+from zml_backend.domain.mining_cost import DropCostBreakdown
+from zml_backend.domain.money import Mpec
+from zml_backend.domain.position import WorldPos
+from zml_backend.events.base import EventBase
+
+
+@dataclass(frozen=True, slots=True)
+class RunSegmentStartedEvent(EventBase):
+    segment_id: str
+    run_id: int
+    segment_index: int
+    started_ts_ms: int
+    setup_hash: str
+    setup_snapshot: dict[str, object]
+
+
+@dataclass(frozen=True, slots=True)
+class RunSegmentEndedEvent(EventBase):
+    segment_id: str
+    run_id: int
+    ended_ts_ms: int
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
+class MiningDropEvent(EventBase):
+    drop_id: str
+    observed_ts_ms: int
+    position: WorldPos | None
+    modes_mask: int | None
+    probes_per_drop: int | None
+    ammo_per_drop: int | None
+    cost: DropCostBreakdown
+    drop_radius_m: float | None = None
+    raw_status_text: str | None = None
+    run_id: int | None = None
+    segment_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class MiningHitHintEvent(EventBase):
+    # TODO: This is only the finder-visible preclaim hint. The actual deeds can
+    # arrive through chat/deed OCR at the same timestamp, and one multi-mode drop
+    # can produce multiple deeds even though the finder shows a single hint.
+    hit_id: str
+    drop_id: str | None
+    observed_ts_ms: int
+    position: WorldPos | None
+    size_label: str
+    size_index: int
+    resource_name: str
+    expected_expires_ts_ms: int | None = None
+    range_m: float | None = None
+    depth_m: float | None = None
+    raw_status_text: str | None = None
+    raw_details_text: str | None = None
+    run_id: int | None = None
+    segment_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class MiningNoResourcesEvent(EventBase):
+    drop_id: str | None
+    observed_ts_ms: int
+    position: WorldPos | None
+    raw_status_text: str | None = None
+    run_id: int | None = None
+    segment_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class MiningClaimCreatedEvent(EventBase):
+    claim_id: str
+    hit_id: str | None
+    drop_id: str | None
+    observed_ts_ms: int
+    position: WorldPos | None
+    search_radius_m: float | None
+    resource_name: str | None
+    mining_type: str | None
+    size_label: str | None
+    size_index: int | None
+    expected_expires_ts_ms: int | None
+    range_m: float | None = None
+    depth_m: float | None = None
+    run_id: int | None = None
+    segment_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class MiningClaimUpdatedEvent(EventBase):
+    claim_id: str
+    updated_ts_ms: int
+    hit_id: str | None = None
+    drop_id: str | None = None
+    resource_name: str | None = None
+    mining_type: str | None = None
+    size_label: str | None = None
+    size_index: int | None = None
+    expected_expires_ts_ms: int | None = None
+    range_m: float | None = None
+    depth_m: float | None = None
+    run_id: int | None = None
+    segment_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class MiningItemReceivedEvent(EventBase):
+    persist: ClassVar[bool] = False
+
+    event_dt: datetime
+    item_name: str
+    qty: int
+    value_mpec: Mpec
+    raw: str
+    extraction_cost_mpec: Mpec | None = None
+    run_id: int | None = None
+    segment_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class MiningLootItemSnapshot:
+    event_id: int
+    created_ts_ms: int
+    event_dt: datetime | None
+    run_id: int | None
+    segment_id: str | None
+    item_name: str
+    qty: int
+    value_mpec: Mpec
+    extraction_cost_mpec: Mpec | None
+
+
+@dataclass(frozen=True, slots=True)
+class MiningLootTotalSnapshot:
+    scope: str
+    run_id: int
+    segment_id: str | None
+    item_name: str
+    qty: int
+    value_mpec: Mpec
+    extraction_cost_mpec: Mpec
+    event_count: int
+    first_seen_ts_ms: int
+    last_seen_ts_ms: int
+
+
+@dataclass(frozen=True, slots=True)
+class MiningLootTotalsUpdatedEvent(EventBase):
+    persist: ClassVar[bool] = False
+
+    updated_ts_ms: int
+    run_id: int | None = None
+    segment_id: str | None = None
+    recent_item: MiningLootItemSnapshot | None = None
+    run_total: MiningLootTotalSnapshot | None = None
+    segment_total: MiningLootTotalSnapshot | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class MiningClaimDeedReceivedEvent(EventBase):
+    event_dt: datetime
+    resource_name: str
+    mining_type: str | None
+    deed_item_name: str | None
+    qty: int | None
+    value_mpec: Mpec | None
+    raw: str
+    received_raw: str | None = None
+    claimed_raw: str | None = None
+    run_id: int | None = None
+    segment_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class MiningClaimDepletedEvent(EventBase):
+    claim_id: str
+    drop_id: str | None
+    hit_id: str | None
+    event_dt: datetime
+    position: WorldPos
+    distance_m: float
+    raw: str | None = None
+    run_id: int | None = None
+    segment_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class MiningClaimIgnoredEvent(EventBase):
+    claim_id: str
+    ignored_ts_ms: int
+    reason: str | None = None
+    drop_id: str | None = None
+    hit_id: str | None = None
+    run_id: int | None = None
+    segment_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class MiningClaimExpiredEvent(EventBase):
+    claim_id: str
+    expired_ts_ms: int
+    expected_expires_ts_ms: int
+    drop_id: str | None = None
+    hit_id: str | None = None
+    run_id: int | None = None
+    segment_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class MiningEnhancerBrokeEvent(EventBase):
+    event_dt: datetime
+    enhancer_name: str
+    item_name: str
+    remaining: int
+    raw: str

@@ -3,9 +3,9 @@ default:
 
 # Component task modules. Each module runs from its own project directory.
 mod api 'packages/api-contract'
-mod backend 'apps/game-bridge'
-mod desktop 'apps/electron-ui'
-mod ocr 'apps/ocr-agent'
+mod backend 'apps/backend'
+mod desktop 'apps/desktop'
+mod ocr 'apps/ocr-worker'
 mod protocol 'packages/ocr-protocol'
 
 # Resolve the complete Python workspace into the root lockfile.
@@ -18,7 +18,7 @@ python-sync:
 
 # Start the desktop development process. Electron owns the local backend lifecycle.
 dev: python-sync api::generate
-    pnpm --filter @zml/electron-ui dev
+    pnpm --filter @zml/desktop dev
 
 # Run the complete repository quality gate.
 verify: python-sync protocol::verify ocr::verify backend::verify api::generate desktop::verify

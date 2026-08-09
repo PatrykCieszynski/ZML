@@ -1,36 +1,5 @@
 {
   "name": "zml",
   "private": true,
-  "packageManager": "pnpm@10.27.0",
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
-  "scripts": {
-    "dev": "just dev",
-    "ocr-protocol:format": "just protocol format",
-    "ocr-protocol:verify": "just protocol verify",
-    "bridge:format": "just backend format",
-    "bridge:package": "just backend package",
-    "bridge:verify": "just backend verify",
-    "ocr-agent:format": "just ocr format",
-    "ocr-agent:package": "just ocr package",
-    "ocr-agent:verify": "just ocr verify",
-    "python:stage": "just stage-python",
-    "backend:stage": "just stage-python",
-    "frontend:verify": "just api generate && just desktop verify",
-    "frontend:build": "just build",
-    "frontend:package": "just api generate && just desktop package",
-    "verify": "just verify",
-    "build": "just build",
-    "package": "just package",
-    "lint": "just lint"
-  },
-  "devDependencies": {
-    "concurrently": "^9.2.1",
-    "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-prettier": "^5.5.4",
-    "prettier": "^3.7.4",
-    "wait-on": "^9.0.3"
-  }
+  "packageManager": "pnpm@10.27.0"
 }

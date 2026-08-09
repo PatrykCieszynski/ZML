@@ -1,0 +1,47 @@
+{
+  "name": "@zml/desktop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Local-first Entropia Universe mining tracker",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:mocks": "node ./scripts/dev-with-mocks.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "build:web": "vite build",
+    "build:desktop": "tsc -p tsconfig.json",
+    "build": "pnpm build:web && pnpm build:desktop",
+    "package": "pnpm build && electron-builder"
+  },
+  "dependencies": {
+    "@deck.gl/core": "^9.3.2",
+    "@deck.gl/geo-layers": "^9.3.2",
+    "@deck.gl/layers": "^9.3.2",
+    "@deck.gl/react": "^9.3.2",
+    "@types/ws": "^8.18.1",
+    "@zml/api-contract": "workspace:*",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "ws": "^8.19.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.64",
+    "@types/react-dom": "^18.2.21",
+    "@typescript-eslint/eslint-plugin": "^7.1.1",
+    "@typescript-eslint/parser": "^7.1.1",
+    "@vitejs/plugin-react": "^4.2.1",
+    "electron": "^30.0.1",
+    "electron-builder": "^24.13.3",
+    "eslint": "^8.57.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.5",
+    "typescript": "^5.2.2",
+    "vite": "^5.1.6",
+    "vite-plugin-electron": "^0.28.6",
+    "vite-plugin-electron-renderer": "^0.14.5",
+    "vitest": "^4.0.17"
+  },
+  "main": "dist-electron/main.js"
+}

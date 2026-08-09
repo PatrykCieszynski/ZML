@@ -1,7 +1,7 @@
 [project]
 name = "zml-ocr-protocol"
 version = "0.1.0"
-description = "Versioned stdio protocol shared by ZML Game Bridge and OCR Agent"
+description = "Versioned stdio protocol shared by ZML Backend and OCR Worker"
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
 dependencies = [

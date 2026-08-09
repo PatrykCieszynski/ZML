@@ -4,8 +4,8 @@ requires-python = "==3.13.*"
 
 [manifest]
 members = [
-    "zml-game-bridge",
-    "zml-ocr-agent",
+    "zml-backend",
+    "zml-ocr-worker",
     "zml-ocr-protocol",
     "zml-workspace",
 ]
@@ -659,9 +659,9 @@ wheels = [
 ]
 
 [[package]]
-name = "zml-game-bridge"
+name = "zml-backend"
 version = "0.1.0"
-source = { editable = "apps/game-bridge" }
+source = { editable = "apps/backend" }
 dependencies = [
     { name = "fastapi" },
     { name = "pydantic" },
@@ -702,9 +702,9 @@ dev = [
 ]
 
 [[package]]
-name = "zml-ocr-agent"
+name = "zml-ocr-worker"
 version = "0.1.0"
-source = { editable = "apps/ocr-agent" }
+source = { editable = "apps/ocr-worker" }
 dependencies = [
     { name = "mss" },
     { name = "numpy" },

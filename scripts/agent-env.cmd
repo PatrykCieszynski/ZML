@@ -4,7 +4,7 @@ setlocal EnableExtensions
 set "SCRIPT_DIR=%~dp0"
 for %%I in ("%SCRIPT_DIR%..") do set "REPO_ROOT=%%~fI"
 
-set "UV_CACHE_DIR=%REPO_ROOT%\apps\game-bridge\.uv-cache"
+set "UV_CACHE_DIR=%REPO_ROOT%\.uv-cache"
 if not defined COREPACK_HOME set "COREPACK_HOME=%REPO_ROOT%\.corepack"
 set "TEMP=%REPO_ROOT%\.tmp"
 set "TMP=%REPO_ROOT%\.tmp"

@@ -1,0 +1,43 @@
+default:
+    just --list
+
+config:
+    uv run --package zml-backend python -m zml_backend.dev_cli config
+
+dev:
+    uv run --package zml-backend python -m zml_backend.dev_cli serve
+
+ocr:
+    uv run --package zml-backend python -m zml_backend.dev_cli serve --mode live --position-roi-snapshots --position-roi-snapshot-max-samples 1
+
+mock:
+    uv run --package zml-backend python -m zml_backend.dev_cli serve --mode mock
+
+finder-debug:
+    uv run --package zml-backend python -m zml_backend.dev_cli serve --mode live --finder-debug
+
+ocr-profile-record:
+    uv run --package zml-backend python -m zml_backend.dev_cli serve --mode live --ocr-profiling --ocr-profiling-interval-s 5 --finder-record manual,interval --finder-record-interval-s 60 --finder-record-max-samples 1 --position-roi-snapshots --position-roi-snapshot-max-samples 1
+
+lint-fix:
+    uv run --package zml-backend ruff check . --fix
+
+lint:
+    uv run --package zml-backend ruff check .
+
+format:
+    uv run --package zml-backend ruff format .
+
+format-check:
+    uv run --package zml-backend ruff format --check .
+
+typecheck:
+    uv run --package zml-backend pyright
+
+test:
+    uv run --package zml-backend pytest --basetemp .pytest-tmp -o cache_dir=.pytest-cache-local
+
+verify: lint format-check typecheck test
+
+package:
+    uv run --package zml-backend pyinstaller --noconfirm --clean --onedir --name zml-backend --paths src --paths ../../packages/ocr-protocol/src --collect-submodules zml_backend.api --collect-submodules zml_ocr_protocol --collect-data zml_backend.resources src/zml_backend/dev_cli.py

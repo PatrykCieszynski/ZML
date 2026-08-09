@@ -1,8 +1,8 @@
 # Z Mining Log - Agent Handoff
 
 This repository is a local-first Entropia Universe mining tracker. It has a
-Python backend (`apps/game-bridge`), an Electron/React UI (`apps/electron-ui`),
-and desktop-internal shared TypeScript modules (`apps/electron-ui/shared`).
+Python backend (`apps/backend`), an Electron/React UI (`apps/desktop`),
+and desktop-internal shared TypeScript modules (`apps/desktop/shared`).
 
 Use this file as the first stop for future Codex/agent work. The deeper project
 notes live in:
@@ -24,7 +24,7 @@ notes live in:
 - The user prefers not to run local `ruff`, `pyright`, or broad lint pipelines
   unless explicitly requested. CI/PR checks cover those. Focused tests or
   TypeScript checks are fine when useful.
-- Do not start the Electron UI, Vite dev server, Browser tooling, or mock UI
+- Do not start the Desktop, Vite dev server, Browser tooling, or mock UI
   preview for routine verification unless the user explicitly asks. Prefer
   focused tests, typechecks, and builds.
 
@@ -34,7 +34,7 @@ For one-shot commands, prefer the wrapper so Windows execution policy does not
 block the setup:
 
 ```powershell
-.\scripts\agent-env.cmd -- pnpm --filter @zml/electron-ui typecheck
+.\scripts\agent-env.cmd -- pnpm --filter @zml/desktop typecheck
 .\scripts\agent-env.cmd -- just test
 ```
 
@@ -46,7 +46,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 . .\scripts\agent-env.ps1
 ```
 
-This sets `UV_CACHE_DIR` to `apps/game-bridge/.uv-cache`, keeps temporary files
+This sets `UV_CACHE_DIR` to `apps/backend/.uv-cache`, keeps temporary files
 in repo-local `.tmp`, prefers local tools from `Y:\Software`, and defines
 `pnpm` as a `corepack pnpm` wrapper. For one-shot commands, use
 `scripts\agent-env.cmd`.
@@ -81,7 +81,7 @@ The backend has three important flows:
 
 4. Desktop process lifecycle:
    - Electron starts the default local backend from `.venv` in development
-   - packaged Electron starts `resources/backend/zml-game-bridge.exe`
+   - packaged Electron starts `resources/backend/zml-backend.exe`
    - backend shutdown travels through the parent stdin pipe and FastAPI lifespan
    - explicit/custom backends remain externally owned
 
@@ -107,7 +107,7 @@ See `docs/architecture.md` for details.
 - `persistence/*` owns SQLite schema, event store, readers, projections, and
   writer-side SQL.
 - `api/*` owns FastAPI routes, dependencies, schemas, and live channels.
-- `apps/electron-ui/shared/*` owns TypeScript models and IPC contracts shared by
+- `apps/desktop/shared/*` owns TypeScript models and IPC contracts shared by
   Electron main/preload and renderer code. Backend REST wire schemas come from
   `packages/api-contract` instead of being duplicated here.
 
@@ -132,7 +132,7 @@ Check `docs/current-state.md` and `ROADMAP_2025-05-26.md` before touching these:
 - loot aggregation vs raw `MiningItemReceivedEvent` spam
 - OCR finder/position stability
 - ROI calibration for finder and compass
-- Electron UI map/dashboard polish
+- Desktop map/dashboard polish
 
 ## Useful Commands
 
@@ -148,7 +148,7 @@ corepack pnpm verify
 Backend:
 
 ```bash
-cd apps/game-bridge
+cd apps/backend
 just test
 just ocr
 ```
@@ -156,9 +156,9 @@ just ocr
 Frontend:
 
 ```bash
-corepack pnpm --filter @zml/electron-ui dev
-corepack pnpm --filter @zml/electron-ui typecheck
-corepack pnpm --filter @zml/electron-ui build
+corepack pnpm --filter @zml/desktop dev
+corepack pnpm --filter @zml/desktop typecheck
+corepack pnpm --filter @zml/desktop build
 ```
 
 Use focused checks during agent work unless the user asks for full verification.

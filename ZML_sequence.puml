@@ -1,5 +1,5 @@
 @startuml
-title ZML Game Bridge — Probe Fired Flow
+title ZML Backend — Probe Fired Flow
 
 actor "Finder OCR Adapter" as Finder
 participant "RuntimeInputQueue" as Queue
