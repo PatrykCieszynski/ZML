@@ -119,7 +119,7 @@ jobs:
         run: ./scripts/verify-python-artifacts.ps1
 
   frontend:
-    name: Shared + Electron UI
+    name: Electron UI / TypeScript
     runs-on: ubuntu-latest
 
     steps:
@@ -155,9 +155,6 @@ jobs:
 
       - name: Generate API contract
         run: just api generate
-
-      - name: Verify shared package
-        run: just shared verify
 
       - name: Verify desktop
         run: just desktop verify
