@@ -6,6 +6,7 @@ export type BackendLaunchSpec = {
   command: string;
   args: string[];
   cwd: string;
+  environment?: Record<string, string>;
 };
 
 type BackendProcessManagerOptions = {
@@ -62,7 +63,9 @@ export class BackendProcessManager {
     this.spawnBackend();
     const ready = await this.waitUntilReady(this.startupTimeoutMs);
     if (!ready) {
-      console.error(`[backend] health check timed out after ${this.startupTimeoutMs}ms`);
+      console.error(
+        `[backend] health check timed out after ${this.startupTimeoutMs}ms`,
+      );
     }
     return ready;
   }
@@ -83,12 +86,20 @@ export class BackendProcessManager {
       try {
         child.stdin.write("shutdown\n");
       } catch (error) {
-        console.warn("[backend] failed to send graceful shutdown command", error);
+        console.warn(
+          "[backend] failed to send graceful shutdown command",
+          error,
+        );
       }
     }
-    const stoppedGracefully = await waitForChildClose(child, this.shutdownTimeoutMs);
+    const stoppedGracefully = await waitForChildClose(
+      child,
+      this.shutdownTimeoutMs,
+    );
     if (!stoppedGracefully && this.child === child) {
-      console.warn("[backend] graceful shutdown timed out; terminating process");
+      console.warn(
+        "[backend] graceful shutdown timed out; terminating process",
+      );
       child.kill();
       await waitForChildClose(child, 1_000);
     }
@@ -109,6 +120,7 @@ export class BackendProcessManager {
         ...process.env,
         PYTHONUNBUFFERED: "1",
         ZML_PARENT_MANAGED: "1",
+        ...this.launch.environment,
       },
       shell: false,
       stdio: ["pipe", "pipe", "pipe"],
@@ -192,10 +204,19 @@ export function createBackendLaunchSpec({
 }): BackendLaunchSpec {
   if (isPackaged) {
     const backendDir = path.join(resourcesPath, "backend");
+    const ocrAgentExecutable = path.join(
+      resourcesPath,
+      "ocr-agent",
+      "zml-ocr-agent.exe",
+    );
     return {
       command: path.join(backendDir, "zml-game-bridge.exe"),
       args: ["serve", "--mode", "live"],
       cwd: backendDir,
+      environment: {
+        ZML_OCR_TRANSPORT: "agent",
+        ZML_OCR_AGENT_PATH: ocrAgentExecutable,
+      },
     };
   }
 
@@ -222,14 +243,19 @@ export function shouldManageBackend({
 }): boolean {
   if (mocksEnabled) return false;
   if (explicitValue !== undefined) {
-    return ["1", "true", "yes", "on"].includes(explicitValue.trim().toLowerCase());
+    return ["1", "true", "yes", "on"].includes(
+      explicitValue.trim().toLowerCase(),
+    );
   }
   return !backendUrlOverridden;
 }
 
 async function checkBackendHealth(baseUrl: string): Promise<boolean> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), HEALTH_REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(
+    () => controller.abort(),
+    HEALTH_REQUEST_TIMEOUT_MS,
+  );
   try {
     const url = new URL("/health", normalizeBaseUrl(baseUrl));
     const response = await fetch(url, { signal: controller.signal });
@@ -261,7 +287,8 @@ function waitForChildClose(
   child: ChildProcessWithoutNullStreams,
   timeoutMs: number,
 ): Promise<boolean> {
-  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(true);
+  if (child.exitCode !== null || child.signalCode !== null)
+    return Promise.resolve(true);
 
   return new Promise((resolve) => {
     const onClose = () => {

@@ -63,6 +63,8 @@ Z Mining Log is now a working local mining tracker prototype:
   - missing/lost Entropia window degrades health and retries instead of crashing OCR;
   - OCR still runs in-process by default, but `ZML_OCR_TRANSPORT=agent` now
     selects a managed child process and `ZML_OCR_AGENT_PATH` can select its executable;
+  - source runs retain that embedded rollback default, while packaged Electron
+    explicitly starts Game Bridge in agent mode with the bundled Agent path;
   - the subprocess supervisor validates `hello`, drains both output pipes,
     applies the complete desired config before accepting observations, monitors
     heartbeats, maps observations, and restarts with bounded backoff;
@@ -82,13 +84,19 @@ Z Mining Log is now a working local mining tracker prototype:
     so mining logic no longer imports signal types from `inputs.ocr`.
 - Desktop lifecycle and packaging:
   - Electron starts the local backend from `.venv` in development;
-  - packaged Electron starts the bundled PyInstaller backend;
+  - Windows builds produce separate PyInstaller artifacts for Game Bridge and OCR Agent;
+  - the Bridge artifact excludes the Agent package, Windows capture bindings,
+    native OCR libraries, and tessdata;
+  - packaged Electron stages both artifacts separately, starts the bundled Bridge,
+    and passes the bundled Agent path through its managed environment;
   - backend exits through FastAPI lifespan when Electron sends `shutdown` on the parent pipe;
   - parent-pipe reads are non-blocking and Ctrl+C retains Uvicorn's handler despite
     `tesserocr`/`cysignals` initialization;
   - a runtime shutdown signal releases long-lived WS/SSE streams before connection drain;
   - unexpected backend exits use a bounded restart policy;
-  - Windows release workflow builds and smoke-tests one NSIS installer.
+  - packaging verification checks both artifact layouts, the Agent protocol,
+    config synchronization, and clean Bridge/Agent process-tree shutdown;
+  - Windows release workflow builds and smoke-tests one NSIS installer containing both artifacts.
 - Run accounting and utilities:
   - drop costs distinguish TT from markup-adjusted totals;
   - duplicate drop observations have a five-second lock;
@@ -101,7 +109,8 @@ See `ROADMAP_2025-05-26.md` for the ordered roadmap. The highest-value items are
 
 1. Managed OCR Agent migration:
    - validate agent mode during real gameplay;
-   - package both executables before removing embedded OCR.
+   - run a packaged gameplay smoke and soak before switching the source default
+     or removing embedded OCR.
 
 2. Runtime config and live settings:
    - move safe OCR/runtime options beyond env-only configuration;

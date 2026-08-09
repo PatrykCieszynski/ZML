@@ -208,6 +208,15 @@ def _env_float(name: str, *, default: float) -> float:
         return default
 
 
+def _default_host() -> str:
+    value = os.getenv("ZML_HOST", "127.0.0.1").strip()
+    return value or "127.0.0.1"
+
+
+def _default_port() -> int:
+    return _env_int("ZML_PORT", default=17171)
+
+
 def _default_mock_mining_interval_ms() -> int:
     return _env_int("ZML_MOCK_MINING_INTERVAL_MS", default=3_000)
 
@@ -339,8 +348,8 @@ def _install_exception_hooks() -> None:
 
 @dataclass(frozen=True, slots=True)
 class Settings:
-    host: str = "127.0.0.1"
-    port: int = 17171
+    host: str = field(default_factory=_default_host)
+    port: int = field(default_factory=_default_port)
     reload: bool = False
 
     # Paths

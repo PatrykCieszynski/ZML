@@ -11,6 +11,7 @@ default rollback path during migration.
 uv run zml-ocr-agent --version
 uv run zml-ocr-agent doctor
 uv run zml-ocr-agent stdio
+just package
 ```
 
 In `stdio` mode the first stdout line is a protocol `hello` message. The process
@@ -23,3 +24,7 @@ it again after every process restart.
 
 The OCR Agent and Game Bridge runtimes are pinned to Python 3.13 because the
 Windows `tesserocr` dependency is distributed as a CPython 3.13 wheel.
+
+`just package` creates `dist/zml-ocr-agent/zml-ocr-agent.exe` together with its
+private native OCR libraries and tessdata. Game Bridge packaging intentionally
+does not contain those files.

@@ -235,6 +235,7 @@ apps/game-bridge/build/
 apps/game-bridge/dist/
 apps/game-bridge/*.spec
 apps/electron-ui/resources/backend/
+apps/electron-ui/resources/ocr-agent/
 
 # Python bridge local pytest/cache artifacts
 apps/game-bridge/.pytest-*/

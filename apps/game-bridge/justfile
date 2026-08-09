@@ -40,5 +40,4 @@ test:
 verify: lint format-check typecheck test
 
 package:
-    uv run pyinstaller --noconfirm --clean --onedir --name zml-game-bridge --paths src --paths ../ocr-agent/src --collect-submodules zml_game_bridge --collect-submodules zml_ocr_agent --collect-submodules tesserocr --collect-binaries tesserocr --collect-data tesserocr --collect-data zml_game_bridge.resources --hidden-import tesserocr.cysignals --add-data "../ocr-agent/resources/tessdata;tessdata" src/zml_game_bridge/dev_cli.py
-    powershell -NoProfile -Command "Remove-Item -Force dist/zml-game-bridge/_internal/cv2/opencv_videoio_ffmpeg*_64.dll -ErrorAction SilentlyContinue"
+    uv run pyinstaller --noconfirm --clean --onedir --name zml-game-bridge --paths src --paths ../../packages/ocr-protocol/src --collect-submodules zml_game_bridge.api --collect-submodules zml_ocr_protocol --collect-data zml_game_bridge.resources --exclude-module zml_ocr_agent --exclude-module zml_game_bridge.inputs.ocr --exclude-module tesserocr --exclude-module cv2 --exclude-module numpy --exclude-module mss --exclude-module win32gui --exclude-module win32ui src/zml_game_bridge/dev_cli.py
