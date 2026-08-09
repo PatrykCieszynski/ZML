@@ -10,8 +10,10 @@ from zml_game_bridge.application.mining.segments.session import (
 )
 from zml_game_bridge.application.mining.settings import default_id_factory
 from zml_game_bridge.application.position.input_processor import PositionInputProcessor
+from zml_game_bridge.application.position.model import PositionSnapshot
 from zml_game_bridge.application.position.tracking import PositionTrackingService
 from zml_game_bridge.events.in_memory_persisted_event_bus import InMemoryPersistedEventBus
+from zml_game_bridge.inputs.ocr.source import EmbeddedOcrInputConfig, EmbeddedOcrInputSource
 from zml_game_bridge.persistence.event_projector import CompositeEventProjector
 from zml_game_bridge.persistence.mining_claims import MiningClaimProjector
 from zml_game_bridge.persistence.mining_drops import MiningDropProjector
@@ -23,6 +25,7 @@ from zml_game_bridge.runtime.db_commands import DbCommandChannel
 from zml_game_bridge.runtime.db_writer import DbWriterWorker
 from zml_game_bridge.runtime.input_coordinator import InputCoordinator
 from zml_game_bridge.runtime.input_processor import CompositeInputProcessor
+from zml_game_bridge.runtime.ocr_input import OcrInputSource
 from zml_game_bridge.runtime.restore import MiningLifecycleRestorer
 from zml_game_bridge.runtime.supervisor import WorkerSupervisor
 from zml_game_bridge.settings import Settings
@@ -35,6 +38,7 @@ class RuntimeComponents:
     pending_db_commands: DbCommandChannel
     persisted_events: InMemoryPersistedEventBus
     position_service: PositionTrackingService
+    ocr_input_source: OcrInputSource
     mining_equipment_service: MiningEquipmentService
     run_session_service: RunSessionService
     mining_coordinator: MiningCoordinator
@@ -43,12 +47,40 @@ class RuntimeComponents:
     lifecycle_restorer: MiningLifecycleRestorer
 
 
-def build_runtime_components(settings: Settings) -> RuntimeComponents:
+def build_runtime_components(
+    settings: Settings,
+    *,
+    supervisor: WorkerSupervisor,
+) -> RuntimeComponents:
     pending_inputs = RuntimeInputChannel()
     pending_events = EventChannel()
     pending_db_commands = DbCommandChannel()
     persisted_events = InMemoryPersistedEventBus()
     position_service = PositionTrackingService()
+
+    def ingest_ocr_position(snapshot: PositionSnapshot) -> None:
+        position_service.ingest_snapshot(snapshot)
+
+    ocr_input_source = EmbeddedOcrInputSource(
+        config=EmbeddedOcrInputConfig(
+            enabled=settings.ocr_enabled,
+            roi_profile_path=settings.ocr_profile_path,
+            finder_recording_modes=settings.finder_recording_modes,
+            finder_recording_dir=settings.finder_recording_dir,
+            finder_recording_interval_s=settings.finder_recording_interval_s,
+            finder_recording_max_samples=settings.finder_recording_max_samples,
+            finder_presence_check_enabled=settings.finder_presence_check_enabled,
+            position_roi_snapshot_enabled=settings.position_roi_snapshot_enabled,
+            position_roi_snapshot_dir=settings.position_roi_snapshot_dir,
+            position_roi_snapshot_interval_s=settings.position_roi_snapshot_interval_s,
+            position_roi_snapshot_max_samples=settings.position_roi_snapshot_max_samples,
+            ocr_profiling_enabled=settings.ocr_profiling_enabled,
+            ocr_profiling_interval_s=settings.ocr_profiling_interval_s,
+        ),
+        supervisor=supervisor,
+        position_sink=ingest_ocr_position,
+        signal_sink=pending_inputs.emit,
+    )
     resource_catalog = MiningResourceCatalog(user_path=settings.mining_resource_catalog_path)
     mining_equipment_service = MiningEquipmentService(path=settings.mining_tools_path)
     run_session_service = RunSessionService(
@@ -114,6 +146,7 @@ def build_runtime_components(settings: Settings) -> RuntimeComponents:
         pending_db_commands=pending_db_commands,
         persisted_events=persisted_events,
         position_service=position_service,
+        ocr_input_source=ocr_input_source,
         mining_equipment_service=mining_equipment_service,
         run_session_service=run_session_service,
         mining_coordinator=mining_coordinator,

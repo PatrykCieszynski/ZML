@@ -13,15 +13,9 @@ from zml_game_bridge.application.mining.claims.commands import (
 )
 from zml_game_bridge.application.mining.equipment.service import MiningEquipmentService
 from zml_game_bridge.application.mining.segments.session import RunSessionService
-from zml_game_bridge.application.position.model import PositionSnapshot
 from zml_game_bridge.application.position.tracking import PositionTrackingService
 from zml_game_bridge.inputs.chat.runner import start_chat_input
 from zml_game_bridge.inputs.mock.mining import start_mock_mining_input
-from zml_game_bridge.inputs.ocr.pipelines.position.model import OcrPosition
-from zml_game_bridge.inputs.ocr.runner import start_ocr_input
-from zml_game_bridge.inputs.ocr.tesserocr_runtime import (
-    preload_tesserocr_preserving_sigint_handler,
-)
 from zml_game_bridge.runtime.bootstrap import RuntimeComponents
 from zml_game_bridge.runtime.channels import ChannelClosedError
 from zml_game_bridge.runtime.db_commands import DbCommand
@@ -174,40 +168,7 @@ class AppRuntime:
             },
         )
 
-        if self._settings.ocr_enabled:
-            try:
-                # Needed for 'tesserocr import failed: signal only works in main thread of the main interpreter'
-                preload_tesserocr_preserving_sigint_handler()
-            except Exception as exc:
-                self._supervisor.mark_crashed("ocr_worker", exc)
-                raise
-
-            self._supervisor.start_thread(
-                name="ocr_worker",
-                target=start_ocr_input,
-                worker_kwargs={
-                    "position_sink": self._on_position,
-                    "signal_sink": self._components.pending_inputs.emit,
-                    "capture_status_sink": self._on_ocr_capture_status,
-                    "stop_event": self._stop_event,
-                    "roi_profile_path": self._settings.ocr_profile_path,
-                    "finder_recording_modes": self._settings.finder_recording_modes,
-                    "finder_recording_dir": self._settings.finder_recording_dir,
-                    "finder_recording_interval_s": self._settings.finder_recording_interval_s,
-                    "finder_recording_max_samples": self._settings.finder_recording_max_samples,
-                    "finder_presence_check_enabled": (self._settings.finder_presence_check_enabled),
-                    "position_roi_snapshot_enabled": self._settings.position_roi_snapshot_enabled,
-                    "position_roi_snapshot_dir": self._settings.position_roi_snapshot_dir,
-                    "position_roi_snapshot_interval_s": (
-                        self._settings.position_roi_snapshot_interval_s
-                    ),
-                    "position_roi_snapshot_max_samples": (
-                        self._settings.position_roi_snapshot_max_samples
-                    ),
-                    "ocr_profiling_enabled": self._settings.ocr_profiling_enabled,
-                    "ocr_profiling_interval_s": self._settings.ocr_profiling_interval_s,
-                },
-            )
+        self._components.ocr_input_source.start(stop_event=self._stop_event)
 
         if self._settings.mock_inputs_enabled:
             self._supervisor.start_thread(
@@ -222,25 +183,6 @@ class AppRuntime:
 
         if self._sse_hub is not None:
             self._sub_sse = self._components.persisted_events.subscribe(self._sse_hub.on_envelope)
-
-    def _on_position(self, position: OcrPosition) -> None:
-        self._components.position_service.ingest_snapshot(
-            PositionSnapshot(
-                observed_ts_ms=position.ts_ms,
-                received_ts_ms=time.time_ns() // 1_000_000,
-                position=position.position,
-                source="ocr",
-            )
-        )
-
-    def _on_ocr_capture_status(self, available: bool, error: str | None) -> None:
-        if available:
-            self._supervisor.mark_running("ocr_worker")
-            return
-        self._supervisor.mark_degraded(
-            "ocr_worker",
-            error or "Entropia Universe window is unavailable",
-        )
 
     def _run_claim_expiration_maintenance(self, *, stop_event: threading.Event) -> None:
         interval_s = max(1.0, self._settings.claim_expiration_maintenance_interval_s)
@@ -291,7 +233,7 @@ class AppRuntime:
             self._sub_sse = None
 
         self._supervisor.join_thread("chat_tail")
-        self._supervisor.join_thread("ocr_worker")
+        self._components.ocr_input_source.stop()
         self._supervisor.join_thread("mock_mining_input")
         self._supervisor.join_thread("claim_expiration_maintenance")
 
