@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict
 
 from zml_game_bridge.domain.money import mpec_to_int
@@ -7,6 +9,11 @@ from zml_game_bridge.domain.position import WorldPos
 from zml_game_bridge.persistence.mining_claims import MiningClaimRow
 from zml_game_bridge.persistence.mining_drops import MiningDropRow
 from zml_game_bridge.persistence.mining_loot import MiningLootItemRow, MiningLootTotalRow
+
+MiningDropResultDto = Literal["pending", "hit", "no_resources"]
+MiningClaimStatusDto = Literal["active", "depleted", "ignored", "expired"]
+MiningResourceTypeDto = Literal["ore", "enmatter", "treasure", "other", "unknown"]
+MiningLootScopeDto = Literal["run", "segment"]
 
 
 class MiningDropPositionDto(BaseModel):
@@ -44,7 +51,7 @@ class MiningDropDto(BaseModel):
     probes_per_drop: int | None
     ammo_per_drop: int | None
     cost: MiningDropCostDto
-    result: str
+    result: MiningDropResultDto
     result_event_id: int | None
     result_observed_ts_ms: int | None
     hit_id: str | None
@@ -124,13 +131,13 @@ class MiningClaimDto(BaseModel):
     position: MiningClaimPositionDto | None
     search_radius_m: float | None
     resource_name: str | None
-    mining_type: str | None
+    mining_type: MiningResourceTypeDto | None
     size_label: str | None
     size_index: int | None
     expected_expires_ts_ms: int | None
     range_m: float | None
     depth_m: float | None
-    status: str
+    status: MiningClaimStatusDto
     depleted_event_id: int | None
     depleted_event_dt: str | None
     depleted_position: MiningClaimPositionDto | None
@@ -213,7 +220,7 @@ class MiningLootItemDto(BaseModel):
 class MiningLootTotalDto(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    scope: str
+    scope: MiningLootScopeDto
     run_id: int
     segment_id: str | None
     item_name: str
