@@ -1,7 +1,8 @@
+import type { components } from "@zml/api-contract";
 import type { WorldPosDTO } from "./worldPos";
 import type { MiningClaimCreatedEventWire } from "./miningClaims";
 
-export type MiningDropResult = "pending" | "hit" | "no_resources";
+export type MiningDropResult = components["schemas"]["MiningDropDto"]["result"];
 
 export type MiningDropPositionDto = WorldPosDTO;
 
@@ -40,47 +41,9 @@ export type MiningDropDto = {
     depthM: number | null;
 };
 
-export type MiningDropPositionWire = {
-    planet_name: string | null;
-    x: number;
-    y: number;
-    z?: number | null;
-};
-
-export type MiningDropCostWire = {
-    ammo_cost_mpec: number;
-    probes_cost_mpec: number;
-    finder_decay_mpec: number;
-    finder_enhancer_decay_mpec: number;
-    amp_decay_mpec: number;
-    total_tt_mpec: number;
-    total_with_markup_mpec: number;
-};
-
-export type MiningDropWire = {
-    drop_id: string;
-    drop_event_id: number;
-    run_id?: number | null;
-    segment_id?: string | null;
-    observed_ts_ms: number;
-    position: MiningDropPositionWire | null;
-    drop_radius_m: number;
-    modes_mask: number | null;
-    probes_per_drop: number | null;
-    ammo_per_drop: number | null;
-    cost: MiningDropCostWire;
-    result: MiningDropResult;
-    result_event_id: number | null;
-    result_observed_ts_ms: number | null;
-    hit_id: string | null;
-    hit_event_id: number | null;
-    resource_name: string | null;
-    size_label: string | null;
-    size_index: number | null;
-    expected_expires_ts_ms: number | null;
-    range_m: number | null;
-    depth_m: number | null;
-};
+export type MiningDropPositionWire = components["schemas"]["MiningDropPositionDto"];
+export type MiningDropCostWire = components["schemas"]["MiningDropCostDto"];
+export type MiningDropWire = components["schemas"]["MiningDropDto"];
 
 type MiningDropEventCostComponentWire = {
     quantity: number | null;
@@ -144,8 +107,8 @@ export function isMiningDropWire(value: unknown): value is MiningDropWire {
     return (
         typeof value.drop_id === "string" &&
         isFiniteNumber(value.drop_event_id) &&
-        (value.run_id === undefined || isNullableNumber(value.run_id)) &&
-        (value.segment_id === undefined || isNullableString(value.segment_id)) &&
+        isNullableNumber(value.run_id) &&
+        isNullableString(value.segment_id) &&
         isFiniteNumber(value.observed_ts_ms) &&
         isNullablePositionWire(value.position) &&
         isFiniteNumber(value.drop_radius_m) &&
@@ -213,8 +176,8 @@ export function wireToMiningDropDto(wire: MiningDropWire): MiningDropDto {
     return {
         dropId: wire.drop_id,
         dropEventId: wire.drop_event_id,
-        runId: wire.run_id ?? null,
-        segmentId: wire.segment_id ?? null,
+        runId: wire.run_id,
+        segmentId: wire.segment_id,
         observedTsMs: wire.observed_ts_ms,
         position: wire.position ? wireToPositionDto(wire.position) : null,
         dropRadiusM: wire.drop_radius_m,
