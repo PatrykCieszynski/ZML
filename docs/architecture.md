@@ -7,30 +7,36 @@ Z Mining Log is a local-first desktop application built around three runtime pro
 ## System overview
 
 ```mermaid
-flowchart LR
+flowchart TB
     subgraph Game[Entropia Universe]
+        direction TB
         Window[Game window]
         Chat[chat.log]
     end
 
     subgraph WorkerProcess[OCR Worker process]
+        direction TB
         Capture[Screen capture]
         OCR[Position + finder OCR]
         Capture --> OCR
     end
 
     subgraph BackendProcess[Backend process]
+        direction TB
         Inputs[Input adapters]
-        App[Application/domain logic]
-        DB[(SQLite)]
+        App[Application / domain logic]
         API[REST / SSE / WebSocket]
+        DB[(SQLite)]
+
         Inputs --> App
-        App --> DB
-        App --> API
-        DB --> API
+        API -->|commands| App
+        App -->|durable writes through runtime| DB
+        DB -->|projection + event reads| API
+        App -->|live state + persisted event delivery| API
     end
 
     subgraph DesktopProcess[Desktop process]
+        direction TB
         Main[Electron main]
         Preload[Preload / IPC boundary]
         Renderer[React renderer]
@@ -99,7 +105,7 @@ The backend source is organized by responsibility:
 ```text
 api/          FastAPI app, routes, schemas, SSE/WS channels, dependencies
 application/  mining/use-case logic and application-facing models
- domain/      durable events/value objects and pure domain behavior
+domain/       durable events/value objects and pure domain behavior
 inputs/       external input adapters (chat, OCR protocol, mocks)
 persistence/  SQLite schema, readers, event journal, projections
 runtime/      queues, workers, lifecycle, supervision, bootstrap
@@ -109,7 +115,7 @@ resources/    packaged seed/reference data
 Conceptual flow:
 
 ```mermaid
-flowchart LR
+flowchart TB
     External[OCR / chat / UI commands] --> Inputs[Input adapters]
     Inputs --> Queue[RuntimeInputChannel]
     Queue --> Coordinator[InputCoordinator]
@@ -131,26 +137,26 @@ Important distinctions:
 
 ## SQLite model
 
-SQLite uses a deliberate single-writer model.
+SQLite uses a deliberate single-writer model. Writes and reads intentionally take different paths.
 
 ```mermaid
 flowchart TB
-    Inputs[Runtime/application] --> EventChannel
+    Inputs[Runtime / application] --> EventChannel
     EventChannel --> Writer[DbWriterWorker]
     Writer --> Tx[Single SQLite transaction]
     Tx --> Events[(events journal)]
     Tx --> ReadModels[(projection tables)]
 
-    APIReads[FastAPI read routes] --> ReadConn[separate read connections]
-    ReadConn --> Events
-    ReadConn --> ReadModels
+    Events --> ReadConn[separate read connections]
+    ReadModels --> ReadConn
+    ReadConn --> APIReads[FastAPI read routes]
 ```
 
 Rules:
 
 - API/input threads do not perform ad-hoc writes.
 - Event journal and projection changes are committed together.
-- API reads may use separate read connections.
+- API reads use separate read connections against the event journal/read models.
 - High-frequency player-position ticks are live telemetry and are not persisted as a raw event stream.
 
 ## Live transport model
@@ -163,8 +169,8 @@ Different data has different delivery semantics:
 - **Electron IPC**: Desktop main/preload/renderer boundary.
 
 ```mermaid
-flowchart LR
-    Backend -->|REST snapshots/commands| Main[Electron main]
+flowchart TB
+    Backend -->|REST snapshots / commands| Main[Electron main]
     Backend -->|SSE durable events| Main
     Backend -->|WebSocket position| Main
     Main -->|IPC bootstrap + state patches| Renderer[React renderer]
@@ -237,7 +243,7 @@ Desktop may connect to an explicitly external Backend instead. In that case it d
 Renderer windows run with `contextIsolation: true` and `nodeIntegration: false`. The preload exposes a narrow `window.zml` API backed by known IPC channels.
 
 ```mermaid
-flowchart LR
+flowchart TB
     Renderer[React renderer] -->|window.zml| Preload[contextBridge]
     Preload -->|known IPC commands| Main[Electron main]
     Main --> Backend[Backend clients]
@@ -250,7 +256,7 @@ Do not expose arbitrary filesystem/process primitives to the renderer when a nar
 FastAPI/Pydantic is the source of truth for HTTP request/response wire schemas.
 
 ```mermaid
-flowchart LR
+flowchart TB
     Schemas[FastAPI / Pydantic] --> Export[deterministic OpenAPI JSON]
     Export --> Generator[openapi-typescript]
     Generator --> Contract[packages/api-contract/schema.d.ts]
