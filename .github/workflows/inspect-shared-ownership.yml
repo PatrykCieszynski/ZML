@@ -1,4 +1,4 @@
-name: Inspect shared ownership
+name: Migrate desktop shared ownership
 
 on:
   push:
@@ -6,21 +6,126 @@ on:
       - agent/shared-ownership-cleanup
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  inspect:
+  migrate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Inspect shared and typings references
+        with:
+          ref: agent/shared-ownership-cleanup
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Move desktop-owned shared code and remove stale typings
         shell: bash
         run: |
-          echo '=== @zml/shared references ==='
-          grep -RIn --exclude-dir=node_modules --exclude-dir=.git '@zml/shared' . || true
-          echo '=== packages/shared references ==='
-          grep -RIn --exclude-dir=node_modules --exclude-dir=.git 'packages/shared' . || true
-          echo '=== typings references ==='
-          grep -RIn --exclude-dir=node_modules --exclude-dir=.git -E 'typings|stubPath|zml_game_bridge.*\.pyi' . || true
-          echo '=== typings tree ==='
-          find typings -type f -print 2>/dev/null || true
+          set -euo pipefail
+
+          git mv packages/shared/src apps/electron-ui/shared
+          git rm packages/shared/justfile packages/shared/package.json packages/shared/tsconfig.json
+          git rm -r typings
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path('.')
+          desktop = root / 'apps/electron-ui'
+
+          for path in list((desktop / 'src').rglob('*')) + list((desktop / 'electron').rglob('*')):
+              if path.is_file() and path.suffix in {'.ts', '.tsx', '.mts', '.cts'}:
+                  text = path.read_text(encoding='utf-8')
+                  updated = text.replace('@zml/shared', '@desktop/shared')
+                  if updated != text:
+                      path.write_text(updated, encoding='utf-8')
+
+          tsconfig_path = desktop / 'tsconfig.json'
+          text = tsconfig_path.read_text(encoding='utf-8')
+          text = text.replace(
+              '"@zml/shared": ["../../packages/shared/src/index.ts"],\n      "@zml/shared/*": ["../../packages/shared/src/*"]',
+              '"@desktop/shared": ["shared/index.ts"],\n      "@desktop/shared/*": ["shared/*"]',
+          )
+          text = text.replace(
+              '"include": ["src", "electron", "../../packages/shared/src"]',
+              '"include": ["src", "electron", "shared"]',
+          )
+          tsconfig_path.write_text(text, encoding='utf-8')
+
+          vite_path = desktop / 'vite.config.ts'
+          text = vite_path.read_text(encoding='utf-8')
+          text = text.replace('../../packages/shared/src/index.ts', './shared/index.ts')
+          text = text.replace('@zml/shared', '@desktop/shared')
+          vite_path.write_text(text, encoding='utf-8')
+
+          package_path = desktop / 'package.json'
+          package = json.loads(package_path.read_text(encoding='utf-8'))
+          package['dependencies'].pop('@zml/shared', None)
+          package['dependencies']['@zml/api-contract'] = 'workspace:*'
+          package['dependencies'] = dict(sorted(package['dependencies'].items()))
+          package_path.write_text(json.dumps(package, indent=2) + '\n', encoding='utf-8')
+
+          just_path = root / 'justfile'
+          text = just_path.read_text(encoding='utf-8')
+          text = text.replace("mod shared 'packages/shared'\n", '')
+          text = text.replace(' api::generate shared::build', ' api::generate')
+          text = text.replace(' api::generate shared::verify desktop::verify', ' api::generate desktop::verify')
+          just_path.write_text(text, encoding='utf-8')
+
+          agents_path = root / 'AGENTS.md'
+          text = agents_path.read_text(encoding='utf-8')
+          text = text.replace(
+              'and shared TypeScript contracts (`packages/shared`).',
+              'and desktop-internal shared TypeScript modules (`apps/electron-ui/shared`).',
+          )
+          text = text.replace(
+              '- `packages/shared/*` owns TypeScript DTOs and IPC contracts shared by Electron\n  main and renderer.',
+              '- `apps/electron-ui/shared/*` owns TypeScript models and IPC contracts shared by\n  Electron main/preload and renderer code. Backend REST wire schemas come from\n  `packages/api-contract` instead of being duplicated here.',
+          )
+          agents_path.write_text(text, encoding='utf-8')
+
+          architecture_path = root / 'docs/architecture.md'
+          text = architecture_path.read_text(encoding='utf-8')
+          text = text.replace(
+              'Shared contracts belong in `packages/shared`. If a backend wire schema changes,\nupdate shared DTOs and Electron main/renderer handling together.',
+              'Desktop-internal contracts shared by Electron main/preload and renderers live in\n`apps/electron-ui/shared`. Backend REST wire schemas come from FastAPI/OpenAPI via\n`packages/api-contract`; do not duplicate those schemas in desktop shared code.',
+          )
+          architecture_path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Refresh pnpm lockfile
+        run: pnpm install --lockfile-only --no-frozen-lockfile
+
+      - name: Assert stale ownership references are gone
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git --exclude='inspect-shared-ownership.yml' -E '@zml/shared|packages/shared|just shared|shared::' .; then
+            echo 'Stale shared ownership reference remains.' >&2
+            exit 1
+          fi
+          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git --exclude='inspect-shared-ownership.yml' -E 'stubPath|typings/zml_game_bridge' .; then
+            echo 'Stale Python typing reference remains.' >&2
+            exit 1
+          fi
+          test ! -d typings
+          test ! -d packages/shared
+          test -f apps/electron-ui/shared/index.ts
+
+      - name: Commit migration and remove temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/inspect-shared-ownership.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Move desktop shared code under Electron app"
+          git push
