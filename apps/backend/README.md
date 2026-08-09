@@ -1,152 +1,180 @@
 # Z Mining Log Backend
 
-Local Python backend for Z Mining Log. It watches Entropia inputs, derives mining domain events, persists durable state to SQLite, and exposes REST/SSE/WebSocket APIs for the Desktop.
+The Backend is the local Python application that turns noisy game inputs into durable mining state and exposes that state to the Desktop.
 
-The backend is offline-first and currently designed for one local UI client.
+It owns FastAPI, application/domain logic, runtime orchestration, SQLite persistence, chat-log input, and supervision of the standalone OCR Worker.
 
-## Current Shape
+## Boundary
 
-- Chat input tails Entropia `chat.log` and emits internal chat signals.
-- OCR input reads position continuously and finder state periodically.
-- Mock mining input can generate deterministic mining signals for UI/dev work.
-- `InputCoordinator` receives signals and asks domain coordinators to derive durable events.
-- `DbWriterWorker` is the only SQLite writer.
-- Durable events are appended to `events` and projected into read-model tables such as mining drops and claims in the same DB transaction.
-- Persisted event envelopes are published to SSE only after the DB write succeeds.
-- High-frequency position updates bypass SQLite and go through `PositionTrackingService` to `/ws/position`.
-
-## Runtime Flow
-
-```text
-chat.log / OCR / mocks
-  -> SignalChannel
-  -> InputCoordinator
-  -> MiningCoordinator
-       -> FinderDropCorrelator
-       -> MiningChatCorrelator
-       -> ClaimLifecycleCorrelator
-  -> EventChannel
-  -> DbWriterWorker
-       -> EventStore.append(...)
-       -> read-model projectors
-  -> PersistedEventBus
-       -> SSE fan-out to UI
+```mermaid
+flowchart LR
+    Chat[chat.log] --> Inputs[Backend inputs]
+    Worker[OCR Worker] -->|zml-ocr-protocol| Inputs
+    Inputs --> App[Application/domain]
+    App --> DB[(SQLite)]
+    App --> API[FastAPI]
+    DB --> API
+    API -->|REST / SSE / WebSocket| Desktop[Desktop]
 ```
 
-Signals are internal observations. They are not persisted.
+The Backend **does not import the OCR Worker package or native OCR stack**. `zml-ocr-worker` is a child-process runtime dependency. The Python dependency shared across the boundary is only `zml-ocr-protocol`.
 
-Events are durable domain facts. They are persisted and can be streamed to the UI.
+## Source layout
 
-Read models are query-friendly tables derived from events, for example active mining claims. They are written by the same single DB writer, so they do not introduce a second SQLite writer.
+```text
+src/zml_backend/
+  api/          FastAPI routes, schemas, dependencies, SSE/WS channels
+  application/  use cases, mining coordination, position tracking
+  domain/       durable events, value objects, pure domain behavior
+  inputs/       chat, OCR protocol, and mock adapters
+  persistence/  SQLite schema, readers, journal, projections
+  runtime/      queues, workers, lifecycle, supervision, bootstrap
+  resources/    packaged seed/reference data
+```
 
-Input modes:
+See [`../../docs/architecture.md`](../../docs/architecture.md) for cross-component flows.
 
-- `env`: use current environment variables.
-- `live`: OCR on, mocks off.
-- `mock`: OCR off, mocks on.
-- `hybrid`: OCR on, mocks on.
-- `no-inputs`: OCR off, mocks off.
+## Runtime flow
 
-## Useful Environment Variables
+```mermaid
+flowchart LR
+    Observations[OCR / chat / mock / UI command] --> Queue[RuntimeInputChannel]
+    Queue --> Input[InputCoordinator]
+    Input --> Mining[MiningCoordinator + services]
+    Mining --> Events[Durable events]
+    Events --> Writer[DbWriterWorker]
+    Writer --> Journal[(events)]
+    Writer --> Projections[(read models)]
+    Writer --> SSE[PersistedEventBus / SSE]
+```
 
-- `ZML_LOG_LEVEL`: console log level, defaults to `INFO`.
-- `ZML_HOST` / `ZML_PORT`: backend bind address, defaults to `127.0.0.1:17171`.
-- `ZML_APP_DATA_DIR`: optional override for the directory containing backend DB, config, logs, and OCR captures.
-- `ZML_ERROR_LOG_PATH`: optional override for error-only log file.
-- `ZML_DB_PATH`: optional override for SQLite DB path.
-- `ZML_CHAT_LOG_PATH`: optional override for Entropia `chat.log`.
-- `ZML_MINING_RESOURCE_CATALOG_PATH`: optional override for learned/user mining resources JSON.
-- `ZML_CHAT_START_AT_END`: start tailing from the end of the file, defaults to `true`.
-- `ZML_OCR_ENABLED`: enable live OCR input.
-- `ZML_OCR_WORKER_PATH`: optional path to the standalone OCR Worker executable;
-  direct backend runs resolve `zml-ocr-worker` from `PATH` when this is unset.
-- `ZML_OCR_CAPTURE_HZ`: desired agent capture frequency, defaults to `10`.
-- `ZML_OCR_CAPTURE_ARTIFACTS_DIR`: directory reserved for command-driven OCR captures.
-- `ZML_OCR_PROFILE_PATH`: ROI profile loaded by Backend into the complete desired agent config.
-- `ZML_MOCK_INPUTS`: enable mock mining input.
-- `ZML_MOCK_MINING_INTERVAL_MS`: mock drop interval.
-- `ZML_FINDER_DEBUG`: enable detailed finder OCR debug logging.
-- `ZML_FINDER_RECORDING`: finder crop recording modes, comma-separated: `manual`, `interval`, or `all`.
-- `ZML_FINDER_RECORDING_DIR`: output directory for finder crop PNG + JSON metadata.
-- `ZML_FINDER_RECORDING_INTERVAL_S`: cadence for `interval` recording mode, defaults to `10`.
-- `ZML_OCR_PROFILING`: enable OCR timing summaries in logs.
-- `ZML_OCR_PROFILING_INTERVAL_S`: OCR profiling summary interval, defaults to `10`.
+Signals are transient observations. Events are durable facts. Do not persist raw input signals simply to make them observable.
 
-Windows packaging builds Backend and OCR Worker as separate Python 3.13
-artifacts. Electron supplies `ZML_OCR_WORKER_PATH` for both development and
-packaged runs. Backend never imports the Agent package; the executable is a
-runtime process dependency connected only through the versioned stdio protocol.
+## Commands
 
-For manual finder recording, enable `manual` mode and create a `record-now.flag` file in `ZML_FINDER_RECORDING_DIR`; the OCR worker consumes the flag on the next finder frame.
+From the repository root:
 
-Source development runs keep their state inside the repository:
+```powershell
+just backend --list
+just backend config
+just backend dev
+just backend mock
+just backend ocr
+just backend finder-debug
+just backend test
+just backend verify
+just backend package
+```
+
+`just backend verify` runs Ruff lint, Ruff format check, Pyright, and Pytest.
+
+### Input modes
+
+The developer CLI supports:
+
+- `env` — use current environment configuration;
+- `live` — OCR enabled, mock mining disabled;
+- `mock` — OCR disabled, mock mining enabled;
+- `hybrid` — OCR and mock mining enabled;
+- `no-inputs` — both disabled.
+
+The root `just dev` path normally starts Backend through Electron rather than running it manually.
+
+## OCR Worker supervision
+
+Backend starts the worker through `runtime/ocr_worker` and adapts protocol observations under `inputs/ocr_worker`.
+
+The supervisor provides:
+
+- child-process stdin/stdout/stderr transport;
+- hello/capability validation;
+- complete revisioned `apply_config` handshake;
+- sequence-ID validation;
+- heartbeat monitoring;
+- structured worker health;
+- bounded restart/backoff;
+- graceful shutdown with terminate/kill escalation.
+
+A missing Entropia window is treated as a recoverable capture condition rather than a reason to crash/restart the process.
+
+The architecture test `tests/test_ocr_process_boundary.py` protects this separation.
+
+## Persistence rules
+
+SQLite has one writer: `DbWriterWorker`.
+
+- Durable events and their projections are written in the same transaction.
+- API routes may open separate read connections.
+- Input threads and API handlers must not create a second ad-hoc write path.
+- Player-position ticks are live telemetry and are not persisted as a raw stream.
+
+Monetary amounts are stored as integer mPEC to avoid floating-point drift:
+
+```text
+1 PED = 100 PEC = 100000 mPEC
+```
+
+## API surfaces
+
+The Backend exposes three categories of local transport:
+
+- **REST** for queries, snapshots, and commands;
+- **SSE** (`/events/stream`) for persisted event notifications;
+- **WebSocket** (`/ws/position`) for high-frequency position telemetry.
+
+FastAPI/Pydantic HTTP schemas are the source of truth for `packages/api-contract`. When a REST schema changes, regenerate the TypeScript contract with:
+
+```powershell
+just api generate
+```
+
+## Key configuration
+
+Most runtime configuration is environment-driven through `zml_backend.settings.Settings`.
+
+Common variables:
+
+```text
+ZML_HOST / ZML_PORT
+ZML_APP_DATA_DIR
+ZML_DB_PATH
+ZML_CHAT_LOG_PATH
+ZML_OCR_ENABLED
+ZML_OCR_WORKER_PATH
+ZML_OCR_CAPTURE_HZ
+ZML_OCR_PROFILE_PATH
+ZML_MOCK_INPUTS
+ZML_LOG_LEVEL
+```
+
+OCR recording/profiling and path overrides are also available; use `just backend config` and `settings.py` as the authoritative list rather than duplicating every setting here.
+
+## Application data
+
+Default development Backend state:
 
 ```text
 <repo>/.tmp/appdata/backend
 ```
 
-The packaged backend keeps live application state under:
+Packaged state:
 
 ```text
-%LOCALAPPDATA%\z-mining-log
+%LOCALAPPDATA%/z-mining-log
 ```
 
-Consequently, packaged error logs are written to:
+`ZML_APP_DATA_DIR` overrides the base directory, while explicit path variables such as `ZML_DB_PATH` take precedence for their individual resource.
+
+## Packaging
+
+```powershell
+just backend package
+```
+
+produces:
 
 ```text
-%LOCALAPPDATA%\z-mining-log\logs\errors.log
+apps/backend/dist/zml-backend/zml-backend.exe
 ```
 
-Only `ERROR` and `CRITICAL` records go to that file. Normal `INFO` runtime logs stay on the console.
-
-## APIs
-
-- `GET /health`
-- `GET /events/latest?limit=200`
-- `GET /events/after/{event_id}?limit=200`
-- `GET /events/stream`
-- `GET /api/v1/mining/drops?window_minutes=30`
-- `GET /api/v1/mining/claims?active=true`
-- `POST /api/v1/runs/start`
-- `POST /api/v1/runs/stop`
-- `GET /api/v1/runs/active`
-- `WS /ws/position`
-
-## SQLite Rules
-
-- SQLite writes must go through `DbWriterWorker`.
-- API routes may open their own read connections.
-- Events and projections are written in one transaction.
-- Position is live state and is not written to SQLite.
-
-This keeps the app safe from multiple concurrent writers while still allowing REST reads.
-
-## Monetary Amounts
-
-Amounts are stored as integer mPEC to avoid float drift.
-
-```text
-1 PED = 100 PEC = 100000 mPEC
-1 mPEC = 0.001 PEC = 0.00001 PED
-```
-
-## Verification
-
-From the repository root:
-
-```bash
-npm run bridge:lint
-npm run bridge:typecheck
-npm run bridge:test
-npm run bridge:verify
-```
-
-`bridge:verify` runs Ruff, Pyright, and Pytest.
-
-## Notes
-
-- Finder OCR currently creates `MiningDropEvent`, `MiningHitHintEvent`, and `MiningNoResourcesEvent`.
-- Claim lifecycle creates map-facing claim events such as `MiningClaimCreatedEvent` and `MiningClaimDepletedEvent`.
-- Chat currently contributes deed, item received, enhancer, and depleted signals/events.
-- Loot/profit aggregation should primarily happen at run/segment level, not claim level.
-- Mining resources are seeded from package JSON and learned into user JSON from claim deed chat lines.
+The artifact intentionally excludes OCR-native dependencies. Full artifact/process-tree verification is documented in [`../../docs/packaging.md`](../../docs/packaging.md).

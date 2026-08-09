@@ -1,39 +1,113 @@
-# ZML OCR Worker
+# Z Mining Log OCR Worker
 
-Standalone Windows screen-capture and OCR component for Z Mining Log.
+The OCR Worker is a standalone Windows process responsible for screen capture and OCR. It contains the native OCR stack so the Backend can remain a clean Python/FastAPI process without capture/OCR implementation dependencies.
 
-The agent owns the native OCR stack and emits versioned NDJSON messages on
-stdout. Logs are written to stderr. Backend always runs it as a managed
-child process and never imports this Python package.
+## Boundary
 
-```powershell
-uv run zml-ocr-worker --version
-uv run zml-ocr-worker doctor
-uv run zml-ocr-worker stdio
-just package
+```mermaid
+flowchart LR
+    Window[Entropia window] --> Capture[Windows capture]
+    Capture --> Pipelines[Position + finder OCR]
+    Pipelines --> Runner[stdio runner]
+    Runner -->|NDJSON stdout| Backend[Backend]
+    Backend -->|commands on stdin| Runner
 ```
 
-In `stdio` mode the first stdout line is a protocol `hello` message. The process
-emits periodic heartbeats, accepts protocol commands on stdin, and exits on a
-`shutdown` command or EOF. It waits for a complete revisioned `apply_config`
-snapshot before starting capture and OCR. Repeating the same revision with the
-same values is idempotent; stale revisions and conflicting values for an already
-applied revision are rejected. Backend owns the desired snapshot and sends
-it again after every process restart.
+The worker imports `zml-ocr-protocol` but imports no Backend code.
 
-The OCR Worker and Backend runtimes are pinned to Python 3.13 because the
-Windows `tesserocr` dependency is distributed as a CPython 3.13 wheel.
+## Native/runtime dependencies
 
-`just package` creates `dist/zml-ocr-worker/zml-ocr-worker.exe` together with its
-private native OCR libraries and tessdata. Backend packaging intentionally
-does not contain those files.
+The worker owns dependencies such as:
 
-The application is organized around the OCR pipeline rather than backend DDD
-layers:
+- `mss`;
+- numpy;
+- OpenCV headless;
+- `pywin32`;
+- `tesserocr`;
+- packaged Tesseract traineddata.
 
-- `capture/`: Windows capture and capture models;
-- `pipelines/`: position/finder preprocessing, recognition, and observations;
-- `runtime/`: stdio command loop, runner lifecycle, message creation, profiling,
-  native Tesseract initialization, and runtime paths;
-- `config.py`: applied OCR configuration and ROI profile conversion;
-- `cli.py`, `doctor.py`, and `finder_debug.py`: process entrypoints and tools.
+The runtime is pinned to Python 3.13 because the Windows `tesserocr` dependency is supplied as a CPython 3.13 wheel.
+
+## Source layout
+
+```text
+src/zml_ocr_worker/
+  capture/      screen/window capture
+  pipelines/    finder and position recognition pipelines
+  runtime/      protocol runner, lifecycle, profiling, native runtime setup
+  config.py     applied OCR configuration / ROI conversion
+  cli.py        worker CLI
+  doctor.py     environment/native dependency diagnostics
+  finder_debug.py
+```
+
+This application follows OCR pipeline ownership rather than the Backend's DDD-style layers.
+
+## Protocol lifecycle
+
+`stdio` mode reserves stdout for protocol traffic. Logs belong on stderr.
+
+```mermaid
+sequenceDiagram
+    participant B as Backend
+    participant W as OCR Worker
+
+    W-->>B: hello
+    B->>W: apply_config(revision, complete snapshot)
+    W-->>B: command_result(ok)
+    loop active session
+        W-->>B: position/finder messages
+        W-->>B: heartbeat/status
+    end
+    B->>W: shutdown
+    W-->>B: command_result(ok)
+    W-->>B: exit
+```
+
+The worker does not begin publishing normal observations until a complete configuration revision has been accepted.
+
+Reapplying the same revision with identical values is idempotent. Stale revisions or conflicting data for an already-applied revision are rejected.
+
+EOF on stdin is also treated as parent shutdown so the worker cannot remain alive after losing its owner under normal operation.
+
+## Commands
+
+From the repository root:
+
+```powershell
+just ocr --list
+just ocr doctor
+just ocr stdio
+just ocr finder-debug --help
+just ocr test
+just ocr verify
+just ocr package
+```
+
+Useful direct CLI behavior is also exposed by `zml-ocr-worker --version`, `doctor`, and `stdio` inside the uv workspace.
+
+## Health behavior
+
+Loss/absence of the Entropia window is not a fatal worker error. Capture reports a degraded/waiting state and retries. Fatal pipeline/runtime errors are reported through status/protocol failure and can cause Backend supervision to restart the process.
+
+## Diagnostics
+
+The worker contains finder crop recording, position ROI snapshots, profiling, and finder debug tooling. Backend owns the desired configuration snapshot and sends the relevant settings through the protocol.
+
+Do not move these native/debug implementations back into Backend just to simplify a call path; the process boundary exists partly to isolate native capture/OCR behavior from the API/runtime process.
+
+## Packaging
+
+```powershell
+just ocr package
+```
+
+produces:
+
+```text
+apps/ocr-worker/dist/zml-ocr-worker/zml-ocr-worker.exe
+```
+
+with private native libraries and tessdata. Backend packaging intentionally excludes those files.
+
+The complete packaged process boundary is verified by `scripts/verify-python-artifacts.ps1` and the Windows CI/release workflows. See [`../../docs/packaging.md`](../../docs/packaging.md).
