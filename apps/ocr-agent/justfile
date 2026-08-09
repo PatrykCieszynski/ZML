@@ -1,0 +1,31 @@
+default:
+    just --list
+
+doctor:
+    uv run zml-ocr-agent doctor
+
+stdio:
+    uv run zml-ocr-agent stdio
+
+finder-debug *ARGS:
+    uv run zml-ocr-finder-debug {{ARGS}}
+
+lint-fix:
+    uv run ruff check . --fix
+
+lint:
+    uv run ruff check .
+
+format:
+    uv run ruff format .
+
+format-check:
+    uv run ruff format --check .
+
+typecheck:
+    uv run pyright
+
+test:
+    uv run pytest --basetemp .pytest-tmp -o cache_dir=.pytest-cache-local
+
+verify: lint format-check typecheck test

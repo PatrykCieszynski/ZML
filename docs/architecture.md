@@ -12,9 +12,11 @@ dashboard, map, overlay, and tool setup UI.
 ```text
 apps/
   game-bridge/       Python backend: inputs, runtime, API, persistence
+  ocr-agent/         Screen capture, OCR pipelines, diagnostics, stdio runner
   electron-ui/       Electron main process and React renderer
 
 packages/
+  ocr-protocol/      Versioned Python DTOs and NDJSON codec
   shared/            Shared TypeScript DTOs, IPC channels, and map helpers
 
 docs/
@@ -28,7 +30,7 @@ api/
   FastAPI app, REST routes, SSE, WebSocket, dependency wiring
 
 inputs/
-  OCR, chat tailing, mock sources; emits SignalBase subclasses
+  OCR adapters, chat tailing, mock sources; emits SignalBase subclasses
 
 application/
   use-case/business logic: mining coordinator, correlators, equipment,
@@ -57,6 +59,19 @@ runtime -> application/persistence/events
 persistence -> domain/events
 domain -> no app/runtime/persistence imports
 ```
+
+## OCR Implementation Boundary
+
+`apps/ocr-agent` owns Windows capture, ROI models, finder and position
+pipelines, recording/profiling tools, `tesserocr`, OpenCV, numpy, and tessdata.
+Its runner emits `zml-ocr-protocol` messages and imports no Game Bridge modules.
+
+During the migration, Game Bridge uses a path dependency on the agent and runs
+the same runner in-process through `EmbeddedOcrInputSource`. The adapter maps
+position and finder DTOs to application models and signals. The agent also has
+an independent `stdio` entrypoint that emits `hello`, accepts `shutdown`, and
+reserves stdout for NDJSON. Process supervision and transport selection are the
+next migration step.
 
 ## Signal To Event Flow
 

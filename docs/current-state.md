@@ -52,15 +52,19 @@ Z Mining Log is now a working local mining tracker prototype:
   - segments have setup snapshots;
   - drop/claim/loot projections are exposed to UI.
 - OCR backend:
+  - `apps/ocr-agent` now owns capture, pipelines, recording/profiling,
+    finder debug tooling, native OCR dependencies, and tessdata;
+  - OCR Agent has independent Ruff, Pyright, unit tests, `doctor`, `--version`,
+    and `stdio` commands; protocol mode emits `hello` and handles `shutdown`;
   - finder OCR migrated toward `tesserocr` wrapper;
   - profiling and finder crop recording hooks exist;
   - position outlier filtering exists;
   - missing/lost Entropia window degrades health and retries instead of crashing OCR;
-  - OCR still runs in-process, but `packages/ocr-protocol` now defines the
-    strict version 1 DTO and NDJSON boundary for the planned OCR Agent;
+  - OCR still runs in-process by default, but the runner now emits strict
+    version 1 `packages/ocr-protocol` messages and imports no Game Bridge code;
   - `AppRuntime` owns only the `OcrInputSource` lifecycle while
-    `EmbeddedOcrInputSource` adapts the current runner, position snapshots,
-    finder signals, preload, and worker health without changing behavior;
+    `EmbeddedOcrInputSource` maps agent messages to position snapshots, finder
+    signals, preload, and worker health without changing runtime behavior;
   - finder application signals live under `application.mining.signals.finder`,
     so mining logic no longer imports signal types from `inputs.ocr`.
 - Desktop lifecycle and packaging:
@@ -83,7 +87,6 @@ Z Mining Log is now a working local mining tracker prototype:
 See `ROADMAP_2025-05-26.md` for the ordered roadmap. The highest-value items are:
 
 1. Managed OCR Agent migration:
-   - create the standalone OCR Agent application;
    - add the subprocess supervisor behind a rollback flag;
    - synchronize full configuration snapshots and validate real-game behavior;
    - package both executables before removing embedded OCR.

@@ -6,12 +6,21 @@ from threading import Event, Thread
 from typing import Any, cast
 
 import pytest
+from zml_ocr_protocol import AgentToBridgeMessage
+from zml_ocr_protocol.messages import (
+    FinderSignalMessage,
+    PositionMessage,
+    PositionObservationPayload,
+    ProbeFiredPayload,
+    StatusMessage,
+    StatusPayload,
+    WorldPositionPayload,
+)
 
 from zml_game_bridge.application.mining.signals.finder import ProbeFiredSignal
 from zml_game_bridge.application.position.model import PositionSnapshot
 from zml_game_bridge.domain.position import WorldPos
 from zml_game_bridge.events.base import SignalBase
-from zml_game_bridge.inputs.ocr.pipelines.position.model import OcrPosition
 from zml_game_bridge.inputs.ocr.source import EmbeddedOcrInputConfig, EmbeddedOcrInputSource
 from zml_game_bridge.runtime.supervisor import WorkerSupervisor
 
@@ -84,11 +93,25 @@ def test_embedded_source_wraps_runner_and_maps_outputs() -> None:
     assert worker_kwargs["stop_event"] is stop_event
     assert worker_kwargs["roi_profile_path"] == Path("ocr-profile.json")
 
-    position_sink = cast(Callable[[OcrPosition], None], worker_kwargs["position_sink"])
-    position_sink(
-        OcrPosition(
-            ts_ms=1_000,
-            position=WorldPos(planet_name="Calypso", x=58_000, y=84_000, z=None),
+    message_sink = cast(Callable[[AgentToBridgeMessage], None], worker_kwargs["message_sink"])
+    message_sink(
+        PositionMessage(
+            protocol_version=1,
+            type="position",
+            message_id="a" * 32,
+            sequence_id=0,
+            emitted_ts_ms=1_001,
+            observed_ts_ms=1_000,
+            payload=PositionObservationPayload(
+                position=WorldPositionPayload(
+                    planet_name="Calypso",
+                    x=58_000,
+                    y=84_000,
+                    z=None,
+                ),
+                confidence=None,
+                roi_name="compass",
+            ),
         )
     )
     assert positions == [
@@ -100,24 +123,69 @@ def test_embedded_source_wraps_runner_and_maps_outputs() -> None:
         )
     ]
 
-    signal = ProbeFiredSignal(
-        ts_ms=1_500,
-        position=None,
-        modes_mask=1,
-        probes_per_drop=1,
-        ammo_per_drop=None,
-        raw_status_text="Searching",
-        roi_name="finder",
+    message_sink(
+        FinderSignalMessage(
+            protocol_version=1,
+            type="finder_signal",
+            message_id="b" * 32,
+            sequence_id=1,
+            emitted_ts_ms=1_501,
+            observed_ts_ms=1_500,
+            payload=ProbeFiredPayload(
+                kind="probe_fired",
+                modes_mask=1,
+                probes_per_drop=1,
+                ammo_per_drop=None,
+                raw_status_text="Searching",
+                roi_name="finder",
+                debug={},
+            ),
+        )
     )
-    signal_sink = cast(Callable[[SignalBase], None], worker_kwargs["signal_sink"])
-    signal_sink(signal)
-    assert signals == [signal]
+    assert signals == [
+        ProbeFiredSignal(
+            ts_ms=1_500,
+            position=None,
+            modes_mask=1,
+            probes_per_drop=1,
+            ammo_per_drop=None,
+            raw_status_text="Searching",
+            roi_name="finder",
+        )
+    ]
 
-    capture_status_sink = cast(
-        Callable[[bool, str | None], None], worker_kwargs["capture_status_sink"]
+    message_sink(
+        StatusMessage(
+            protocol_version=1,
+            type="status",
+            message_id="c" * 32,
+            sequence_id=2,
+            emitted_ts_ms=1_502,
+            payload=StatusPayload(
+                state="waiting_for_window",
+                capture_available=False,
+                applied_revision=None,
+                code="window_unavailable",
+                detail="window missing",
+            ),
+        )
     )
-    capture_status_sink(False, "window missing")
-    capture_status_sink(True, None)
+    message_sink(
+        StatusMessage(
+            protocol_version=1,
+            type="status",
+            message_id="d" * 32,
+            sequence_id=3,
+            emitted_ts_ms=1_503,
+            payload=StatusPayload(
+                state="running",
+                capture_available=True,
+                applied_revision=None,
+                code=None,
+                detail=None,
+            ),
+        )
+    )
     assert supervisor.degraded == [("ocr_worker", "window missing")]
     assert supervisor.running == ["ocr_worker"]
 
