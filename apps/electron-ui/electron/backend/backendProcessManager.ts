@@ -219,16 +219,17 @@ export function createBackendLaunchSpec({
     };
   }
 
+  const repoRoot = path.resolve(appRoot, "..", "..");
   const backendDir = path.resolve(appRoot, "..", "game-bridge");
+  const workspaceVenv = path.join(repoRoot, ".venv");
   const pythonExecutable =
     process.platform === "win32"
-      ? path.join(backendDir, ".venv", "Scripts", "python.exe")
-      : path.join(backendDir, ".venv", "bin", "python");
-  const ocrAgentDir = path.resolve(appRoot, "..", "ocr-agent");
+      ? path.join(workspaceVenv, "Scripts", "python.exe")
+      : path.join(workspaceVenv, "bin", "python");
   const ocrAgentExecutable =
     process.platform === "win32"
-      ? path.join(ocrAgentDir, ".venv", "Scripts", "zml-ocr-agent.exe")
-      : path.join(ocrAgentDir, ".venv", "bin", "zml-ocr-agent");
+      ? path.join(workspaceVenv, "Scripts", "zml-ocr-agent.exe")
+      : path.join(workspaceVenv, "bin", "zml-ocr-agent");
   return {
     command: pythonExecutable,
     args: ["-m", "zml_game_bridge.dev_cli", "serve", "--mode", "live"],

@@ -14,9 +14,6 @@ dependencies = [
     "zml-ocr-protocol==0.1.0",
 ]
 
-[tool.uv.sources]
-zml-ocr-protocol = { path = "../../packages/ocr-protocol", editable = true }
-
 [dependency-groups]
 dev = [
     "pyinstaller>=6.20.0",
@@ -48,7 +45,7 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
-ignore = ["E501"]  # if you want line-length enforced, remove this
+ignore = ["E501"]
 
 [tool.ruff.format]
 quote-style = "double"

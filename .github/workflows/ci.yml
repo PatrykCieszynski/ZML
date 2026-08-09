@@ -28,16 +28,13 @@ jobs:
           enable-cache: true
 
       - name: Install Python
-        working-directory: packages/ocr-protocol
         run: uv python install
 
-      - name: Install protocol dependencies
-        working-directory: packages/ocr-protocol
-        run: uv sync --locked --dev
+      - name: Sync protocol dependencies
+        run: uv sync --locked --package zml-ocr-protocol
 
       - name: Verify protocol
-        working-directory: packages/ocr-protocol
-        run: just verify
+        run: just protocol verify
 
   ocr-agent:
     name: OCR Agent / Python
@@ -56,16 +53,13 @@ jobs:
           enable-cache: true
 
       - name: Install Python
-        working-directory: apps/ocr-agent
         run: uv python install
 
-      - name: Install OCR Agent dependencies
-        working-directory: apps/ocr-agent
-        run: uv sync --locked --dev
+      - name: Sync OCR Agent dependencies
+        run: uv sync --locked --package zml-ocr-agent
 
       - name: Verify OCR Agent
-        working-directory: apps/ocr-agent
-        run: just verify
+        run: just ocr verify
 
   bridge:
     name: Bridge / Python
@@ -75,12 +69,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Set up bridge
-        uses: ./.github/actions/setup-bridge
+      - name: Set up just
+        uses: extractions/setup-just@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install
+
+      - name: Sync bridge dependencies
+        run: uv sync --locked --package zml-game-bridge
 
       - name: Verify bridge
-        working-directory: apps/game-bridge
-        run: just verify
+        run: just backend verify
 
   python-packaging:
     name: Python executables / Windows
@@ -90,20 +94,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Set up bridge
-        uses: ./.github/actions/setup-bridge
+      - name: Set up just
+        uses: extractions/setup-just@v4
 
-      - name: Install OCR Agent dependencies
-        working-directory: apps/ocr-agent
-        run: uv sync --locked --dev
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install
+
+      - name: Sync Python workspace
+        run: uv sync --locked --all-packages
 
       - name: Package OCR Agent
-        working-directory: apps/ocr-agent
-        run: just package
+        run: just ocr package
 
       - name: Package bridge
-        working-directory: apps/game-bridge
-        run: just package
+        run: just backend package
 
       - name: Verify packaged process tree
         shell: pwsh

@@ -35,7 +35,7 @@ describe("createBackendLaunchSpec", () => {
     });
   });
 
-  it("uses the game bridge virtualenv in development", () => {
+  it("uses the workspace virtualenv in development", () => {
     const appRoot = path.join("C:", "repo", "apps", "electron-ui");
     const launch = createBackendLaunchSpec({
       isPackaged: false,
@@ -43,7 +43,14 @@ describe("createBackendLaunchSpec", () => {
       appRoot,
     });
 
+    const repoRoot = path.resolve(appRoot, "..", "..");
+    const workspaceVenv = path.join(repoRoot, ".venv");
     expect(launch.cwd).toBe(path.resolve(appRoot, "..", "game-bridge"));
+    expect(launch.command).toBe(
+      process.platform === "win32"
+        ? path.join(workspaceVenv, "Scripts", "python.exe")
+        : path.join(workspaceVenv, "bin", "python"),
+    );
     expect(launch.args).toEqual([
       "-m",
       "zml_game_bridge.dev_cli",
@@ -51,12 +58,11 @@ describe("createBackendLaunchSpec", () => {
       "--mode",
       "live",
     ]);
-    const ocrAgentDir = path.resolve(appRoot, "..", "ocr-agent");
     expect(launch.environment).toEqual({
       ZML_OCR_AGENT_PATH:
         process.platform === "win32"
-          ? path.join(ocrAgentDir, ".venv", "Scripts", "zml-ocr-agent.exe")
-          : path.join(ocrAgentDir, ".venv", "bin", "zml-ocr-agent"),
+          ? path.join(workspaceVenv, "Scripts", "zml-ocr-agent.exe")
+          : path.join(workspaceVenv, "bin", "zml-ocr-agent"),
     });
   });
 });

@@ -1,17 +1,20 @@
+default:
+    just --list
+
 lint:
-    uv run ruff check .
+    uv run --package zml-ocr-protocol ruff check .
 
 format:
-    uv run ruff check --fix .
-    uv run ruff format .
+    uv run --package zml-ocr-protocol ruff check --fix .
+    uv run --package zml-ocr-protocol ruff format .
 
 format-check:
-    uv run ruff format --check .
+    uv run --package zml-ocr-protocol ruff format --check .
 
 typecheck:
-    uv run pyright
+    uv run --package zml-ocr-protocol pyright
 
 test:
-    uv run pytest --basetemp ../../.tmp/pytest-ocr-protocol -o cache_dir=../../.tmp/pytest-ocr-protocol-cache
+    uv run --package zml-ocr-protocol pytest --basetemp ../../.tmp/pytest-ocr-protocol -o cache_dir=../../.tmp/pytest-ocr-protocol-cache
 
 verify: lint format-check typecheck test

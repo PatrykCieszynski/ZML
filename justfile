@@ -8,12 +8,20 @@ mod ocr 'apps/ocr-agent'
 mod protocol 'packages/ocr-protocol'
 mod shared 'packages/shared'
 
+# Resolve the complete Python workspace into the root lockfile.
+python-lock:
+    uv lock
+
+# Synchronize all Python workspace members into the root .venv.
+python-sync:
+    uv sync --locked --all-packages
+
 # Start the desktop development process. Electron owns the local backend lifecycle.
-dev: shared::build
+dev: python-sync shared::build
     pnpm --filter @zml/electron-ui dev
 
 # Run the complete repository quality gate.
-verify: protocol::verify ocr::verify backend::verify shared::verify desktop::verify
+verify: python-sync protocol::verify ocr::verify backend::verify shared::verify desktop::verify
 
 # Run all test suites that exist today.
 test: protocol::test ocr::test backend::test desktop::test
@@ -32,6 +40,6 @@ stage-python:
     node scripts/stage-python-components.mjs
 
 # Package both Python processes, stage them, then build the desktop installer.
-package: ocr::package backend::package shared::build
+package: python-sync ocr::package backend::package shared::build
     node scripts/stage-python-components.mjs
     just desktop package

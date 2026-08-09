@@ -7,10 +7,9 @@ if (-not $scriptPath) {
 }
 
 $repoRoot = Resolve-Path -LiteralPath (Join-Path (Split-Path -Parent $scriptPath) "..")
-$gameBridgeRoot = Join-Path $repoRoot "apps/game-bridge"
 $agentTempRoot = Join-Path $repoRoot ".tmp"
 
-$env:UV_CACHE_DIR = Join-Path $gameBridgeRoot ".uv-cache"
+$env:UV_CACHE_DIR = Join-Path $repoRoot ".uv-cache"
 $env:TEMP = $agentTempRoot
 $env:TMP = $agentTempRoot
 
@@ -39,13 +38,13 @@ function global:pnpm {
 
 function global:zml-agent-env {
     [PSCustomObject]@{
-        RepoRoot     = $repoRoot.Path
-        UV_CACHE_DIR = $env:UV_CACHE_DIR
+        RepoRoot      = $repoRoot.Path
+        UV_CACHE_DIR  = $env:UV_CACHE_DIR
         COREPACK_HOME = $env:COREPACK_HOME
-        TEMP         = $env:TEMP
-        Just         = (Get-Command just -ErrorAction SilentlyContinue).Source
-        Corepack     = (Get-Command corepack -ErrorAction SilentlyContinue).Source
-        Node         = (Get-Command node -ErrorAction SilentlyContinue).Source
+        TEMP          = $env:TEMP
+        Just          = (Get-Command just -ErrorAction SilentlyContinue).Source
+        Corepack      = (Get-Command corepack -ErrorAction SilentlyContinue).Source
+        Node          = (Get-Command node -ErrorAction SilentlyContinue).Source
     }
 }
 
