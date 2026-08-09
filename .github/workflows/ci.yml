@@ -11,28 +11,134 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  bridge:
-    name: Bridge / Python
+  ocr-protocol:
+    name: OCR Protocol / Python
     runs-on: windows-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Set up bridge
-        uses: ./.github/actions/setup-bridge
+      - name: Set up just
+        uses: extractions/setup-just@v4
 
-      - name: Verify bridge
-        working-directory: apps/game-bridge
-        run: just verify
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
 
-  frontend:
-    name: Shared + Electron UI
+      - name: Install Python
+        run: uv python install
+
+      - name: Sync protocol dependencies
+        run: uv sync --locked --package zml-ocr-protocol
+
+      - name: Verify protocol
+        run: just protocol verify
+
+  ocr-worker:
+    name: OCR Worker / Python
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up just
+        uses: extractions/setup-just@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install
+
+      - name: Sync OCR Worker dependencies
+        run: uv sync --locked --package zml-ocr-worker
+
+      - name: Verify OCR Worker
+        run: just ocr verify
+
+  backend:
+    name: Backend / Python
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up just
+        uses: extractions/setup-just@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install
+
+      - name: Sync backend dependencies
+        run: uv sync --locked --package zml-backend
+
+      - name: Verify backend
+        run: just backend verify
+
+  python-packaging:
+    name: Python executables / Windows
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up just
+        uses: extractions/setup-just@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install
+
+      - name: Sync Python workspace
+        run: uv sync --locked --all-packages
+
+      - name: Package OCR Worker
+        run: just ocr package
+
+      - name: Package backend
+        run: just backend package
+
+      - name: Verify packaged process tree
+        shell: pwsh
+        run: ./scripts/verify-python-artifacts.ps1
+
+  desktop:
+    name: Desktop / TypeScript
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Set up just
+        uses: extractions/setup-just@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install
+
+      - name: Sync backend dependencies
+        run: uv sync --locked --package zml-backend
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
@@ -47,5 +153,8 @@ jobs:
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Verify frontend
-        run: pnpm frontend:verify
+      - name: Generate API contract
+        run: just api generate
+
+      - name: Verify desktop
+        run: just desktop verify

@@ -1,36 +1,5 @@
 {
   "name": "zml",
   "private": true,
-  "packageManager": "pnpm@10.27.0",
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
-  "scripts": {
-    "dev": "pnpm --filter @zml/electron-ui dev",
-
-    "bridge:format": "cd apps/game-bridge && just format",
-    "bridge:package": "cd apps/game-bridge && just package",
-    "bridge:verify": "cd apps/game-bridge && just verify",
-
-    "backend:stage": "node scripts/stage-backend.mjs",
-
-    "shared:verify": "pnpm --filter @zml/shared typecheck && pnpm --filter @zml/shared build",
-
-    "frontend:verify": "pnpm shared:verify && pnpm --filter @zml/electron-ui typecheck && pnpm --filter @zml/electron-ui lint && pnpm --filter @zml/electron-ui test && pnpm --filter @zml/electron-ui build",
-    "frontend:build": "pnpm --filter @zml/shared build && pnpm --filter @zml/electron-ui build",
-    "frontend:package": "pnpm --filter @zml/shared build && pnpm --filter @zml/electron-ui package",
-
-    "verify": "pnpm bridge:verify && pnpm frontend:verify",
-    "build": "pnpm frontend:build",
-    "package": "pnpm bridge:package && pnpm backend:stage && pnpm frontend:package",
-    "lint": "cd apps/game-bridge && just lint && pnpm --filter @zml/electron-ui lint"
-  },
-  "devDependencies": {
-    "concurrently": "^9.2.1",
-    "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-prettier": "^5.5.4",
-    "prettier": "^3.7.4",
-    "wait-on": "^9.0.3"
-  }
+  "packageManager": "pnpm@10.27.0"
 }

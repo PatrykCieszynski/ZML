@@ -1,0 +1,71 @@
+name: Package Python Components Windows
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_name:
+        description: Artifact/build name suffix
+        required: false
+        default: snapshot
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-python-windows
+  cancel-in-progress: false
+
+jobs:
+  package-python-components:
+    name: Package Python Components / Windows
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up just
+        uses: extractions/setup-just@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install
+
+      - name: Sync Python workspace
+        run: uv sync --locked --all-packages
+
+      - name: Verify backend
+        run: just backend verify
+
+      - name: Verify OCR Worker
+        run: just ocr verify
+
+      - name: Package OCR Worker
+        run: just ocr package
+
+      - name: Package backend
+        run: just backend package
+
+      - name: Verify packaged process tree
+        shell: pwsh
+        run: ./scripts/verify-python-artifacts.ps1
+
+      - name: Upload backend artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: zml-backend-windows-${{ github.event.inputs.build_name }}
+          path: apps/backend/dist/zml-backend
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Upload OCR Worker artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: zml-ocr-worker-windows-${{ github.event.inputs.build_name }}
+          path: apps/ocr-worker/dist/zml-ocr-worker
+          retention-days: 14
+          if-no-files-found: error

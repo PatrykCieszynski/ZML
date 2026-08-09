@@ -1,11 +1,23 @@
-# Documentation Index
+# Z Mining Log Documentation
 
-Start here when the conversation context is missing or stale.
+The documentation is intentionally split by ownership instead of duplicating the same architecture description in multiple files.
 
-- `../AGENTS.md` - practical rules and handoff notes for coding agents.
-- `architecture.md` - current backend/runtime/UI architecture.
-- `current-state.md` - compact snapshot of what works, what is open, and what
-  should not be redesigned lightly.
-- `decisions/` - short architecture decision records.
-- `../ROADMAP_2025-05-26.md` - current MVP roadmap and priority order.
+## Current documentation
 
+- [`architecture.md`](architecture.md) — runtime boundaries, data flow, contracts, persistence, and lifecycle.
+- [`development.md`](development.md) — setup, common commands, local state, generated contracts, and focused verification.
+- [`packaging.md`](packaging.md) — Python artifacts, Electron staging, Windows installer, and release CI.
+- [`current-state.md`](current-state.md) — compact handoff of what works now and the next high-value work.
+- [`decisions/`](decisions/) — historical architecture decision records.
+
+Component-specific details live beside the component:
+
+- [`../apps/backend/README.md`](../apps/backend/README.md)
+- [`../apps/desktop/README.md`](../apps/desktop/README.md)
+- [`../apps/ocr-worker/README.md`](../apps/ocr-worker/README.md)
+- [`../packages/api-contract/README.md`](../packages/api-contract/README.md)
+- [`../packages/ocr-protocol/README.md`](../packages/ocr-protocol/README.md)
+
+## Source-of-truth rule
+
+Current code/configuration is authoritative. These documents should describe the current system. ADRs are historical records and can intentionally describe older names or superseded approaches.

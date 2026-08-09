@@ -32,26 +32,41 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         run: |
-          $package = Get-Content apps/electron-ui/package.json | ConvertFrom-Json
+          $package = Get-Content apps/desktop/package.json | ConvertFrom-Json
           $expectedTag = "v$($package.version)"
           if ($env:GITHUB_REF_NAME -ne $expectedTag) {
             throw "Release tag $env:GITHUB_REF_NAME does not match desktop version $expectedTag"
           }
 
-      - name: Set up bridge
-        uses: ./.github/actions/setup-bridge
+      - name: Set up just
+        uses: extractions/setup-just@v4
 
-      - name: Verify bridge
-        working-directory: apps/game-bridge
-        run: just verify
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
 
-      - name: Package bridge
-        working-directory: apps/game-bridge
-        run: just package
+      - name: Install Python
+        run: uv python install
 
-      - name: Smoke test bridge executable
-        working-directory: apps/game-bridge
-        run: .\dist\zml-game-bridge\zml-game-bridge.exe config
+      - name: Sync Python workspace
+        run: uv sync --locked --all-packages
+
+      - name: Verify backend
+        run: just backend verify
+
+      - name: Verify OCR Worker
+        run: just ocr verify
+
+      - name: Package OCR Worker
+        run: just ocr package
+
+      - name: Package backend
+        run: just backend package
+
+      - name: Verify packaged process tree
+        shell: pwsh
+        run: ./scripts/verify-python-artifacts.ps1
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
@@ -66,27 +81,38 @@ jobs:
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Stage backend in Electron resources
-        run: pnpm backend:stage
+      - name: Generate API contract
+        run: just api generate
 
-      - name: Package Electron application
-        run: pnpm frontend:package
+      - name: Stage Python components in desktop resources
+        run: just stage-python
 
-      - name: Smoke test bundled backend
+      - name: Package desktop application
+        run: just desktop package
+
+      - name: Verify bundled Python process tree
         shell: pwsh
         run: |
-          $backend = Get-ChildItem apps/electron-ui/release -Recurse -Filter zml-game-bridge.exe |
+          $backend = Get-ChildItem apps/desktop/release -Recurse -Filter zml-backend.exe |
             Where-Object { $_.FullName -match 'win-unpacked[\\/]+resources[\\/]+backend' } |
+            Select-Object -First 1
+          $worker = Get-ChildItem apps/desktop/release -Recurse -Filter zml-ocr-worker.exe |
+            Where-Object { $_.FullName -match 'win-unpacked[\\/]+resources[\\/]+ocr-worker' } |
             Select-Object -First 1
           if ($null -eq $backend) {
             throw "Bundled backend executable was not found in win-unpacked resources"
           }
-          & $backend.FullName config
+          if ($null -eq $worker) {
+            throw "Bundled OCR Worker executable was not found in win-unpacked resources"
+          }
+          & ./scripts/verify-python-artifacts.ps1 `
+            -BackendArtifactDir $backend.Directory.FullName `
+            -WorkerArtifactDir $worker.Directory.FullName
 
       - name: Verify installer artifact
         shell: pwsh
         run: |
-          $installer = Get-ChildItem apps/electron-ui/release -Recurse -Filter 'Z-Mining-Log-Windows-*-Setup.exe' |
+          $installer = Get-ChildItem apps/desktop/release -Recurse -Filter 'Z-Mining-Log-Windows-*-Setup.exe' |
             Select-Object -First 1
           if ($null -eq $installer) {
             throw "Windows installer was not produced"
@@ -97,7 +123,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: z-mining-log-windows-${{ github.event.inputs.build_name || github.ref_name }}
-          path: apps/electron-ui/release/**/Z-Mining-Log-Windows-*-Setup.exe
+          path: apps/desktop/release/**/Z-Mining-Log-Windows-*-Setup.exe
           if-no-files-found: error
           retention-days: 14
 
@@ -107,4 +133,4 @@ jobs:
         with:
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}
-          files: apps/electron-ui/release/**/Z-Mining-Log-Windows-*-Setup.exe
+          files: apps/desktop/release/**/Z-Mining-Log-Windows-*-Setup.exe
