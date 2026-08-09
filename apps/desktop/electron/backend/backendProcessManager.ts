@@ -204,7 +204,7 @@ export function createBackendLaunchSpec({
 }): BackendLaunchSpec {
   if (isPackaged) {
     const backendDir = path.join(resourcesPath, "backend");
-    const ocrAgentExecutable = path.join(
+    const ocrWorkerExecutable = path.join(
       resourcesPath,
       "ocr-worker",
       "zml-ocr-worker.exe",
@@ -214,7 +214,7 @@ export function createBackendLaunchSpec({
       args: ["serve", "--mode", "live"],
       cwd: backendDir,
       environment: {
-        ZML_OCR_WORKER_PATH: ocrAgentExecutable,
+        ZML_OCR_WORKER_PATH: ocrWorkerExecutable,
       },
     };
   }
@@ -226,7 +226,7 @@ export function createBackendLaunchSpec({
     process.platform === "win32"
       ? path.join(workspaceVenv, "Scripts", "python.exe")
       : path.join(workspaceVenv, "bin", "python");
-  const ocrAgentExecutable =
+  const ocrWorkerExecutable =
     process.platform === "win32"
       ? path.join(workspaceVenv, "Scripts", "zml-ocr-worker.exe")
       : path.join(workspaceVenv, "bin", "zml-ocr-worker");
@@ -235,7 +235,7 @@ export function createBackendLaunchSpec({
     args: ["-m", "zml_backend.dev_cli", "serve", "--mode", "live"],
     cwd: backendDir,
     environment: {
-      ZML_OCR_WORKER_PATH: ocrAgentExecutable,
+      ZML_OCR_WORKER_PATH: ocrWorkerExecutable,
     },
   };
 }

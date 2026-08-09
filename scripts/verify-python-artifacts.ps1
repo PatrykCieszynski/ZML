@@ -1,7 +1,7 @@
 param(
     [string]$RepoRoot = (Split-Path -Parent $PSScriptRoot),
     [string]$BackendArtifactDir,
-    [string]$AgentArtifactDir,
+    [string]$WorkerArtifactDir,
     [switch]$SkipProcessTree
 )
 
@@ -13,31 +13,31 @@ $backendDir = if ($BackendArtifactDir) {
 } else {
     Join-Path $resolvedRepoRoot "apps/backend/dist/zml-backend"
 }
-$agentDir = if ($AgentArtifactDir) {
-    (Resolve-Path -LiteralPath $AgentArtifactDir).Path
+$workerDir = if ($WorkerArtifactDir) {
+    (Resolve-Path -LiteralPath $WorkerArtifactDir).Path
 } else {
     Join-Path $resolvedRepoRoot "apps/ocr-worker/dist/zml-ocr-worker"
 }
 $backendExe = Join-Path $backendDir "zml-backend.exe"
-$agentExe = Join-Path $agentDir "zml-ocr-worker.exe"
+$workerExe = Join-Path $workerDir "zml-ocr-worker.exe"
 
-foreach ($requiredPath in @($backendExe, $agentExe)) {
+foreach ($requiredPath in @($backendExe, $workerExe)) {
     if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
         throw "Required packaged executable is missing: $requiredPath"
     }
 }
 
-$forbiddenBridgeEntries = @(
+$forbiddenBackendEntries = @(
     Get-ChildItem -LiteralPath $backendDir -Recurse -Force |
         Where-Object { $_.Name -match "^(cv2|mss|numpy|opencv|tesserocr|tessdata|win32gui|win32ui)(\.|$)" }
 )
-if ($forbiddenBridgeEntries.Count -gt 0) {
-    $paths = $forbiddenBridgeEntries.FullName -join [Environment]::NewLine
+if ($forbiddenBackendEntries.Count -gt 0) {
+    $paths = $forbiddenBackendEntries.FullName -join [Environment]::NewLine
     throw "Backend still contains OCR-native artifacts:$([Environment]::NewLine)$paths"
 }
 
 foreach ($trainedData in @("eng.traineddata", "osd.traineddata")) {
-    $path = Join-Path $agentDir "_internal/tessdata/$trainedData"
+    $path = Join-Path $workerDir "_internal/tessdata/$trainedData"
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         throw "OCR Worker tessdata is missing: $path"
     }
@@ -56,13 +56,13 @@ function Invoke-PackagedCommand {
     $output | Write-Host
 }
 
-Invoke-PackagedCommand -Executable $agentExe -Arguments @("--version")
-Invoke-PackagedCommand -Executable $agentExe -Arguments @("doctor")
+Invoke-PackagedCommand -Executable $workerExe -Arguments @("--version")
+Invoke-PackagedCommand -Executable $workerExe -Arguments @("doctor")
 Invoke-PackagedCommand -Executable $backendExe -Arguments @("config")
 
-function Test-AgentProtocol {
+function Test-WorkerProtocol {
     $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
-    $startInfo.FileName = $agentExe
+    $startInfo.FileName = $workerExe
     $startInfo.Arguments = "stdio"
     $startInfo.UseShellExecute = $false
     $startInfo.CreateNoWindow = $true
@@ -120,7 +120,7 @@ function Test-AgentProtocol {
     }
 }
 
-Test-AgentProtocol
+Test-WorkerProtocol
 
 if (-not $SkipProcessTree) {
     $port = Get-Random -Minimum 20000 -Maximum 40000
@@ -139,7 +139,7 @@ if (-not $SkipProcessTree) {
     $startInfo.EnvironmentVariables["ZML_APP_DATA_DIR"] = $smokeData
     $startInfo.EnvironmentVariables["ZML_CHAT_LOG_PATH"] = Join-Path $smokeData "chat.log"
     $startInfo.EnvironmentVariables["ZML_OCR_CAPTURE_HZ"] = "1"
-    $startInfo.EnvironmentVariables["ZML_OCR_WORKER_PATH"] = $agentExe
+    $startInfo.EnvironmentVariables["ZML_OCR_WORKER_PATH"] = $workerExe
     $startInfo.EnvironmentVariables["ZML_PARENT_MANAGED"] = "1"
 
     $process = [System.Diagnostics.Process]::new()
@@ -171,7 +171,7 @@ if (-not $SkipProcessTree) {
             throw "Packaged process tree did not become healthy"
         }
 
-        $agentPid = [int]$health.workers.ocr_worker.details.pid
+        $workerPid = [int]$health.workers.ocr_worker.details.pid
         $process.StandardInput.WriteLine("shutdown")
         $process.StandardInput.Flush()
         if (-not $process.WaitForExit(30000)) {
@@ -182,15 +182,15 @@ if (-not $SkipProcessTree) {
             throw "Packaged Backend exited with $($process.ExitCode)"
         }
 
-        $agentDeadline = [DateTime]::UtcNow.AddSeconds(5)
+        $workerDeadline = [DateTime]::UtcNow.AddSeconds(5)
         while (
-            [DateTime]::UtcNow -lt $agentDeadline -and
-            (Get-Process -Id $agentPid -ErrorAction SilentlyContinue)
+            [DateTime]::UtcNow -lt $workerDeadline -and
+            (Get-Process -Id $workerPid -ErrorAction SilentlyContinue)
         ) {
             Start-Sleep -Milliseconds 100
         }
-        if (Get-Process -Id $agentPid -ErrorAction SilentlyContinue) {
-            throw "OCR Worker process $agentPid survived Backend shutdown"
+        if (Get-Process -Id $workerPid -ErrorAction SilentlyContinue) {
+            throw "OCR Worker process $workerPid survived Backend shutdown"
         }
     } finally {
         if (-not $process.HasExited) {
