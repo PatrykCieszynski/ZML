@@ -1,11 +1,6 @@
-import path from "node:path";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-
-const HEALTH_POLL_INTERVAL_MS = 250;
-const HEALTH_REQUEST_TIMEOUT_MS = 1_500;
-const BACKEND_START_TIMEOUT_MS = 15_000;
-const BACKEND_STOP_TIMEOUT_MS = 5_000;
-const BACKEND_RESTART_DELAYS_MS = [500, 1_000, 2_000, 4_000];
+import { existsSync } from "node:fs";
+import path from "node:path";
 
 export type BackendLaunchSpec = {
   command: string;
@@ -14,90 +9,173 @@ export type BackendLaunchSpec = {
   environment?: Record<string, string>;
 };
 
+type BackendProcessManagerOptions = {
+  baseUrl: string;
+  launch: BackendLaunchSpec;
+  startupTimeoutMs?: number;
+  shutdownTimeoutMs?: number;
+  maxRestartsPerMinute?: number;
+};
+
+const HEALTH_POLL_INTERVAL_MS = 250;
+const HEALTH_REQUEST_TIMEOUT_MS = 750;
+const RESTART_WINDOW_MS = 60_000;
+
 export class BackendProcessManager {
+  private readonly baseUrl: string;
+  private readonly launch: BackendLaunchSpec;
+  private readonly startupTimeoutMs: number;
+  private readonly shutdownTimeoutMs: number;
+  private readonly maxRestartsPerMinute: number;
+
   private child: ChildProcessWithoutNullStreams | null = null;
   private restartTimer: NodeJS.Timeout | null = null;
+  private restartTimestamps: number[] = [];
   private stopping = false;
-  private restartIndex = 0;
+  private usingExternalBackend = false;
 
-  constructor(
-    private readonly launchSpec: BackendLaunchSpec,
-    private readonly baseUrl: string,
-  ) {}
+  constructor({
+    baseUrl,
+    launch,
+    startupTimeoutMs = 60_000,
+    shutdownTimeoutMs = 30_000,
+    maxRestartsPerMinute = 3,
+  }: BackendProcessManagerOptions) {
+    this.baseUrl = baseUrl;
+    this.launch = launch;
+    this.startupTimeoutMs = startupTimeoutMs;
+    this.shutdownTimeoutMs = shutdownTimeoutMs;
+    this.maxRestartsPerMinute = maxRestartsPerMinute;
+  }
 
-  async start(): Promise<void> {
-    if (this.child || this.stopping) return;
-    this.spawnBackend();
-    const healthy = await this.waitForHealth(BACKEND_START_TIMEOUT_MS);
-    if (!healthy) {
-      await this.stop();
-      throw new Error("Managed backend did not become healthy in time");
+  async start(): Promise<boolean> {
+    if (this.child !== null) return this.waitUntilReady(this.startupTimeoutMs);
+
+    this.stopping = false;
+    this.usingExternalBackend = false;
+    if (await checkBackendHealth(this.baseUrl)) {
+      this.usingExternalBackend = true;
+      console.info("[backend] using already running backend");
+      return true;
     }
+    if (this.stopping) return false;
+
+    this.spawnBackend();
+    const ready = await this.waitUntilReady(this.startupTimeoutMs);
+    if (!ready) {
+      console.error(
+        `[backend] health check timed out after ${this.startupTimeoutMs}ms`,
+      );
+    }
+    return ready;
   }
 
   async stop(): Promise<void> {
     this.stopping = true;
     this.clearRestartTimer();
-    const child = this.child;
-    this.child = null;
-    if (!child || child.exitCode !== null) return;
 
-    try {
-      child.stdin.end();
-    } catch {
-      // The process may already be exiting.
+    if (this.usingExternalBackend) {
+      this.usingExternalBackend = false;
+      return;
     }
 
-    const exited = await waitForExit(child, BACKEND_STOP_TIMEOUT_MS);
-    if (!exited && child.exitCode === null) child.kill();
+    const child = this.child;
+    if (child === null) return;
+
+    if (child.stdin.writable) {
+      try {
+        child.stdin.write("shutdown\n");
+      } catch (error) {
+        console.warn(
+          "[backend] failed to send graceful shutdown command",
+          error,
+        );
+      }
+    }
+    const stoppedGracefully = await waitForChildClose(
+      child,
+      this.shutdownTimeoutMs,
+    );
+    if (!stoppedGracefully && this.child === child) {
+      console.warn(
+        "[backend] graceful shutdown timed out; terminating process",
+      );
+      child.kill();
+      await waitForChildClose(child, 1_000);
+    }
+    if (this.child === child) this.child = null;
   }
 
   private spawnBackend(): void {
-    const child = spawn(this.launchSpec.command, this.launchSpec.args, {
-      cwd: this.launchSpec.cwd,
+    if (!existsSync(this.launch.command)) {
+      throw new Error(`Backend executable not found: ${this.launch.command}`);
+    }
+
+    console.info(
+      `[backend] starting ${this.launch.command} ${this.launch.args.join(" ")}`,
+    );
+    const child = spawn(this.launch.command, this.launch.args, {
+      cwd: this.launch.cwd,
       env: {
         ...process.env,
-        ...this.launchSpec.environment,
+        PYTHONUNBUFFERED: "1",
+        ZML_PARENT_MANAGED: "1",
+        ...this.launch.environment,
       },
+      shell: false,
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
     });
     this.child = child;
 
-    child.stdout.on("data", (chunk) => {
-      process.stdout.write(`[backend] ${chunk}`);
-    });
-    child.stderr.on("data", (chunk) => {
-      process.stderr.write(`[backend] ${chunk}`);
-    });
-    child.on("error", (error) => {
+    forwardBackendOutput(child);
+    child.once("error", (error) => {
       console.error("[backend] process error", error);
     });
-    child.on("exit", (code, signal) => {
-      if (this.child === child) this.child = null;
-      console.info(`[backend] exited code=${code} signal=${signal}`);
-      if (!this.stopping) this.scheduleRestart();
+    child.stdin.on("error", (error) => {
+      if (!this.stopping) console.error("[backend] stdin error", error);
+    });
+    child.once("close", (code, signal) => {
+      if (this.child !== child) return;
+      this.child = null;
+      if (this.stopping) return;
+
+      console.error(
+        `[backend] exited unexpectedly code=${String(code)} signal=${String(signal)}`,
+      );
+      this.scheduleRestart();
     });
   }
 
   private scheduleRestart(): void {
-    if (this.restartTimer) return;
-    const delay =
-      BACKEND_RESTART_DELAYS_MS[
-        Math.min(this.restartIndex, BACKEND_RESTART_DELAYS_MS.length - 1)
-      ];
-    this.restartIndex += 1;
-    this.restartTimer = setTimeout(async () => {
+    if (this.stopping || this.restartTimer !== null) return;
+
+    const now = Date.now();
+    this.restartTimestamps = this.restartTimestamps.filter(
+      (timestamp) => now - timestamp < RESTART_WINDOW_MS,
+    );
+    if (this.restartTimestamps.length >= this.maxRestartsPerMinute) {
+      console.error("[backend] restart limit reached; leaving backend offline");
+      return;
+    }
+
+    this.restartTimestamps.push(now);
+    const restartNumber = this.restartTimestamps.length;
+    const delayMs = Math.min(4_000, 500 * 2 ** (restartNumber - 1));
+    console.warn(`[backend] restarting in ${delayMs}ms`);
+    this.restartTimer = setTimeout(() => {
       this.restartTimer = null;
-      if (this.stopping || this.child) return;
-      this.spawnBackend();
-      if (await this.waitForHealth(BACKEND_START_TIMEOUT_MS)) {
-        this.restartIndex = 0;
+      if (this.stopping) return;
+      try {
+        this.spawnBackend();
+      } catch (error) {
+        console.error("[backend] restart failed", error);
+        this.scheduleRestart();
       }
-    }, delay);
+    }, delayMs);
   }
 
-  private async waitForHealth(timeoutMs: number): Promise<boolean> {
+  private async waitUntilReady(timeoutMs: number): Promise<boolean> {
     const deadline = Date.now() + timeoutMs;
     while (!this.stopping && Date.now() < deadline) {
       if (await checkBackendHealth(this.baseUrl)) {
@@ -198,27 +276,41 @@ async function checkBackendHealth(baseUrl: string): Promise<boolean> {
 }
 
 function normalizeBaseUrl(baseUrl: string): string {
-  return baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(baseUrl)) return baseUrl;
+  return `http://${baseUrl}`;
+}
+
+function forwardBackendOutput(child: ChildProcessWithoutNullStreams): void {
+  child.stdout.on("data", (chunk: Buffer) => {
+    const message = chunk.toString("utf8").trimEnd();
+    if (message) console.info(`[backend] ${message}`);
+  });
+  child.stderr.on("data", (chunk: Buffer) => {
+    const message = chunk.toString("utf8").trimEnd();
+    if (message) console.error(`[backend] ${message}`);
+  });
+}
+
+function waitForChildClose(
+  child: ChildProcessWithoutNullStreams,
+  timeoutMs: number,
+): Promise<boolean> {
+  if (child.exitCode !== null || child.signalCode !== null)
+    return Promise.resolve(true);
+
+  return new Promise((resolve) => {
+    const onClose = () => {
+      clearTimeout(timeout);
+      resolve(true);
+    };
+    const timeout = setTimeout(() => {
+      child.removeListener("close", onClose);
+      resolve(false);
+    }, timeoutMs);
+    child.once("close", onClose);
+  });
 }
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function waitForExit(
-  child: ChildProcessWithoutNullStreams,
-  timeoutMs: number,
-): Promise<boolean> {
-  if (child.exitCode !== null) return Promise.resolve(true);
-  return new Promise((resolve) => {
-    const timeout = setTimeout(() => {
-      child.off("exit", onExit);
-      resolve(false);
-    }, timeoutMs);
-    const onExit = () => {
-      clearTimeout(timeout);
-      resolve(true);
-    };
-    child.once("exit", onExit);
-  });
 }
