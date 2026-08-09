@@ -2,7 +2,9 @@
 
 Z Mining Log is a local-first desktop mining assistant for **Entropia Universe**. It combines screen OCR, chat-log parsing, durable local state, and a live map/dashboard so mining runs can be tracked without sending gameplay data to an external service.
 
-> **Status:** active work in progress. The current runtime and packaging path is Windows-first because screen capture and OCR rely on Windows-native dependencies.
+The project is intentionally built as a small multi-process desktop system rather than a single OCR script glued to a UI. Its main engineering challenge is turning noisy, timing-sensitive game observations into reliable domain state while keeping native OCR, persistence, realtime transport, and Electron lifecycle concerns isolated from each other.
+
+> **Status:** active work in progress. The core runtime architecture, automated quality gates, and Windows packaging pipeline are in place; live OCR quality and product UX are still being iterated through gameplay testing.
 
 ## What it does
 
@@ -13,6 +15,21 @@ Z Mining Log is a local-first desktop mining assistant for **Entropia Universe**
 - Tracks runs, setup segments, drops, active claims, loot, and mining tools.
 - Provides dashboard, map, overlay, health, and debugging views in Electron/React.
 - Supports mock input for development without the game running.
+
+## Engineering highlights
+
+Z Mining Log goes beyond a typical CRUD desktop application in a few deliberate ways:
+
+- **Explicit three-process runtime.** Electron owns the Backend process, and Backend owns the OCR Worker process. Startup, health polling, bounded restart, graceful shutdown, and orphan-process prevention are part of the runtime design.
+- **Native OCR isolation.** Windows capture, OpenCV, numpy, `tesserocr`, and tessdata live only in the OCR Worker. Backend cannot import the OCR implementation and communicates with it through a strict, versioned NDJSON stdio protocol.
+- **Hardened worker supervision.** The OCR boundary includes capability/version handshake, complete revisioned configuration, acknowledgement before observations are accepted, heartbeat monitoring, monotonic message sequencing, stderr draining, restart/backoff, and terminate/kill escalation.
+- **Event-driven persistence with one SQLite writer.** Noisy input `Signal`s are separated from durable domain `Event`s. Events and their read-model projections are committed through `DbWriterWorker` in the same transaction, while API reads use separate read connections.
+- **Different transports for different semantics.** REST handles snapshots and commands, SSE carries persisted events, WebSocket carries high-frequency position telemetry, and typed Electron IPC connects main/preload/renderer.
+- **Generated HTTP contract.** FastAPI/Pydantic is the source of truth for REST schemas; OpenAPI generates the TypeScript wire contract consumed by Desktop instead of maintaining duplicate DTO definitions manually.
+- **Packaging verifies architecture, not just compilation.** Backend and OCR Worker are built as separate PyInstaller artifacts. CI checks that OCR-native dependencies do not leak into Backend, verifies the worker protocol, starts the packaged process tree, checks configuration acknowledgement and shutdown, and repeats the process-tree smoke test after Electron Builder bundles both artifacts.
+- **Strict automated verification.** Python components use Ruff, Pyright, and Pytest; Desktop uses strict TypeScript, ESLint, Vitest, and production builds; Windows CI additionally verifies packaged executables.
+
+The result is still a personal desktop application, but the reliability and boundary problems are much closer to a small local distributed system than to a conventional single-process utility.
 
 ## Architecture
 
