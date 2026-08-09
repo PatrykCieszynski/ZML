@@ -18,8 +18,8 @@ import type {
   StopRunRequest,
   UpdateRunRequest,
   WindowType,
-} from "@zml/shared";
-import { IPC_CMD, IPC_PUSH } from "@zml/shared";
+} from "@desktop/shared";
+import { IPC_CMD, IPC_PUSH } from "@desktop/shared";
 
 type Unsubscribe = () => void;
 

@@ -1,5 +1,5 @@
 import type { BrowserWindow } from "electron";
-import type { WindowType } from "@zml/shared";
+import type { WindowType } from "@desktop/shared";
 
 const windows = new Map<WindowType, BrowserWindow>();
 

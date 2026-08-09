@@ -1,7 +1,7 @@
 import { app, type BrowserWindow, type BrowserWindowConstructorOptions, type Rectangle } from "electron";
 import fs from "node:fs";
 import path from "node:path";
-import type { WindowType } from "@zml/shared";
+import type { WindowType } from "@desktop/shared";
 
 type WindowBoundsState = Partial<Record<WindowType, Rectangle>>;
 

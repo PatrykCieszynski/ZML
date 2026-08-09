@@ -10,7 +10,7 @@ import {
     isUpdateRunRequest,
     type BootstrapState,
     type GetBootstrapStateReq,
-} from "@zml/shared";
+} from "@desktop/shared";
 import { runtime } from "../runtime";
 import type { AgentClient } from "../agent/restClient.ts";
 import { pushStatePatch } from "./pushStatePatch.ts";

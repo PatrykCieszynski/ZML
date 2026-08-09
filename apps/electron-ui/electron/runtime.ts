@@ -10,7 +10,7 @@ import type {
     OcrPositionDTO,
     RunDto,
     RunSegmentDto,
-} from "@zml/shared";
+} from "@desktop/shared";
 
 export type RuntimeState = {
     seq: number;

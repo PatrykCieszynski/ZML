@@ -12,7 +12,7 @@ import type {
   RunSegmentDto,
   WorldPosDTO,
   WindowType,
-} from "@zml/shared";
+} from "@desktop/shared";
 import {
   deleteRun,
   refreshAgentHealth,

@@ -3,7 +3,7 @@ import type {
   ActiveMiningToolsDto,
   MiningToolKind,
   MiningToolProfileDto,
-} from "@zml/shared";
+} from "@desktop/shared";
 import {
   createMiningTool,
   deleteMiningTool,

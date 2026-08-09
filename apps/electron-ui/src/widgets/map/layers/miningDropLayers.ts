@@ -1,6 +1,6 @@
 import { COORDINATE_SYSTEM } from "@deck.gl/core";
 import { ScatterplotLayer, TextLayer } from "@deck.gl/layers";
-import type { PlanetId } from "@zml/shared";
+import type { PlanetId } from "@desktop/shared";
 import { coordRadiusToDeckRadius } from "../mapProjection";
 import type { Color, MapMiningDrop } from "../mapTypes";
 

@@ -4,7 +4,7 @@ import {
   getMapSizePx,
   worldToPixel,
   type PlanetId,
-} from "@zml/shared";
+} from "@desktop/shared";
 import type { OrthographicViewState } from "@deck.gl/core";
 
 export type EntropiaMapPoint = { x: number; y: number };

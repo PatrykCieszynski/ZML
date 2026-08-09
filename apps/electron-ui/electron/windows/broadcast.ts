@@ -1,5 +1,5 @@
 import { BrowserWindow } from "electron";
-import type { WindowType } from "@zml/shared";
+import type { WindowType } from "@desktop/shared";
 import { getAllWindows, getWindow } from "./registry.ts";
 
 export function getWindowsByType(type?: WindowType): BrowserWindow[] {

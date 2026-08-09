@@ -14,7 +14,7 @@ import type {
     StartRunRequest,
     StopRunRequest,
     UpdateRunRequest,
-} from "@zml/shared";
+} from "@desktop/shared";
 
 import type {
     AgentClient,

@@ -5,14 +5,14 @@ import path from 'node:path'
 import electron from 'vite-plugin-electron/simple'
 import react from '@vitejs/plugin-react'
 
-const sharedIndex = path.resolve(__dirname, "../../packages/shared/src/index.ts");
+const sharedIndex = path.resolve(__dirname, "./shared/index.ts");
 
 // https://vitejs.dev/config/
 export default defineConfig(() => {
   return {
     resolve: {
       alias: {
-        "@zml/shared": sharedIndex,
+        "@desktop/shared": sharedIndex,
       },
     },
     plugins: [
@@ -23,7 +23,7 @@ export default defineConfig(() => {
           vite: {
             resolve: {
               alias: {
-                "@zml/shared": sharedIndex,
+                "@desktop/shared": sharedIndex,
               },
             },
           },
@@ -33,7 +33,7 @@ export default defineConfig(() => {
           vite: {
             resolve: {
               alias: {
-                "@zml/shared": sharedIndex,
+                "@desktop/shared": sharedIndex,
               },
             },
           },

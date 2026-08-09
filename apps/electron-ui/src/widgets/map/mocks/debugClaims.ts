@@ -1,4 +1,4 @@
-import { MAP_CONFIG, type PlanetId } from "@zml/shared";
+import { MAP_CONFIG, type PlanetId } from "@desktop/shared";
 import { entropiaToDeckPosition } from "../mapProjection";
 import type { ClaimResourceKind, MapClaim } from "../mapTypes";
 

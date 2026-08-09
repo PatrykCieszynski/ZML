@@ -14,7 +14,7 @@ import type {
   StopRunRequest,
   UpdateRunRequest,
   WindowType,
-} from "@zml/shared";
+} from "@desktop/shared";
 
 declare global {
   interface Window {

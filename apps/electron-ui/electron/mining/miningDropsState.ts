@@ -19,7 +19,7 @@ import {
     type MiningClaimPositionDto,
     type MiningClaimPositionWire,
     type MiningDropDto,
-} from "@zml/shared";
+} from "@desktop/shared";
 
 import { pushStatePatch } from "../ipc/pushStatePatch.ts";
 import { runtime } from "../runtime.ts";

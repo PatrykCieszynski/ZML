@@ -17,7 +17,7 @@ import type {
   RunSegmentDto,
   SetActiveMiningToolsRequest,
   WindowType,
-} from "@zml/shared";
+} from "@desktop/shared";
 import { getZml } from "../zml";
 
 export type ZmlRendererState = {

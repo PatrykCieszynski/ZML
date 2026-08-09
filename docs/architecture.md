@@ -214,8 +214,9 @@ Live updates:
   renderer windows;
 - React reads from `zmlRendererStore`.
 
-Shared contracts belong in `packages/shared`. If a backend wire schema changes,
-update shared DTOs and Electron main/renderer handling together.
+Desktop-internal contracts shared by Electron main/preload and renderers live in
+`apps/electron-ui/shared`. Backend REST wire schemas come from FastAPI/OpenAPI via
+`packages/api-contract`; do not duplicate those schemas in desktop shared code.
 
 ## Windows
 

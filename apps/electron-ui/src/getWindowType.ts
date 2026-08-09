@@ -1,4 +1,4 @@
-import {isWindowType, WindowType} from "@zml/shared";
+import {isWindowType, WindowType} from "@desktop/shared";
 
 
 export function getWindowType(): WindowType {

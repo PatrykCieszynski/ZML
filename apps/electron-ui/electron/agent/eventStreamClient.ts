@@ -1,4 +1,4 @@
-import type { AgentEventEnvelope } from "@zml/shared";
+import type { AgentEventEnvelope } from "@desktop/shared";
 
 export type AgentEventStreamStatus = "connecting" | "connected" | "disconnected";
 

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { WindowType } from "@zml/shared";
+import type { WindowType } from "@desktop/shared";
 import { MapViewport } from "../widgets/map/mapViewport.tsx";
 import {
   ignoreMiningClaim,
