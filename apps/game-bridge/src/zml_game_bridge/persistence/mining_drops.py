@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any, Literal, cast
 
 from zml_game_bridge.domain.mining_events import (
+    MiningClaimCreatedEvent,
     MiningDropEvent,
     MiningHitHintEvent,
     MiningNoResourcesEvent,
@@ -35,7 +36,8 @@ class MiningDropRow:
     finder_decay_mpec: Mpec
     finder_enhancer_decay_mpec: Mpec
     amp_decay_mpec: Mpec
-    total_cost_mpec: Mpec
+    total_tt_cost_mpec: Mpec
+    total_with_markup_cost_mpec: Mpec
     result: MiningDropResult
     result_event_id: int | None
     result_observed_ts_ms: int | None
@@ -103,6 +105,8 @@ class MiningDropProjector(EventProjector):
             writer.upsert_drop(event=event, event_id=envelope.event_id)
         elif isinstance(event, MiningHitHintEvent):
             writer.mark_hit(event=event, event_id=envelope.event_id)
+        elif isinstance(event, MiningClaimCreatedEvent):
+            writer.mark_claim_created(event=event, event_id=envelope.event_id)
         elif isinstance(event, MiningNoResourcesEvent):
             writer.mark_no_resources(event=event, event_id=envelope.event_id)
 
@@ -120,10 +124,11 @@ class _MiningDropProjectionWriter:
                 planet_name, x, y, z, drop_radius_m,
                 modes_mask, probes_per_drop, ammo_per_drop,
                 ammo_cost_mpec, probes_cost_mpec, finder_decay_mpec,
-                finder_enhancer_decay_mpec, amp_decay_mpec, total_cost_mpec,
+                finder_enhancer_decay_mpec, amp_decay_mpec, total_tt_cost_mpec,
+                total_cost_mpec,
                 result
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
             ON CONFLICT(drop_id) DO UPDATE SET
                 drop_event_id = excluded.drop_event_id,
                 run_id = excluded.run_id,
@@ -142,6 +147,7 @@ class _MiningDropProjectionWriter:
                 finder_decay_mpec = excluded.finder_decay_mpec,
                 finder_enhancer_decay_mpec = excluded.finder_enhancer_decay_mpec,
                 amp_decay_mpec = excluded.amp_decay_mpec,
+                total_tt_cost_mpec = excluded.total_tt_cost_mpec,
                 total_cost_mpec = excluded.total_cost_mpec
             """,
             (
@@ -163,7 +169,8 @@ class _MiningDropProjectionWriter:
                 mpec_to_int(event.cost.finder_decay_mpec),
                 mpec_to_int(event.cost.finder_enhancer_decay_mpec),
                 mpec_to_int(event.cost.amp_decay_mpec),
-                mpec_to_int(event.cost.total_mpec),
+                mpec_to_int(event.cost.total_tt_mpec),
+                mpec_to_int(event.cost.total_with_markup_mpec),
             ),
         )
 
@@ -214,8 +221,47 @@ class _MiningDropProjectionWriter:
                 result_event_id = ?,
                 result_observed_ts_ms = ?
             WHERE drop_id = ?
+              AND result = 'pending'
             """,
             (event_id, event.observed_ts_ms, event.drop_id),
+        )
+
+    def mark_claim_created(self, *, event: MiningClaimCreatedEvent, event_id: int) -> None:
+        if event.drop_id is None:
+            return
+        self._conn.execute(
+            """
+            UPDATE mining_drops
+            SET result = 'hit',
+                result_event_id = CASE
+                    WHEN result = 'hit' AND hit_event_id IS NOT NULL THEN result_event_id
+                    ELSE ?
+                END,
+                result_observed_ts_ms = CASE
+                    WHEN result = 'hit' AND hit_event_id IS NOT NULL THEN result_observed_ts_ms
+                    ELSE ?
+                END,
+                hit_id = COALESCE(hit_id, ?),
+                resource_name = COALESCE(?, resource_name),
+                size_label = COALESCE(?, size_label),
+                size_index = COALESCE(?, size_index),
+                expected_expires_ts_ms = COALESCE(?, expected_expires_ts_ms),
+                range_m = COALESCE(?, range_m),
+                depth_m = COALESCE(?, depth_m)
+            WHERE drop_id = ?
+            """,
+            (
+                event_id,
+                event.observed_ts_ms,
+                event.hit_id,
+                event.resource_name,
+                event.size_label,
+                event.size_index,
+                event.expected_expires_ts_ms,
+                event.range_m,
+                event.depth_m,
+                event.drop_id,
+            ),
         )
 
 
@@ -248,7 +294,8 @@ def _row_to_mining_drop(row: sqlite3.Row) -> MiningDropRow:
         finder_decay_mpec=Mpec(int(row["finder_decay_mpec"])),
         finder_enhancer_decay_mpec=Mpec(int(row["finder_enhancer_decay_mpec"])),
         amp_decay_mpec=Mpec(int(row["amp_decay_mpec"])),
-        total_cost_mpec=Mpec(int(row["total_cost_mpec"])),
+        total_tt_cost_mpec=Mpec(int(row["total_tt_cost_mpec"])),
+        total_with_markup_cost_mpec=Mpec(int(row["total_cost_mpec"])),
         result=cast(MiningDropResult, row["result"]),
         result_event_id=_optional_int(row["result_event_id"]),
         result_observed_ts_ms=_optional_int(row["result_observed_ts_ms"]),

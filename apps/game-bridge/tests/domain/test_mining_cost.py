@@ -36,7 +36,8 @@ def test_calculate_drop_cost_prefers_ocr_units_over_profile_fallbacks() -> None:
     assert mpec_to_int(cost.finder_decay_mpec) == 129
     assert mpec_to_int(cost.finder_enhancer_decay_mpec) == 0
     assert mpec_to_int(cost.amp_decay_mpec) == 2_500
-    assert mpec_to_int(cost.total_mpec) == 12_629
+    assert mpec_to_int(cost.total_tt_mpec) == 12_123
+    assert mpec_to_int(cost.total_with_markup_mpec) == 12_629
 
 
 def test_calculate_drop_cost_uses_profile_fallbacks_when_ocr_units_are_missing() -> None:
@@ -60,7 +61,8 @@ def test_calculate_drop_cost_uses_profile_fallbacks_when_ocr_units_are_missing()
     assert cost.probes.source == "missing"
     assert mpec_to_int(cost.finder_decay_mpec) == 100
     assert mpec_to_int(cost.amp_decay_mpec) == 0
-    assert mpec_to_int(cost.total_mpec) == 5_100
+    assert mpec_to_int(cost.total_tt_mpec) == 5_100
+    assert mpec_to_int(cost.total_with_markup_mpec) == 5_100
 
 
 def test_calculate_drop_cost_treats_zero_ocr_units_as_missing() -> None:
@@ -102,7 +104,8 @@ def test_calculate_drop_cost_uses_probe_count_when_ammo_units_are_missing() -> N
     assert cost.probes.quantity == 2
     assert mpec_to_int(cost.probes.cost_mpec) == 10_000
     assert cost.probes.source == "ocr"
-    assert mpec_to_int(cost.total_mpec) == 10_100
+    assert mpec_to_int(cost.total_tt_mpec) == 10_100
+    assert mpec_to_int(cost.total_with_markup_mpec) == 10_100
 
 
 def test_calculate_drop_cost_marks_missing_units_without_blocking_decay_cost() -> None:
@@ -122,7 +125,8 @@ def test_calculate_drop_cost_marks_missing_units_without_blocking_decay_cost() -
     assert cost.probes.quantity is None
     assert mpec_to_int(cost.probes.cost_mpec) == 0
     assert cost.probes.source == "missing"
-    assert mpec_to_int(cost.total_mpec) == 100
+    assert mpec_to_int(cost.total_tt_mpec) == 100
+    assert mpec_to_int(cost.total_with_markup_mpec) == 100
 
 
 def test_apply_rate_mpec_uses_rate_with_half_up_mpec_rounding() -> None:
@@ -145,7 +149,8 @@ def test_calculate_drop_cost_applies_finder_range_enhancer_decay() -> None:
 
     assert mpec_to_int(cost.finder_decay_mpec) == 1_000
     assert mpec_to_int(cost.finder_enhancer_decay_mpec) == 200
-    assert mpec_to_int(cost.total_mpec) == 11_200
+    assert mpec_to_int(cost.total_tt_mpec) == 11_200
+    assert mpec_to_int(cost.total_with_markup_mpec) == 11_200
     assert effective_finder_radius_m(profile) == 56.1
 
 

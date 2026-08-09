@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from dataclasses import replace
 from threading import Lock
 
 from zml_game_bridge.application.position.model import (
@@ -49,6 +50,7 @@ class PositionTrackingService:
 
     def ingest_snapshot(self, snapshot: PositionSnapshot) -> PositionDecision:
         with self._lock:
+            snapshot = _inherit_known_planet(snapshot, latest=self._latest)
             decision = self._outlier_policy.evaluate(
                 snapshot,
                 stable_snapshot=self._latest,
@@ -106,3 +108,22 @@ class PositionTrackingService:
 
 def _format_float(value: float | None) -> str | None:
     return None if value is None else f"{value:.2f}"
+
+
+def _inherit_known_planet(
+    snapshot: PositionSnapshot,
+    *,
+    latest: PositionSnapshot | None,
+) -> PositionSnapshot:
+    if snapshot.position.planet_name:
+        return snapshot
+    if latest is None or not latest.position.planet_name:
+        return snapshot
+
+    return replace(
+        snapshot,
+        position=replace(
+            snapshot.position,
+            planet_name=latest.position.planet_name,
+        ),
+    )

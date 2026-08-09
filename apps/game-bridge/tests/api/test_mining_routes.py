@@ -70,7 +70,8 @@ def test_list_mining_drops_returns_drops_from_window(
         assert drops[0].position is not None
         assert drops[0].position.x == 58_890
         assert drops[0].drop_radius_m == 54.0
-        assert drops[0].cost.total_mpec == 10_100
+        assert drops[0].cost.total_tt_mpec == 10_100
+        assert drops[0].cost.total_with_markup_mpec == 10_100
         assert drops[0].result == "pending"
     finally:
         conn.close()
@@ -226,7 +227,8 @@ def _drop_event(*, drop_id: str, observed_ts_ms: int) -> MiningDropEvent:
             probes=DropUnitCost(quantity=None, cost_mpec=Mpec(0), source="missing"),
             finder_decay_mpec=Mpec(100),
             amp_decay_mpec=Mpec(0),
-            total_mpec=Mpec(10_100),
+            total_tt_mpec=Mpec(10_100),
+            total_with_markup_mpec=Mpec(10_100),
         ),
         drop_radius_m=54.0,
     )

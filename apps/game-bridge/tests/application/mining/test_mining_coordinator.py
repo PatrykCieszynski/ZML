@@ -12,6 +12,7 @@ from zml_game_bridge.application.mining.claims.commands import (
     ExpireMiningClaimsCommand,
     IgnoreMiningClaimCommand,
     MarkMiningClaimDepletedCommand,
+    ResolvePendingDropResultsCommand,
 )
 from zml_game_bridge.application.mining.claims.lifecycle import ActiveClaim
 from zml_game_bridge.application.mining.segments.session import DropRunContext, MiningSegmentSetup
@@ -27,6 +28,7 @@ from zml_game_bridge.domain.mining_events import (
     MiningClaimDepletedEvent,
     MiningClaimExpiredEvent,
     MiningClaimIgnoredEvent,
+    MiningClaimUpdatedEvent,
     MiningDropEvent,
     MiningEnhancerBrokeEvent,
     MiningHitHintEvent,
@@ -153,7 +155,8 @@ def test_mining_coordinator_records_probe_drop_with_current_units() -> None:
     assert drop.cost.ammo.source == "ocr"
     assert mpec_to_int(drop.cost.finder_decay_mpec) == 100
     assert mpec_to_int(drop.cost.finder_enhancer_decay_mpec) == 0
-    assert mpec_to_int(drop.cost.total_mpec) == 10_100
+    assert mpec_to_int(drop.cost.total_tt_mpec) == 10_100
+    assert mpec_to_int(drop.cost.total_with_markup_mpec) == 10_100
 
 
 def test_mining_coordinator_attaches_active_run_segment_to_drop() -> None:
@@ -268,7 +271,8 @@ def test_mining_coordinator_applies_finder_range_enhancer_to_drop_cost_and_radiu
     assert drop.drop_radius_m == 55.55
     assert mpec_to_int(drop.cost.finder_decay_mpec) == 1_000
     assert mpec_to_int(drop.cost.finder_enhancer_decay_mpec) == 100
-    assert mpec_to_int(drop.cost.total_mpec) == 11_100
+    assert mpec_to_int(drop.cost.total_tt_mpec) == 11_100
+    assert mpec_to_int(drop.cost.total_with_markup_mpec) == 11_100
 
 
 def test_mining_coordinator_uses_current_modes_when_probe_signal_lacks_modes() -> None:
@@ -303,7 +307,7 @@ def test_mining_coordinator_prefers_probe_signal_units_over_cached_units() -> No
     drop = events[0]
     assert isinstance(drop, MiningDropEvent)
     assert drop.ammo_per_drop == 1_000
-    assert mpec_to_int(drop.cost.total_mpec) == 10_000
+    assert mpec_to_int(drop.cost.total_with_markup_mpec) == 10_000
 
 
 def test_mining_coordinator_uses_cached_units_when_probe_reports_zero() -> None:
@@ -316,7 +320,7 @@ def test_mining_coordinator_uses_cached_units_when_probe_reports_zero() -> None:
         ProbeFiredSignal(ts_ms=1_000, position=None, modes_mask=1, ammo_per_drop=0)
     )
     second_events = coordinator.process_signal(
-        ProbeFiredSignal(ts_ms=2_000, position=None, modes_mask=1, ammo_per_drop=None)
+        ProbeFiredSignal(ts_ms=6_000, position=None, modes_mask=1, ammo_per_drop=None)
     )
 
     first = first_events[0]
@@ -325,8 +329,28 @@ def test_mining_coordinator_uses_cached_units_when_probe_reports_zero() -> None:
     assert isinstance(second, MiningDropEvent)
     assert first.ammo_per_drop == 1_000
     assert second.ammo_per_drop == 1_000
-    assert mpec_to_int(first.cost.total_mpec) == 10_000
-    assert mpec_to_int(second.cost.total_mpec) == 10_000
+    assert mpec_to_int(first.cost.total_with_markup_mpec) == 10_000
+    assert mpec_to_int(second.cost.total_with_markup_mpec) == 10_000
+
+
+def test_mining_coordinator_ignores_duplicate_probe_signal_during_lock_window() -> None:
+    coordinator = MiningCoordinator(id_factory=_id_factory("drop-1", "drop-2"))
+
+    first = coordinator.process_signal(
+        ProbeFiredSignal(ts_ms=1_000, position=None, modes_mask=1, ammo_per_drop=1_000)
+    )
+    duplicate = coordinator.process_signal(
+        ProbeFiredSignal(ts_ms=5_999, position=None, modes_mask=1, ammo_per_drop=1_000)
+    )
+    next_drop = coordinator.process_signal(
+        ProbeFiredSignal(ts_ms=6_000, position=None, modes_mask=1, ammo_per_drop=1_000)
+    )
+
+    assert [event.drop_id for event in first if isinstance(event, MiningDropEvent)] == ["drop-1"]
+    assert duplicate == []
+    assert [event.drop_id for event in next_drop if isinstance(event, MiningDropEvent)] == [
+        "drop-2"
+    ]
 
 
 def test_mining_coordinator_skips_drop_when_units_are_invalid_without_fallback() -> None:
@@ -566,6 +590,164 @@ def test_mining_coordinator_records_claim_deed_received_chat_event() -> None:
     assert event.claimed_raw == claimed_raw
     assert event.run_id == 7
     assert event.segment_id == "segment-1"
+
+
+def test_mining_coordinator_creates_claim_from_chat_deed_for_pending_drop() -> None:
+    position = WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None)
+    coordinator = MiningCoordinator(
+        id_factory=_id_factory("drop-1", "claim-1"),
+        position_provider=lambda: position,
+        run_context_provider=lambda _ts, _setup: DropRunContext(
+            run_id=7,
+            segment_id="segment-1",
+        ),
+        run_id_provider=lambda: 7,
+        segment_id_provider=lambda: "segment-1",
+    )
+    event_dt = datetime(2026, 1, 10, 12, 37, 50)
+
+    coordinator.process_signal(
+        ProbeFiredSignal(ts_ms=1_000, position=None, modes_mask=1, ammo_per_drop=1_000)
+    )
+    coordinator.process_signal(
+        ItemReceivedSignal(
+            event_dt=event_dt,
+            channel_type=ChannelType.SYSTEM,
+            channel_token="System",
+            raw="deed raw",
+            item_name="Mineral Resource Deed",
+            qty=1,
+            value_mpec=Mpec(0),
+        )
+    )
+    events = coordinator.process_signal(
+        ResourceClaimedSignal(
+            event_dt=event_dt,
+            channel_type=ChannelType.SYSTEM,
+            channel_token="System",
+            raw="claimed raw",
+            resource_name="Narcanisum Stone",
+        )
+    )
+
+    deed = events[0]
+    assert isinstance(deed, MiningClaimDeedReceivedEvent)
+    claim = events[1]
+    assert isinstance(claim, MiningClaimCreatedEvent)
+    assert claim.claim_id == "claim-1"
+    assert claim.drop_id == "drop-1"
+    assert claim.hit_id is None
+    assert claim.resource_name == "Narcanisum Stone"
+    assert claim.mining_type == "ore"
+    assert claim.position == position
+    assert claim.search_radius_m == 55.0
+    assert claim.size_label is None
+    assert claim.expected_expires_ts_ms is None
+    assert claim.run_id == 7
+    assert claim.segment_id == "segment-1"
+
+
+def test_mining_coordinator_updates_claim_when_finder_hint_follows_chat_deed() -> None:
+    coordinator = MiningCoordinator(id_factory=_id_factory("drop-1", "claim-1", "hit-1"))
+    event_dt = datetime(2026, 1, 10, 12, 37, 50)
+
+    coordinator.process_signal(
+        ProbeFiredSignal(ts_ms=1_000, position=None, modes_mask=1, ammo_per_drop=1_000)
+    )
+    coordinator.process_signal(
+        ItemReceivedSignal(
+            event_dt=event_dt,
+            channel_type=ChannelType.SYSTEM,
+            channel_token="System",
+            raw="deed raw",
+            item_name="Mineral Resource Deed",
+            qty=1,
+            value_mpec=Mpec(0),
+        )
+    )
+    coordinator.process_signal(
+        ResourceClaimedSignal(
+            event_dt=event_dt,
+            channel_type=ChannelType.SYSTEM,
+            channel_token="System",
+            raw="claimed raw",
+            resource_name="Narcanisum Stone",
+        )
+    )
+
+    events = coordinator.process_signal(
+        FinderHitHintSignal(
+            ts_ms=2_000,
+            size_label="Tiny",
+            size_index=2,
+            resource_name="Narcanisum Stone",
+        )
+    )
+
+    assert len(events) == 2
+    hit = events[0]
+    assert isinstance(hit, MiningHitHintEvent)
+    assert hit.drop_id == "drop-1"
+    updated = events[1]
+    assert isinstance(updated, MiningClaimUpdatedEvent)
+    assert updated.claim_id == "claim-1"
+    assert updated.drop_id == "drop-1"
+    assert updated.hit_id == "hit-1"
+    assert updated.resource_name == "Narcanisum Stone"
+    assert updated.mining_type == "ore"
+    assert updated.size_label == "Tiny"
+    assert updated.size_index == 2
+    assert updated.expected_expires_ts_ms == 3_602_000
+
+
+def test_mining_coordinator_updates_claim_when_chat_deed_follows_finder_hint() -> None:
+    coordinator = MiningCoordinator(id_factory=_id_factory("drop-1", "hit-1", "claim-1"))
+    event_dt = datetime(2026, 1, 10, 12, 37, 50)
+
+    coordinator.process_signal(
+        ProbeFiredSignal(ts_ms=1_000, position=None, modes_mask=1, ammo_per_drop=1_000)
+    )
+    coordinator.process_signal(
+        FinderHitHintSignal(
+            ts_ms=2_000,
+            size_label="Tiny",
+            size_index=2,
+            resource_name="Narcanisum Stone",
+        )
+    )
+    coordinator.process_signal(
+        ItemReceivedSignal(
+            event_dt=event_dt,
+            channel_type=ChannelType.SYSTEM,
+            channel_token="System",
+            raw="deed raw",
+            item_name="Mineral Resource Deed",
+            qty=1,
+            value_mpec=Mpec(0),
+        )
+    )
+    events = coordinator.process_signal(
+        ResourceClaimedSignal(
+            event_dt=event_dt,
+            channel_type=ChannelType.SYSTEM,
+            channel_token="System",
+            raw="claimed raw",
+            resource_name="Narcanisum Stone",
+        )
+    )
+
+    assert len(events) == 2
+    deed = events[0]
+    assert isinstance(deed, MiningClaimDeedReceivedEvent)
+    updated = events[1]
+    assert isinstance(updated, MiningClaimUpdatedEvent)
+    assert updated.claim_id == "claim-1"
+    assert updated.drop_id == "drop-1"
+    assert updated.hit_id == "hit-1"
+    assert updated.resource_name == "Narcanisum Stone"
+    assert updated.mining_type == "ore"
+    assert updated.size_label is None
+    assert updated.expected_expires_ts_ms is None
 
 
 def test_mining_coordinator_learns_claim_deed_resource(tmp_path: Path) -> None:
@@ -981,6 +1163,75 @@ def test_mining_coordinator_expires_active_claims_by_command() -> None:
     second_result = coordinator.process_command(ExpireMiningClaimsCommand(now_ts_ms=3_000))
     assert second_result.value == 0
     assert second_result.events == ()
+
+
+def test_mining_coordinator_resolves_stale_pending_drop_by_command() -> None:
+    position = WorldPos(planet_name="Calypso", x=58_890, y=84_639, z=None)
+    coordinator = MiningCoordinator(
+        config=MiningCoordinatorConfig(result_link_window_ms=20_000),
+        id_factory=_id_factory("drop-1"),
+        position_provider=lambda: position,
+        run_context_provider=lambda _ts, _setup: DropRunContext(
+            run_id=7,
+            segment_id="segment-1",
+        ),
+    )
+
+    coordinator.process_signal(
+        ProbeFiredSignal(ts_ms=1_000, position=None, modes_mask=1, ammo_per_drop=1_000)
+    )
+    result = coordinator.process_command(ResolvePendingDropResultsCommand(now_ts_ms=21_000))
+
+    assert result.value == 1
+    assert len(result.events) == 1
+    event = result.events[0]
+    assert isinstance(event, MiningNoResourcesEvent)
+    assert event.drop_id == "drop-1"
+    assert event.observed_ts_ms == 21_000
+    assert event.position == position
+    assert event.run_id == 7
+    assert event.segment_id == "segment-1"
+
+    second_result = coordinator.process_command(ResolvePendingDropResultsCommand(now_ts_ms=30_000))
+    assert second_result.value == 0
+    assert second_result.events == ()
+
+
+def test_mining_coordinator_does_not_timeout_drop_resolved_by_chat_deed() -> None:
+    coordinator = MiningCoordinator(
+        config=MiningCoordinatorConfig(result_link_window_ms=20_000),
+        id_factory=_id_factory("drop-1", "claim-1"),
+    )
+    event_dt = datetime(2026, 1, 10, 12, 37, 50)
+
+    coordinator.process_signal(
+        ProbeFiredSignal(ts_ms=1_000, position=None, modes_mask=1, ammo_per_drop=1_000)
+    )
+    coordinator.process_signal(
+        ItemReceivedSignal(
+            event_dt=event_dt,
+            channel_type=ChannelType.SYSTEM,
+            channel_token="System",
+            raw="deed raw",
+            item_name="Mineral Resource Deed",
+            qty=1,
+            value_mpec=Mpec(0),
+        )
+    )
+    coordinator.process_signal(
+        ResourceClaimedSignal(
+            event_dt=event_dt,
+            channel_type=ChannelType.SYSTEM,
+            channel_token="System",
+            raw="claimed raw",
+            resource_name="Narcanisum Stone",
+        )
+    )
+
+    result = coordinator.process_command(ResolvePendingDropResultsCommand(now_ts_ms=21_000))
+
+    assert result.value == 0
+    assert result.events == ()
 
 
 def test_mining_coordinator_records_item_received_chat_signal_as_loot_totals_update() -> None:

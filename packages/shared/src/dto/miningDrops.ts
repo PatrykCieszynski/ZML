@@ -1,4 +1,5 @@
 import type { WorldPosDTO } from "./worldPos";
+import type { MiningClaimCreatedEventWire } from "./miningClaims";
 
 export type MiningDropResult = "pending" | "hit" | "no_resources";
 
@@ -10,7 +11,8 @@ export type MiningDropCostDto = {
     finderDecayMpec: number;
     finderEnhancerDecayMpec: number;
     ampDecayMpec: number;
-    totalMpec: number;
+    totalTtMpec: number;
+    totalWithMarkupMpec: number;
 };
 
 export type MiningDropDto = {
@@ -51,7 +53,8 @@ export type MiningDropCostWire = {
     finder_decay_mpec: number;
     finder_enhancer_decay_mpec: number;
     amp_decay_mpec: number;
-    total_mpec: number;
+    total_tt_mpec: number;
+    total_with_markup_mpec: number;
 };
 
 export type MiningDropWire = {
@@ -91,7 +94,8 @@ type MiningDropEventCostWire = {
     finder_decay_mpec: number;
     finder_enhancer_decay_mpec?: number;
     amp_decay_mpec: number;
-    total_mpec: number;
+    total_tt_mpec: number;
+    total_with_markup_mpec: number;
 };
 
 export type MiningDropEventWire = {
@@ -223,7 +227,8 @@ export function wireToMiningDropDto(wire: MiningDropWire): MiningDropDto {
             finderDecayMpec: wire.cost.finder_decay_mpec,
             finderEnhancerDecayMpec: wire.cost.finder_enhancer_decay_mpec,
             ampDecayMpec: wire.cost.amp_decay_mpec,
-            totalMpec: wire.cost.total_mpec,
+            totalTtMpec: wire.cost.total_tt_mpec,
+            totalWithMarkupMpec: wire.cost.total_with_markup_mpec,
         },
         result: wire.result,
         resultEventId: wire.result_event_id,
@@ -260,7 +265,8 @@ export function miningDropDtoFromMiningDropEventWire(
             finderDecayMpec: wire.cost.finder_decay_mpec,
             finderEnhancerDecayMpec: wire.cost.finder_enhancer_decay_mpec ?? 0,
             ampDecayMpec: wire.cost.amp_decay_mpec,
-            totalMpec: wire.cost.total_mpec,
+            totalTtMpec: wire.cost.total_tt_mpec,
+            totalWithMarkupMpec: wire.cost.total_with_markup_mpec,
         },
         result: "pending",
         resultEventId: null,
@@ -302,11 +308,34 @@ export function miningDropDtoWithNoResources(
     wire: MiningNoResourcesEventWire,
     eventId: number = -1,
 ): MiningDropDto {
+    if (drop.result === "hit") {
+        return drop;
+    }
     return {
         ...drop,
         result: "no_resources",
         resultEventId: eventId,
         resultObservedTsMs: wire.observed_ts_ms,
+    };
+}
+
+export function miningDropDtoWithClaimCreated(
+    drop: MiningDropDto,
+    wire: MiningClaimCreatedEventWire,
+    eventId: number = -1,
+): MiningDropDto {
+    return {
+        ...drop,
+        result: "hit",
+        resultEventId: drop.result === "hit" ? drop.resultEventId : eventId,
+        resultObservedTsMs: drop.result === "hit" ? drop.resultObservedTsMs : wire.observed_ts_ms,
+        hitId: drop.hitId ?? wire.hit_id,
+        resourceName: wire.resource_name ?? drop.resourceName,
+        sizeLabel: wire.size_label ?? drop.sizeLabel,
+        sizeIndex: wire.size_index ?? drop.sizeIndex,
+        expectedExpiresTsMs: wire.expected_expires_ts_ms ?? drop.expectedExpiresTsMs,
+        rangeM: wire.range_m ?? drop.rangeM,
+        depthM: wire.depth_m ?? drop.depthM,
     };
 }
 
@@ -327,7 +356,8 @@ function isMiningDropCostWire(value: unknown): value is MiningDropCostWire {
         isFiniteNumber(value.finder_decay_mpec) &&
         isFiniteNumber(value.finder_enhancer_decay_mpec) &&
         isFiniteNumber(value.amp_decay_mpec) &&
-        isFiniteNumber(value.total_mpec)
+        isFiniteNumber(value.total_tt_mpec) &&
+        isFiniteNumber(value.total_with_markup_mpec)
     );
 }
 
@@ -340,7 +370,8 @@ function isMiningDropEventCostWire(value: unknown): value is MiningDropEventCost
         (value.finder_enhancer_decay_mpec === undefined ||
             isFiniteNumber(value.finder_enhancer_decay_mpec)) &&
         isFiniteNumber(value.amp_decay_mpec) &&
-        isFiniteNumber(value.total_mpec)
+        isFiniteNumber(value.total_tt_mpec) &&
+        isFiniteNumber(value.total_with_markup_mpec)
     );
 }
 

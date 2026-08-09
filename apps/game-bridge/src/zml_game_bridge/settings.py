@@ -197,7 +197,7 @@ def _default_claim_expiration_maintenance_enabled() -> bool:
 
 
 def _default_claim_expiration_maintenance_interval_s() -> float:
-    return _env_float("ZML_CLAIM_EXPIRATION_MAINTENANCE_INTERVAL_S", default=60.0)
+    return _env_float("ZML_CLAIM_EXPIRATION_MAINTENANCE_INTERVAL_S", default=5.0)
 
 
 def _default_finder_recording_modes() -> str:

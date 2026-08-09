@@ -429,7 +429,12 @@ function RunSummaryPanel({
       <MetricRow label="Claims" value={String(stats.totalClaimCount)} accent="warn" />
       <MetricRow label="Extracted" value={String(stats.depletedClaimCount)} />
       <MetricRow label="Active claims" value={String(stats.activeClaimCount)} accent="gain" />
-      <MetricRow label="Cost TT" value={formatPed(stats.totalCostPed)} accent="loss" />
+      <MetricRow label="Cost TT" value={formatPed(stats.totalTtCostPed)} accent="loss" />
+      <MetricRow
+        label="Cost incl. MU"
+        value={formatPed(stats.totalWithMarkupCostPed)}
+        accent="loss"
+      />
       <MetricRow label="Return TT" value={formatPed(stats.totalReturnPed)} accent="gain" />
       <MetricRow
         label="Profit"
@@ -578,8 +583,17 @@ function SegmentsView({
       claim.segmentId === segment.segmentId ||
       (claim.segmentId === null && claim.dropId !== null && segmentDropIds.has(claim.dropId))
     ));
-    const costPed = segmentDrops.reduce((sum, drop) => sum + drop.cost.totalMpec, 0) / 100_000;
-    return { segment, dropCount: segmentDrops.length, claimCount: segmentClaims.length, costPed };
+    const ttCostPed =
+      segmentDrops.reduce((sum, drop) => sum + drop.cost.totalTtMpec, 0) / 100_000;
+    const withMarkupCostPed =
+      segmentDrops.reduce((sum, drop) => sum + drop.cost.totalWithMarkupMpec, 0) / 100_000;
+    return {
+      segment,
+      dropCount: segmentDrops.length,
+      claimCount: segmentClaims.length,
+      ttCostPed,
+      withMarkupCostPed,
+    };
   });
 
   return (
@@ -609,10 +623,11 @@ function SegmentsView({
                 <th>Drops</th>
                 <th>Claims</th>
                 <th>Cost TT</th>
+                <th>Cost incl. MU</th>
               </tr>
             </thead>
             <tbody>
-              {segmentRows.map(({ segment, dropCount, claimCount, costPed }) => (
+              {segmentRows.map(({ segment, dropCount, claimCount, ttCostPed, withMarkupCostPed }) => (
                 <tr key={segment.segmentId}>
                   <td>#{segment.segmentIndex}</td>
                   <td>
@@ -629,7 +644,8 @@ function SegmentsView({
                   <td>{formatSnapshotUnits(readSnapshotNumber(segment.setupSnapshot, "probes_per_drop"))}</td>
                   <td>{dropCount}</td>
                   <td>{claimCount}</td>
-                  <td>{formatPed(costPed)}</td>
+                  <td>{formatPed(ttCostPed)}</td>
+                  <td>{formatPed(withMarkupCostPed)}</td>
                 </tr>
               ))}
             </tbody>
@@ -641,12 +657,26 @@ function SegmentsView({
 }
 
 function LootView({ loot, totals }: { loot: MiningLootItemDto[]; totals: MiningLootTotalDto[] }) {
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
   const runTotals = useMemo(() => totals.filter((item) => item.scope === "run"), [totals]);
   const totalMpec = runTotals.reduce((sum, item) => sum + item.valueMpec, 0);
   const extractionCostMpec = totalExtractionCostMpec(runTotals);
   const netMpec = totalMpec - extractionCostMpec;
   const rows = useMemo(() => buildLootAggregation(runTotals), [runTotals]);
   const eventCount = runTotals.reduce((sum, item) => sum + item.eventCount, 0);
+
+  useEffect(() => {
+    setCopyState("idle");
+  }, [runTotals]);
+
+  const copyLoot = async () => {
+    try {
+      await window.zml.copyText(buildLootClipboardText(rows));
+      setCopyState("copied");
+    } catch {
+      setCopyState("error");
+    }
+  };
 
   return (
     <section className="zml-work-panel">
@@ -655,7 +685,17 @@ function LootView({ loot, totals }: { loot: MiningLootItemDto[]; totals: MiningL
           <h2>Loot</h2>
           <span>Run return aggregation by resource/item</span>
         </div>
-        <strong className="zml-section-total">{formatPedFromMpec(totalMpec)}</strong>
+        <div className="zml-section-actions">
+          <strong className="zml-section-total">{formatPedFromMpec(totalMpec)}</strong>
+          <button
+            type="button"
+            className="zml-button"
+            onClick={() => void copyLoot()}
+            disabled={rows.length === 0}
+          >
+            {copyState === "copied" ? "Copied" : copyState === "error" ? "Copy failed" : "Copy loot"}
+          </button>
+        </div>
       </div>
       <div className="zml-claim-summary-grid">
         <ClaimSummaryCard label="Items" value={String(rows.length)} />
@@ -1099,7 +1139,8 @@ function MapSettingsView({ position }: { position: WorldPosDTO | null }) {
 }
 
 const OVERLAY_METRICS: Array<{ key: OverlayMetricKey; label: string }> = [
-  { key: "cost", label: "Cost" },
+  { key: "costTt", label: "Cost TT" },
+  { key: "costWithMarkup", label: "Cost incl. MU" },
   { key: "return", label: "Return" },
   { key: "profit", label: "Profit" },
   { key: "hitRate", label: "Hit Rate" },
@@ -1430,7 +1471,6 @@ function MetricRow({
 function EmptyState({ text, compact = false }: { text: string; compact?: boolean }) {
   return <div className={compact ? "zml-empty is-compact" : "zml-empty"}>{text}</div>;
 }
-
 function useSmallClaimSoundAlert(
   claims: readonly MiningClaimDto[],
   preferences: MapPreferences,
@@ -1443,14 +1483,26 @@ function useSmallClaimSoundAlert(
       for (const claim of claims) {
         seenClaimIdsRef.current.add(claim.claimId);
       }
+
       initializedRef.current = true;
       return;
     }
 
     let shouldPlay = false;
+
     for (const claim of claims) {
-      if (seenClaimIdsRef.current.has(claim.claimId)) continue;
+      if (seenClaimIdsRef.current.has(claim.claimId)) {
+        continue;
+      }
+
+      // Claim exists, but OCR data has not arrived yet.
+      if (claim.sizeIndex === null) {
+        continue;
+      }
+
+      // Size is known, so the claim can now be handled permanently.
       seenClaimIdsRef.current.add(claim.claimId);
+
       if (shouldPlaySmallClaimSound(claim, preferences)) {
         shouldPlay = true;
       }
@@ -1523,7 +1575,8 @@ type RunStats = {
   activeClaimCount: number;
   depletedClaimCount: number;
   hitRate: number | null;
-  totalCostPed: number;
+  totalTtCostPed: number;
+  totalWithMarkupCostPed: number;
   totalReturnPed: number;
   profitPed: number;
 };
@@ -1612,6 +1665,25 @@ function buildLootAggregation(totals: MiningLootTotalDto[]): LootAggregationRow[
     .sort((a, b) => b.valueMpec - a.valueMpec || a.itemName.localeCompare(b.itemName));
 }
 
+function buildLootClipboardText(rows: LootAggregationRow[]): string {
+  return rows
+    .map((row) => [sanitizeClipboardCell(row.itemName), row.qty, formatMpecForSpreadsheet(row.valueMpec)].join("\t"))
+    .join("\r\n");
+}
+
+function sanitizeClipboardCell(value: string): string {
+  return value.replace(/[\t\r\n]+/g, " ").trim();
+}
+
+function formatMpecForSpreadsheet(valueMpec: number): string {
+  const roundedMpec = Math.round(valueMpec);
+  const sign = roundedMpec < 0 ? "-" : "";
+  const absoluteMpec = Math.abs(roundedMpec);
+  const wholePed = Math.floor(absoluteMpec / 100_000);
+  const fractionalPed = String(absoluteMpec % 100_000).padStart(5, "0").replace(/0+$/, "");
+  return fractionalPed ? `${sign}${wholePed},${fractionalPed}` : `${sign}${wholePed}`;
+}
+
 function minNullableTs(left: number | null, right: number | null): number | null {
   if (left === null) return right;
   if (right === null) return left;
@@ -1647,8 +1719,13 @@ function getRunStats(
   const activeClaimCount = claims.filter((claim) => claim.status === "active").length;
   const depletedClaimCount = claims.filter((claim) => claim.status === "depleted").length;
   const totalClaimCount = claims.filter((claim) => claim.status !== "ignored").length;
-  const totalCostPed =
-    (drops.reduce((sum, drop) => sum + drop.cost.totalMpec, 0) + totalExtractionCostMpec(runLootTotals)) /
+  const extractionCostMpec = totalExtractionCostMpec(runLootTotals);
+  const totalTtCostPed =
+    (drops.reduce((sum, drop) => sum + drop.cost.totalTtMpec, 0) + extractionCostMpec) /
+    100_000;
+  const totalWithMarkupCostPed =
+    (drops.reduce((sum, drop) => sum + drop.cost.totalWithMarkupMpec, 0) +
+      extractionCostMpec) /
     100_000;
   const totalReturnPed = runLootTotals.reduce((sum, item) => sum + item.valueMpec, 0) / 100_000;
 
@@ -1660,9 +1737,10 @@ function getRunStats(
     activeClaimCount,
     depletedClaimCount,
     hitRate: drops.length === 0 ? null : hitCount / drops.length,
-    totalCostPed,
+    totalTtCostPed,
+    totalWithMarkupCostPed,
     totalReturnPed,
-    profitPed: totalReturnPed - totalCostPed,
+    profitPed: totalReturnPed - totalWithMarkupCostPed,
   };
 }
 

@@ -67,7 +67,8 @@ class DropCostBreakdown:
     probes: DropUnitCost
     finder_decay_mpec: Mpec
     amp_decay_mpec: Mpec
-    total_mpec: Mpec
+    total_tt_mpec: Mpec
+    total_with_markup_mpec: Mpec
     finder_enhancer_decay_mpec: Mpec = ZERO_MPEC
 
 
@@ -82,8 +83,14 @@ def calculate_drop_cost(
         ocr_ammo_per_drop=ocr_ammo_per_drop,
         ocr_probes_per_drop=ocr_probes_per_drop,
     )
+    finder_decay_tt = profile.finder.decay_mpec
+    finder_enhancer_decay_tt = _calculate_finder_enhancer_decay_tt(profile=profile)
+    amp_decay_tt = profile.amp.decay_mpec if profile.amp is not None else Mpec(0)
     finder_decay = profile.finder.marked_up_decay_mpec
-    finder_enhancer_decay = _calculate_finder_enhancer_decay_cost(profile=profile)
+    finder_enhancer_decay = apply_rate_mpec(
+        finder_enhancer_decay_tt,
+        profile.finder.markup,
+    )
     amp_decay = profile.amp.marked_up_decay_mpec if profile.amp is not None else Mpec(0)
 
     return DropCostBreakdown(
@@ -91,7 +98,14 @@ def calculate_drop_cost(
         probes=probes,
         finder_decay_mpec=finder_decay,
         amp_decay_mpec=amp_decay,
-        total_mpec=Mpec(
+        total_tt_mpec=Mpec(
+            mpec_to_int(ammo.cost_mpec)
+            + mpec_to_int(probes.cost_mpec)
+            + mpec_to_int(finder_decay_tt)
+            + mpec_to_int(finder_enhancer_decay_tt)
+            + mpec_to_int(amp_decay_tt)
+        ),
+        total_with_markup_mpec=Mpec(
             mpec_to_int(ammo.cost_mpec)
             + mpec_to_int(probes.cost_mpec)
             + mpec_to_int(finder_decay)
@@ -121,14 +135,13 @@ def apply_rate_mpec(value_mpec: Mpec, rate: Rate) -> Mpec:
     return Mpec(rate.apply_to(value))
 
 
-def _calculate_finder_enhancer_decay_cost(*, profile: MiningEquipmentProfile) -> Mpec:
+def _calculate_finder_enhancer_decay_tt(*, profile: MiningEquipmentProfile) -> Mpec:
     loadout = profile.finder_range_enhancers
     _validate_finder_enhancer_loadout(loadout)
     if loadout.count == 0:
         return Mpec(0)
 
-    enhancer_decay = apply_rate_mpec(profile.finder.decay_mpec, loadout.extra_decay_rate)
-    return apply_rate_mpec(enhancer_decay, profile.finder.markup)
+    return apply_rate_mpec(profile.finder.decay_mpec, loadout.extra_decay_rate)
 
 
 def _validate_finder_enhancer_loadout(loadout: FinderRangeEnhancerLoadout) -> None:

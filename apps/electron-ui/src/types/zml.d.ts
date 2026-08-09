@@ -21,6 +21,7 @@ declare global {
     zml: {
       getBootstrapState: (windowType: WindowType) => Promise<BootstrapState>;
       getAgentHealth: () => Promise<AgentHealthDto>;
+      copyText: (text: string) => Promise<void>;
       getActiveRun: () => Promise<RunDto | null>;
       listRuns: () => Promise<RunDto[]>;
       resumeRun: (runId: number) => Promise<RunDto>;

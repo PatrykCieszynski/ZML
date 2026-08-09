@@ -1,4 +1,4 @@
-import { ipcMain } from "electron";
+import { clipboard, ipcMain } from "electron";
 import {
     IPC_CMD,
     IPC_VERSION,
@@ -57,6 +57,13 @@ export function registerIpc({ agentRestClient, toggleMapWindow, toggleOverlayWin
     });
 
     ipcMain.handle(IPC_CMD.GET_AGENT_HEALTH, () => agentRestClient.getHealth());
+
+    ipcMain.handle(IPC_CMD.COPY_TEXT, (_evt, text: unknown) => {
+        if (typeof text !== "string") {
+            throw new Error("Invalid copy text request");
+        }
+        clipboard.writeText(text);
+    });
 
     ipcMain.handle(IPC_CMD.GET_ACTIVE_RUN, async () => {
         const activeRun = await agentRestClient.getActiveRun();

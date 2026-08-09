@@ -78,6 +78,22 @@ export type MiningClaimCreatedEventWire = {
     depth_m: number | null;
 };
 
+export type MiningClaimUpdatedEventWire = {
+    claim_id: string;
+    updated_ts_ms: number;
+    hit_id?: string | null;
+    drop_id?: string | null;
+    resource_name?: string | null;
+    mining_type?: MiningResourceType | null;
+    size_label?: string | null;
+    size_index?: number | null;
+    expected_expires_ts_ms?: number | null;
+    range_m?: number | null;
+    depth_m?: number | null;
+    run_id?: number | null;
+    segment_id?: string | null;
+};
+
 export type MiningClaimDepletedEventWire = {
     claim_id: string;
     drop_id: string | null;
@@ -153,6 +169,28 @@ export function isMiningClaimCreatedEventWire(
         isNullableNumber(value.expected_expires_ts_ms) &&
         isNullableNumber(value.range_m) &&
         isNullableNumber(value.depth_m)
+    );
+}
+
+export function isMiningClaimUpdatedEventWire(
+    value: unknown,
+): value is MiningClaimUpdatedEventWire {
+    if (!isRecord(value)) return false;
+    return (
+        typeof value.claim_id === "string" &&
+        isFiniteNumber(value.updated_ts_ms) &&
+        (value.hit_id === undefined || isNullableString(value.hit_id)) &&
+        (value.drop_id === undefined || isNullableString(value.drop_id)) &&
+        (value.resource_name === undefined || isNullableString(value.resource_name)) &&
+        (value.mining_type === undefined || isNullableMiningResourceType(value.mining_type)) &&
+        (value.size_label === undefined || isNullableString(value.size_label)) &&
+        (value.size_index === undefined || isNullableNumber(value.size_index)) &&
+        (value.expected_expires_ts_ms === undefined ||
+            isNullableNumber(value.expected_expires_ts_ms)) &&
+        (value.range_m === undefined || isNullableNumber(value.range_m)) &&
+        (value.depth_m === undefined || isNullableNumber(value.depth_m)) &&
+        (value.run_id === undefined || isNullableNumber(value.run_id)) &&
+        (value.segment_id === undefined || isNullableString(value.segment_id))
     );
 }
 
@@ -251,6 +289,26 @@ export function miningClaimDtoFromCreatedEventWire(
         depletedEventDt: null,
         depletedPosition: null,
         depletedDistanceM: null,
+    };
+}
+
+export function miningClaimDtoWithUpdatedEventWire(
+    claim: MiningClaimDto,
+    wire: MiningClaimUpdatedEventWire,
+): MiningClaimDto {
+    return {
+        ...claim,
+        hitId: wire.hit_id ?? claim.hitId,
+        dropId: wire.drop_id ?? claim.dropId,
+        runId: wire.run_id ?? claim.runId,
+        segmentId: wire.segment_id ?? claim.segmentId,
+        resourceName: wire.resource_name ?? claim.resourceName,
+        miningType: wire.mining_type ?? claim.miningType,
+        sizeLabel: wire.size_label ?? claim.sizeLabel,
+        sizeIndex: wire.size_index ?? claim.sizeIndex,
+        expectedExpiresTsMs: wire.expected_expires_ts_ms ?? claim.expectedExpiresTsMs,
+        rangeM: wire.range_m ?? claim.rangeM,
+        depthM: wire.depth_m ?? claim.depthM,
     };
 }
 
