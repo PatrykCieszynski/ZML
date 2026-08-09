@@ -66,12 +66,20 @@ domain -> no app/runtime/persistence imports
 pipelines, recording/profiling tools, `tesserocr`, OpenCV, numpy, and tessdata.
 Its runner emits `zml-ocr-protocol` messages and imports no Game Bridge modules.
 
-During the migration, Game Bridge uses a path dependency on the agent and runs
-the same runner in-process through `EmbeddedOcrInputSource`. The adapter maps
-position and finder DTOs to application models and signals. The agent also has
-an independent `stdio` entrypoint that emits `hello`, accepts `shutdown`, and
-reserves stdout for NDJSON. Process supervision and transport selection are the
-next migration step.
+During the migration, Game Bridge supports two implementations of its
+`OcrInputSource` port. `EmbeddedOcrInputSource` runs the agent runner in-process
+and remains the default rollback path. `OcrAgentSupervisor` starts the agent's
+`stdio` entrypoint as a child process when `ZML_OCR_TRANSPORT=agent`, validates
+the initial `hello`, drains stdout/stderr concurrently, monitors heartbeats, and
+restarts failed processes with bounded exponential backoff. Both transports use
+one mapper for position and finder DTOs, so downstream application behavior is
+the same.
+
+The agent reports a missing game window as a recoverable capture state. Health
+diagnostics therefore distinguish `failure_kind=capture` with
+`process_state=window_unavailable` from process/protocol failures and restart
+backoff. The current settings are passed to the child as startup environment;
+revisioned `apply_config` synchronization is the next migration step.
 
 ## Signal To Event Flow
 
@@ -225,8 +233,8 @@ sequenceDiagram
   covering abrupt Electron exits without blocking Python startup.
 - `RuntimeShutdownSignal` lets WS/SSE handlers finish before Uvicorn waits for active
   connections, avoiding a circular graceful-shutdown wait.
-- The main-thread `tesserocr` preload preserves Uvicorn's `SIGINT` handler; otherwise
-  bundled `cysignals` replaces it and a single Ctrl+C ends in `KeyboardInterrupt`.
+- In embedded OCR mode, the main-thread `tesserocr` preload preserves Uvicorn's
+  `SIGINT` handler; agent mode keeps native OCR initialization in the child.
 - Absence of the Entropia window is not a process failure. OCR reports `degraded`, retries
   capture, and returns to `running` when the window becomes available.
 

@@ -8,8 +8,11 @@ from dataclasses import dataclass, field
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from types import TracebackType
+from typing import Literal, cast
 
 from zml_game_bridge.paths import get_app_data_dir
+
+OcrTransport = Literal["embedded", "agent"]
 
 
 def get_documents_dir() -> Path:
@@ -157,6 +160,17 @@ def _default_chat_start_at_end() -> bool:
 
 def _default_ocr_enabled() -> bool:
     return _env_bool("ZML_OCR_ENABLED", default=True)
+
+
+def _default_ocr_transport() -> OcrTransport:
+    value = os.getenv("ZML_OCR_TRANSPORT", "embedded").strip().lower()
+    if value not in {"embedded", "agent"}:
+        raise ValueError("ZML_OCR_TRANSPORT must be 'embedded' or 'agent'")
+    return cast(OcrTransport, value)
+
+
+def _default_ocr_agent_path() -> Path | None:
+    return _env_path("ZML_OCR_AGENT_PATH")
 
 
 def _default_mock_inputs_enabled() -> bool:
@@ -325,6 +339,8 @@ class Settings:
 
     chat_start_at_end: bool = field(default_factory=_default_chat_start_at_end)
     ocr_enabled: bool = field(default_factory=_default_ocr_enabled)
+    ocr_transport: OcrTransport = field(default_factory=_default_ocr_transport)
+    ocr_agent_path: Path | None = field(default_factory=_default_ocr_agent_path)
     mock_inputs_enabled: bool = field(default_factory=_default_mock_inputs_enabled)
     mock_mining_interval_ms: int = field(default_factory=_default_mock_mining_interval_ms)
     claim_expiration_maintenance_enabled: bool = field(

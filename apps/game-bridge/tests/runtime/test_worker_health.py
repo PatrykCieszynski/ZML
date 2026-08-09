@@ -69,3 +69,26 @@ def test_worker_supervisor_can_recover_degraded_worker() -> None:
     assert snapshot["status"] == "running"
     assert workers["ocr_worker"]["state"] == "running"
     assert workers["ocr_worker"]["last_error"] is None
+
+
+def test_worker_health_preserves_structured_details_across_state_changes() -> None:
+    registry = WorkerHealthRegistry()
+    registry.register("ocr_worker", enabled=True)
+
+    registry.update_details(
+        "ocr_worker",
+        transport="agent",
+        process_state="window_unavailable",
+        failure_kind="capture",
+        pid=123,
+    )
+    registry.mark_degraded("ocr_worker", "window missing")
+
+    snapshot = registry.as_dict()
+    workers = cast(dict[str, dict[str, Any]], snapshot["workers"])
+    assert workers["ocr_worker"]["details"] == {
+        "transport": "agent",
+        "process_state": "window_unavailable",
+        "failure_kind": "capture",
+        "pid": 123,
+    }
