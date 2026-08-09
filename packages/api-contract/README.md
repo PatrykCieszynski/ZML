@@ -7,7 +7,7 @@ It is deliberately small and contains no application logic.
 ## Source of truth
 
 ```mermaid
-flowchart LR
+flowchart TB
     Backend[FastAPI / Pydantic] --> OpenAPI[openapi.json]
     OpenAPI --> Generator[openapi-typescript]
     Generator --> Schema[schema.d.ts]
