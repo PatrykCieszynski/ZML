@@ -10,8 +10,10 @@ Z Mining Log uses `just` as the repository command interface, `uv` for the Pytho
 - Python 3.13 (the root `.python-version` and uv workspace require 3.13).
 - `uv`.
 - Node.js 22.
-- Corepack / pnpm 10.27 (pinned by root `package.json`).
+- pnpm 10.27 (pinned by the root `package.json`).
 - `just`.
+
+Corepack is optional. Use it if it is your preferred way to activate the pnpm version declared by the repository, but ZML does not otherwise depend on Corepack.
 
 ## First setup
 
@@ -19,7 +21,6 @@ From the repository root:
 
 ```powershell
 uv python install
-corepack enable
 pnpm install --frozen-lockfile
 just python-sync
 ```
@@ -190,7 +191,7 @@ CI additionally builds and smoke-tests the Windows Python process tree because t
 
 ## Agent wrapper
 
-`scripts/agent-env.cmd` and `scripts/agent-env.ps1` keep uv/corepack temp/cache state under the repository and can be useful in restricted Windows agent shells.
+`scripts/agent-env.cmd` and `scripts/agent-env.ps1` keep uv/pnpm temp/cache state under the repository and can be useful in restricted Windows agent shells.
 
 Example:
 
