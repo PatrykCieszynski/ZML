@@ -1,0 +1,29 @@
+name: Inspect final rename scope
+
+on:
+  push:
+    branches:
+      - agent/final-repository-cleanup
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Inspect legacy names and package metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== legacy path/name references ==='
+          grep -RIn --exclude-dir=node_modules --exclude-dir=.git --exclude='inspect-final-renames.yml' -E 'electron-ui|game-bridge|ocr-agent|zml_game_bridge|zml_ocr_agent|@zml/electron-ui|zml-game-bridge|zml-ocr-agent' . || true
+          echo '=== Python source roots ==='
+          find apps/game-bridge apps/ocr-agent -maxdepth 4 -type f \( -name 'pyproject.toml' -o -name '*.spec' -o -name '__init__.py' \) -print 2>/dev/null || true
+          echo '=== package files ==='
+          sed -n '1,220p' apps/game-bridge/pyproject.toml
+          sed -n '1,220p' apps/ocr-agent/pyproject.toml
+          sed -n '1,220p' apps/electron-ui/package.json
+          echo '=== root package ==='
+          cat package.json
