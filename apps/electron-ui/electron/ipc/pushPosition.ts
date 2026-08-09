@@ -1,4 +1,4 @@
-import { IPC_PUSH, type OcrPositionEvent, type PushPosition } from "@zml/shared";
+import { IPC_PUSH, type OcrPositionEvent, type PushPosition } from "@desktop/shared";
 import { runtime } from "../runtime";
 import { getWindow } from "../windows/registry";
 import type { BrowserWindow } from "electron";

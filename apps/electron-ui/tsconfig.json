@@ -9,8 +9,8 @@
 
     "baseUrl": ".",
     "paths": {
-      "@zml/shared": ["../../packages/shared/src/index.ts"],
-      "@zml/shared/*": ["../../packages/shared/src/*"]
+      "@desktop/shared": ["shared/index.ts"],
+      "@desktop/shared/*": ["shared/*"]
     },
 
     /* Bundler mode */
@@ -27,6 +27,6 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "electron", "../../packages/shared/src"],
+  "include": ["src", "electron", "shared"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

@@ -1,4 +1,4 @@
-import { MAP_CONFIG, type OcrPositionEvent } from "@zml/shared";
+import { MAP_CONFIG, type OcrPositionEvent } from "@desktop/shared";
 
 import type { PositionSourceOptions, StopPositionSource } from "../agent/positionSource.ts";
 import { readMockIntervalMs, readMockNumber } from "./mockConfig.ts";

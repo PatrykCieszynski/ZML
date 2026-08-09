@@ -18,7 +18,7 @@ import {
   type MiningClaimDto,
   type MiningDropDto,
   type PlanetId,
-} from "@zml/shared";
+} from "@desktop/shared";
 import { createClaimPointLayer, createClaimTimerLayer } from "./layers/claimLayers";
 import {
   createHexGridLayer,

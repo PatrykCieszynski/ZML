@@ -3,7 +3,7 @@ import {
     wireToOcrPositionDTO,
     type OcrPositionEvent,
     type OcrPositionWire,
-} from "@zml/shared";
+} from "@desktop/shared";
 import type { PositionSourceOptions, StopPositionSource } from "./positionSource.ts";
 
 type PositionWsClientOptions = PositionSourceOptions & {

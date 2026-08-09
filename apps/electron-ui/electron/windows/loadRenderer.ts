@@ -1,5 +1,5 @@
 import type { BrowserWindow } from "electron";
-import type { WindowType } from "@zml/shared";
+import type { WindowType } from "@desktop/shared";
 import { getIndexHtml } from "./paths.ts";
 import { RENDERER_DIST, VITE_DEV_SERVER_URL } from "../main.ts";
 

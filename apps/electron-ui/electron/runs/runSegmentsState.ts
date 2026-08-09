@@ -6,7 +6,7 @@ import {
     type AgentEventEnvelope,
     type RunDto,
     type RunSegmentDto,
-} from "@zml/shared";
+} from "@desktop/shared";
 
 import { pushStatePatch } from "../ipc/pushStatePatch.ts";
 import { runtime } from "../runtime.ts";

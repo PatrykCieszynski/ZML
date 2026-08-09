@@ -1,5 +1,5 @@
 import { useEffect, useMemo, type CSSProperties } from "react";
-import type { WindowType } from "@zml/shared";
+import type { WindowType } from "@desktop/shared";
 import { useZmlRendererStore } from "../state/zmlRendererStore";
 import { useOverlayPreferences, type OverlayMetricKey } from "./overlayPreferences";
 import "./overlayWindow.css";

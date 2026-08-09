@@ -7,7 +7,7 @@ import {
     type MiningLootTotalDto,
     wireToMiningLootItemDto,
     wireToMiningLootTotalDto,
-} from "@zml/shared";
+} from "@desktop/shared";
 
 import { pushStatePatch } from "../ipc/pushStatePatch.ts";
 import { runtime } from "../runtime.ts";

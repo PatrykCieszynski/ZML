@@ -2,7 +2,7 @@
 
 This repository is a local-first Entropia Universe mining tracker. It has a
 Python backend (`apps/game-bridge`), an Electron/React UI (`apps/electron-ui`),
-and shared TypeScript contracts (`packages/shared`).
+and desktop-internal shared TypeScript modules (`apps/electron-ui/shared`).
 
 Use this file as the first stop for future Codex/agent work. The deeper project
 notes live in:
@@ -107,8 +107,9 @@ See `docs/architecture.md` for details.
 - `persistence/*` owns SQLite schema, event store, readers, projections, and
   writer-side SQL.
 - `api/*` owns FastAPI routes, dependencies, schemas, and live channels.
-- `packages/shared/*` owns TypeScript DTOs and IPC contracts shared by Electron
-  main and renderer.
+- `apps/electron-ui/shared/*` owns TypeScript models and IPC contracts shared by
+  Electron main/preload and renderer code. Backend REST wire schemas come from
+  `packages/api-contract` instead of being duplicated here.
 
 Avoid importing input-specific OCR models into `application/*`. Convert to an
 application/domain model first. `PositionProvider` is intentionally in

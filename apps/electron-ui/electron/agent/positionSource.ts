@@ -1,4 +1,4 @@
-import type { OcrPositionEvent } from "@zml/shared";
+import type { OcrPositionEvent } from "@desktop/shared";
 
 export type PositionSourceStatus = "connecting" | "connected" | "disconnected";
 

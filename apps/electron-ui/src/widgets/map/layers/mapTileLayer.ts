@@ -6,7 +6,7 @@ import {
   getMapSizePx,
   type PlanetId,
   type PlanetMapConfig,
-} from "@zml/shared";
+} from "@desktop/shared";
 import { buildMapTileUrl } from "../mapTileUrl";
 
 function getAvailableTileKeys(planet: PlanetMapConfig): Set<string> {

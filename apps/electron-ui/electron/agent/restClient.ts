@@ -37,7 +37,7 @@ import {
   type StartRunRequest,
   type StopRunRequest,
   type UpdateRunRequest,
-} from "@zml/shared";
+} from "@desktop/shared";
 
 type FetchLike = typeof fetch;
 
