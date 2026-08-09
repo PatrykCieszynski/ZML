@@ -2,42 +2,42 @@ default:
     just --list
 
 config:
-    uv run python -m zml_game_bridge.dev_cli config
+    uv run --package zml-game-bridge python -m zml_game_bridge.dev_cli config
 
 dev:
-    uv run python -m zml_game_bridge.dev_cli serve
+    uv run --package zml-game-bridge python -m zml_game_bridge.dev_cli serve
 
 ocr:
-    uv run python -m zml_game_bridge.dev_cli serve --mode live --position-roi-snapshots --position-roi-snapshot-max-samples 1
+    uv run --package zml-game-bridge python -m zml_game_bridge.dev_cli serve --mode live --position-roi-snapshots --position-roi-snapshot-max-samples 1
 
 mock:
-    uv run python -m zml_game_bridge.dev_cli serve --mode mock
+    uv run --package zml-game-bridge python -m zml_game_bridge.dev_cli serve --mode mock
 
 finder-debug:
-    uv run python -m zml_game_bridge.dev_cli serve --mode live --finder-debug
+    uv run --package zml-game-bridge python -m zml_game_bridge.dev_cli serve --mode live --finder-debug
 
 ocr-profile-record:
-    uv run python -m zml_game_bridge.dev_cli serve --mode live --ocr-profiling --ocr-profiling-interval-s 5 --finder-record manual,interval --finder-record-interval-s 60 --finder-record-max-samples 1 --position-roi-snapshots --position-roi-snapshot-max-samples 1
+    uv run --package zml-game-bridge python -m zml_game_bridge.dev_cli serve --mode live --ocr-profiling --ocr-profiling-interval-s 5 --finder-record manual,interval --finder-record-interval-s 60 --finder-record-max-samples 1 --position-roi-snapshots --position-roi-snapshot-max-samples 1
 
 lint-fix:
-    uv run ruff check . --fix
+    uv run --package zml-game-bridge ruff check . --fix
 
 lint:
-    uv run ruff check .
+    uv run --package zml-game-bridge ruff check .
 
 format:
-    uv run ruff format .
+    uv run --package zml-game-bridge ruff format .
 
 format-check:
-    uv run ruff format --check .
+    uv run --package zml-game-bridge ruff format --check .
 
 typecheck:
-    uv run pyright
+    uv run --package zml-game-bridge pyright
 
 test:
-    uv run pytest --basetemp .pytest-tmp -o cache_dir=.pytest-cache-local
+    uv run --package zml-game-bridge pytest --basetemp .pytest-tmp -o cache_dir=.pytest-cache-local
 
 verify: lint format-check typecheck test
 
 package:
-    uv run pyinstaller --noconfirm --clean --onedir --name zml-game-bridge --paths src --paths ../../packages/ocr-protocol/src --collect-submodules zml_game_bridge.api --collect-submodules zml_ocr_protocol --collect-data zml_game_bridge.resources src/zml_game_bridge/dev_cli.py
+    uv run --package zml-game-bridge pyinstaller --noconfirm --clean --onedir --name zml-game-bridge --paths src --paths ../../packages/ocr-protocol/src --collect-submodules zml_game_bridge.api --collect-submodules zml_ocr_protocol --collect-data zml_game_bridge.resources src/zml_game_bridge/dev_cli.py
