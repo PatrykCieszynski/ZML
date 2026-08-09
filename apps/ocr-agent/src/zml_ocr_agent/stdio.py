@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import logging
-import os
 import sys
 import threading
 from io import BufferedReader, BufferedWriter
-from pathlib import Path
 from typing import BinaryIO, cast
 
 from zml_ocr_protocol import (
@@ -16,10 +14,12 @@ from zml_ocr_protocol import (
 from zml_ocr_protocol.messages import (
     AgentStatusState,
     AgentToBridgeMessage,
+    ApplyConfigCommand,
     BridgeToAgentMessage,
     StatusMessage,
 )
 
+from zml_ocr_agent.config import AppliedOcrConfig, applied_ocr_config
 from zml_ocr_agent.message_factory import AgentMessageFactory
 from zml_ocr_agent.runner import start_ocr_input
 from zml_ocr_agent.tesserocr_runtime import preload_tesserocr_preserving_sigint_handler
@@ -46,6 +46,11 @@ class AgentRuntimeState:
         with self._lock:
             return self._state, self._capture_available
 
+    def mark_configuring(self) -> None:
+        with self._lock:
+            self._state = "degraded"
+            self._capture_available = False
+
 
 class ProtocolWriter:
     def __init__(self, output: BinaryIO, *, runtime_state: AgentRuntimeState) -> None:
@@ -64,6 +69,87 @@ class ProtocolWriter:
             self._output.flush()
 
 
+class OcrRunnerController:
+    def __init__(
+        self,
+        *,
+        writer: ProtocolWriter,
+        factory: AgentMessageFactory,
+        runtime_state: AgentRuntimeState,
+    ) -> None:
+        self._writer = writer
+        self._factory = factory
+        self._runtime_state = runtime_state
+        self._thread: threading.Thread | None = None
+        self._stop_event: threading.Event | None = None
+        self._applied: AppliedOcrConfig | None = None
+        self._pending: tuple[threading.Thread, threading.Event, AppliedOcrConfig] | None = None
+
+    def apply(self, command: ApplyConfigCommand) -> tuple[bool, str | None, str | None]:
+        candidate = applied_ocr_config(command.payload)
+        current = self._applied
+        if current is not None and candidate.revision < current.revision:
+            return (
+                False,
+                "stale_config_revision",
+                (
+                    f"revision {candidate.revision} is older than applied revision {current.revision}"
+                ),
+            )
+        if current is not None and candidate.revision == current.revision:
+            if candidate == current:
+                return True, None, None
+            return (
+                False,
+                "config_revision_conflict",
+                (f"revision {candidate.revision} was already applied with different values"),
+            )
+
+        self._runtime_state.mark_configuring()
+        if not self.stop(timeout_s=5.0):
+            return False, "ocr_runner_stop_timeout", "previous OCR runner did not stop"
+
+        runner_stop_event = threading.Event()
+        runner_thread = threading.Thread(
+            name="zml-ocr-runner",
+            target=_run_runner,
+            kwargs={
+                "writer": self._writer,
+                "factory": self._factory,
+                "stop_event": runner_stop_event,
+                "config": candidate,
+            },
+            daemon=True,
+        )
+        self._pending = (runner_thread, runner_stop_event, candidate)
+        return True, None, None
+
+    def start_pending(self) -> None:
+        pending = self._pending
+        if pending is None:
+            return
+        runner_thread, runner_stop_event, candidate = pending
+        self._factory.set_applied_revision(candidate.revision)
+        self._applied = candidate
+        self._stop_event = runner_stop_event
+        self._thread = runner_thread
+        self._pending = None
+        runner_thread.start()
+
+    def stop(self, *, timeout_s: float) -> bool:
+        stop_event = self._stop_event
+        thread = self._thread
+        if stop_event is None or thread is None:
+            return True
+        stop_event.set()
+        thread.join(timeout=timeout_s)
+        if thread.is_alive():
+            return False
+        self._stop_event = None
+        self._thread = None
+        return True
+
+
 def run_stdio(*, stdin: BinaryIO | None = None, stdout: BinaryIO | None = None) -> int:
     input_stream = stdin or cast(BufferedReader, sys.stdin.buffer)
     output_stream = stdout or cast(BufferedWriter, sys.stdout.buffer)
@@ -71,6 +157,11 @@ def run_stdio(*, stdin: BinaryIO | None = None, stdout: BinaryIO | None = None) 
     writer = ProtocolWriter(output_stream, runtime_state=runtime_state)
     factory = AgentMessageFactory()
     stop_event = threading.Event()
+    runner = OcrRunnerController(
+        writer=writer,
+        factory=factory,
+        runtime_state=runtime_state,
+    )
 
     writer.write(factory.hello())
     heartbeat_thread = threading.Thread(
@@ -86,7 +177,6 @@ def run_stdio(*, stdin: BinaryIO | None = None, stdout: BinaryIO | None = None) 
     )
     heartbeat_thread.start()
 
-    runner_thread: threading.Thread | None = None
     try:
         preload_tesserocr_preserving_sigint_handler()
     except Exception as exc:
@@ -99,19 +189,9 @@ def run_stdio(*, stdin: BinaryIO | None = None, stdout: BinaryIO | None = None) 
                 detail=str(exc),
             )
         )
-    else:
-        runner_thread = threading.Thread(
-            name="zml-ocr-runner",
-            target=_run_runner,
-            kwargs={
-                "writer": writer,
-                "factory": factory,
-                "stop_event": stop_event,
-                "roi_profile_path": _env_path("ZML_OCR_PROFILE_PATH"),
-            },
-            daemon=True,
-        )
-        runner_thread.start()
+        stop_event.set()
+        heartbeat_thread.join(timeout=1.0)
+        return 1
 
     try:
         for line in input_stream:
@@ -121,8 +201,14 @@ def run_stdio(*, stdin: BinaryIO | None = None, stdout: BinaryIO | None = None) 
                 logger.warning("invalid_protocol_command", exc_info=True)
                 continue
 
-            if _handle_command(command, writer=writer, factory=factory, stop_event=stop_event):
-                _join_runner(runner_thread)
+            if _handle_command(
+                command,
+                writer=writer,
+                factory=factory,
+                runner=runner,
+                stop_event=stop_event,
+            ):
+                runner.stop(timeout_s=5.0)
                 heartbeat_thread.join(timeout=1.0)
                 writer.write(
                     factory.command_ok(
@@ -133,7 +219,7 @@ def run_stdio(*, stdin: BinaryIO | None = None, stdout: BinaryIO | None = None) 
                 return 0
     finally:
         stop_event.set()
-        _join_runner(runner_thread)
+        runner.stop(timeout_s=5.0)
         heartbeat_thread.join(timeout=1.0)
 
     return 0
@@ -144,14 +230,27 @@ def _run_runner(
     writer: ProtocolWriter,
     factory: AgentMessageFactory,
     stop_event: threading.Event,
-    roi_profile_path: Path | None,
+    config: AppliedOcrConfig,
 ) -> None:
     try:
         start_ocr_input(
             message_sink=writer.write,
             message_factory=factory,
             stop_event=stop_event,
-            roi_profile_path=roi_profile_path,
+            target_hz=config.capture_hz,
+            finder_debug_logging=config.finder_debug_logging,
+            finder_recording_modes=config.finder_recording_modes,
+            finder_recording_dir=config.finder_recording_dir,
+            finder_recording_interval_s=config.finder_recording_interval_s,
+            finder_recording_max_samples=config.finder_recording_max_samples,
+            finder_presence_check_enabled=config.finder_presence_check_enabled,
+            position_roi_snapshot_enabled=config.position_roi_snapshot_enabled,
+            position_roi_snapshot_dir=config.position_roi_snapshot_dir,
+            position_roi_snapshot_interval_s=config.position_roi_snapshot_interval_s,
+            position_roi_snapshot_max_samples=config.position_roi_snapshot_max_samples,
+            ocr_profiling_enabled=config.ocr_profiling_enabled,
+            ocr_profiling_interval_s=config.ocr_profiling_interval_s,
+            roi_profile=config.roi_profile,
         )
     except Exception as exc:
         logger.exception("ocr_runner_crashed")
@@ -187,13 +286,35 @@ def _handle_command(
     *,
     writer: ProtocolWriter,
     factory: AgentMessageFactory,
+    runner: OcrRunnerController,
     stop_event: threading.Event,
 ) -> bool:
     match command.type:
         case "shutdown":
             stop_event.set()
             return True
-        case "apply_config" | "capture_frame":
+        case "apply_config":
+            ok, code, error = runner.apply(command)
+            if ok:
+                writer.write(
+                    factory.command_applied(
+                        command_id=command.command_id,
+                        revision=command.payload.revision,
+                    )
+                )
+                runner.start_pending()
+                return False
+            writer.write(
+                factory.command_error(
+                    command_id=command.command_id,
+                    command_type="apply_config",
+                    code=cast(str, code),
+                    message=cast(str, error),
+                    retryable=code == "ocr_runner_stop_timeout",
+                )
+            )
+            return False
+        case "capture_frame":
             writer.write(
                 factory.command_error(
                     command_id=command.command_id,
@@ -203,16 +324,4 @@ def _handle_command(
                     retryable=False,
                 )
             )
-            return False
-
-
-def _join_runner(runner_thread: threading.Thread | None) -> None:
-    if runner_thread is not None:
-        runner_thread.join(timeout=5.0)
-
-
-def _env_path(name: str) -> Path | None:
-    value = os.getenv(name)
-    if value is None or not value.strip():
-        return None
-    return Path(value)
+    return False

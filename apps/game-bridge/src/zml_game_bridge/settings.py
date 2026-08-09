@@ -173,6 +173,17 @@ def _default_ocr_agent_path() -> Path | None:
     return _env_path("ZML_OCR_AGENT_PATH")
 
 
+def _default_ocr_capture_hz() -> float:
+    return _env_float("ZML_OCR_CAPTURE_HZ", default=10.0)
+
+
+def _default_ocr_capture_artifacts_dir() -> Path:
+    env_path = _env_path("ZML_OCR_CAPTURE_ARTIFACTS_DIR")
+    if env_path is not None:
+        return env_path
+    return get_app_data_dir() / "ocr" / "captures"
+
+
 def _default_mock_inputs_enabled() -> bool:
     return _env_bool("ZML_MOCK_INPUTS", default=False)
 
@@ -211,6 +222,10 @@ def _default_claim_expiration_maintenance_interval_s() -> float:
 
 def _default_finder_recording_modes() -> str:
     return os.getenv("ZML_FINDER_RECORDING", "").strip()
+
+
+def _default_finder_debug_logging() -> bool:
+    return _env_bool("ZML_FINDER_DEBUG", default=False)
 
 
 def _default_finder_recording_dir() -> Path:
@@ -341,6 +356,8 @@ class Settings:
     ocr_enabled: bool = field(default_factory=_default_ocr_enabled)
     ocr_transport: OcrTransport = field(default_factory=_default_ocr_transport)
     ocr_agent_path: Path | None = field(default_factory=_default_ocr_agent_path)
+    ocr_capture_hz: float = field(default_factory=_default_ocr_capture_hz)
+    ocr_capture_artifacts_dir: Path = field(default_factory=_default_ocr_capture_artifacts_dir)
     mock_inputs_enabled: bool = field(default_factory=_default_mock_inputs_enabled)
     mock_mining_interval_ms: int = field(default_factory=_default_mock_mining_interval_ms)
     claim_expiration_maintenance_enabled: bool = field(
@@ -350,6 +367,7 @@ class Settings:
         default_factory=_default_claim_expiration_maintenance_interval_s
     )
     finder_recording_modes: str = field(default_factory=_default_finder_recording_modes)
+    finder_debug_logging: bool = field(default_factory=_default_finder_debug_logging)
     finder_recording_dir: Path = field(default_factory=_default_finder_recording_dir)
     finder_recording_interval_s: float = field(default_factory=_default_finder_recording_interval_s)
     finder_recording_max_samples: int = field(default_factory=_default_finder_recording_max_samples)

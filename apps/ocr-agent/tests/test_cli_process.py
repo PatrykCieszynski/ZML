@@ -54,6 +54,22 @@ def test_stdio_process_emits_hello_accepts_shutdown_and_exits() -> None:
     assert results[0].payload.status == "ok"
 
 
+@pytest.mark.timeout(15)
+def test_stdio_process_exits_cleanly_when_backend_closes_stdin() -> None:
+    process = subprocess.Popen(
+        [sys.executable, "-m", "zml_ocr_agent", "stdio"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+    stdout, stderr = process.communicate(input=b"", timeout=12)
+
+    assert process.returncode == 0, stderr.decode("utf-8", errors="replace")
+    messages = [decode_agent_message(line) for line in stdout.splitlines()]
+    assert isinstance(messages[0], HelloMessage)
+
+
 def test_agent_source_does_not_import_game_bridge() -> None:
     source_root = Path(__file__).parents[1] / "src" / "zml_ocr_agent"
     offenders = [

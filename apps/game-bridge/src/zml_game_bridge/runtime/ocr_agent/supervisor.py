@@ -10,6 +10,9 @@ from dataclasses import dataclass, field
 
 from zml_ocr_protocol import (
     AgentToBridgeMessage,
+    ApplyConfigCommand,
+    ApplyConfigPayload,
+    CommandResultMessage,
     FinderSignalMessage,
     HeartbeatMessage,
     HelloMessage,
@@ -38,7 +41,9 @@ from zml_game_bridge.runtime.supervisor import WorkerSupervisor
 logger = logging.getLogger(__name__)
 
 _OCR_WORKER_NAME = "ocr_worker"
-_REQUIRED_CAPABILITIES = frozenset({"position", "finder", "status", "heartbeat"})
+_REQUIRED_CAPABILITIES = frozenset(
+    {"position", "finder", "status", "heartbeat", "apply_config", "shutdown"}
+)
 _FATAL_AGENT_STATUS_CODES = frozenset({"ocr_preload_failed", "ocr_runner_crashed"})
 
 MonotonicClock = Callable[[], float]
@@ -83,7 +88,9 @@ class RestartPolicy:
 class OcrAgentSupervisorConfig:
     enabled: bool
     process: OcrAgentProcessConfig
+    desired_config: ApplyConfigPayload
     handshake_timeout_s: float = 5.0
+    config_timeout_s: float = 10.0
     heartbeat_timeout_s: float = 8.0
     monitor_interval_s: float = 0.05
     restart: RestartPolicy = field(default_factory=RestartPolicy)
@@ -218,6 +225,8 @@ class OcrAgentSupervisor:
             failure_kind=None,
             pid=transport.pid,
             restart_count=restart_count,
+            desired_config_revision=self._config.desired_config.revision,
+            applied_config_revision=None,
         )
         self._supervisor.mark_degraded(_OCR_WORKER_NAME, "OCR Agent handshake pending")
 
@@ -250,6 +259,13 @@ class OcrAgentSupervisor:
                 failures=failures,
                 stop_event=stop_event,
             )
+            if error is None and not stop_event.is_set():
+                error = self._apply_desired_config(
+                    transport=transport,
+                    session=session,
+                    failures=failures,
+                    stop_event=stop_event,
+                )
             if error is None and not stop_event.is_set():
                 error = self._monitor_process(
                     transport=transport,
@@ -297,6 +313,52 @@ class OcrAgentSupervisor:
             stop_event.wait(self._config.monitor_interval_s)
         return None
 
+    def _apply_desired_config(
+        self,
+        *,
+        transport: OcrProcessTransport,
+        session: _ProtocolSession,
+        failures: queue.Queue[BaseException],
+        stop_event: threading.Event,
+    ) -> BaseException | None:
+        command_id = uuid.uuid4().hex
+        revision = self._config.desired_config.revision
+        session.expect_config(command_id=command_id, revision=revision)
+        self._supervisor.update_details(
+            _OCR_WORKER_NAME,
+            process_state="configuring",
+            desired_config_revision=revision,
+        )
+        try:
+            transport.send(
+                ApplyConfigCommand(
+                    protocol_version=1,
+                    type="apply_config",
+                    command_id=command_id,
+                    sent_ts_ms=time.time_ns() // 1_000_000,
+                    payload=self._config.desired_config,
+                )
+            )
+        except Exception as exc:
+            return OcrAgentProcessError(f"failed to send apply_config: {exc}")
+
+        deadline = self._monotonic() + self._config.config_timeout_s
+        while not stop_event.is_set():
+            failure = _take_failure(failures)
+            if failure is not None:
+                return failure
+            exit_code = transport.poll()
+            if exit_code is not None:
+                return OcrAgentProcessError(
+                    f"child exited while applying config with code {exit_code}"
+                )
+            if session.config_complete.is_set():
+                return session.config_error
+            if self._monotonic() >= deadline:
+                return OcrAgentProcessError(f"apply_config revision {revision} timed out")
+            stop_event.wait(self._config.monitor_interval_s)
+        return None
+
     def _monitor_process(
         self,
         *,
@@ -334,7 +396,20 @@ class _ProtocolSession:
         self._hello_received = False
         self._last_sequence_id = -1
         self._last_heartbeat_at = monotonic()
+        self._expected_config_command_id: str | None = None
+        self._expected_config_revision: int | None = None
+        self.config_error: BaseException | None = None
         self.handshake_complete = threading.Event()
+        self.config_complete = threading.Event()
+
+    def expect_config(self, *, command_id: str, revision: int) -> None:
+        with self._lock:
+            if not self._hello_received:
+                raise OcrAgentProcessError("cannot configure OCR Agent before hello")
+            if self._expected_config_command_id is not None:
+                raise OcrAgentProcessError("OCR Agent config command is already pending")
+            self._expected_config_command_id = command_id
+            self._expected_config_revision = revision
 
     def handle(self, message: AgentToBridgeMessage) -> None:
         with self._lock:
@@ -375,12 +450,15 @@ class _ProtocolSession:
             )
 
             if isinstance(message, PositionMessage):
+                self._require_configured_observations()
                 self._mapper.map_position(message)
                 return
             if isinstance(message, FinderSignalMessage):
+                self._require_configured_observations()
                 self._mapper.map_finder(message)
                 return
             if isinstance(message, StatusMessage):
+                self._observe_applied_revision(message.payload.applied_revision)
                 self._apply_agent_state(
                     state=message.payload.state,
                     detail=message.payload.detail,
@@ -389,6 +467,7 @@ class _ProtocolSession:
                 return
             if isinstance(message, HeartbeatMessage):
                 self._last_heartbeat_at = self._monotonic()
+                self._observe_applied_revision(message.payload.applied_revision)
                 self._supervisor.update_details(
                     _OCR_WORKER_NAME,
                     last_heartbeat_ts_ms=message.emitted_ts_ms,
@@ -399,11 +478,52 @@ class _ProtocolSession:
                     code=None,
                 )
                 return
+            self._handle_command_result(message)
             return
 
     def heartbeat_age_s(self) -> float:
         with self._lock:
             return max(0.0, self._monotonic() - self._last_heartbeat_at)
+
+    def _handle_command_result(self, message: CommandResultMessage) -> None:
+        command_id = self._expected_config_command_id
+        revision = self._expected_config_revision
+        if command_id is None or revision is None:
+            raise OcrAgentProcessError("OCR Agent emitted an unexpected command_result")
+        payload = message.payload
+        if payload.command_id != command_id or payload.command_type != "apply_config":
+            raise OcrAgentProcessError("OCR Agent returned command_result for another command")
+        if payload.status == "error":
+            error = payload.error
+            detail = "unknown error" if error is None else f"{error.code}: {error.message}"
+            self.config_error = OcrAgentProcessError(
+                f"OCR Agent rejected config revision {revision}: {detail}"
+            )
+            self.config_complete.set()
+            return
+        if payload.applied_revision != revision:
+            raise OcrAgentProcessError(
+                "OCR Agent acknowledged unexpected config revision "
+                f"{payload.applied_revision}; expected {revision}"
+            )
+        self._supervisor.update_details(
+            _OCR_WORKER_NAME,
+            process_state="configured",
+            applied_config_revision=revision,
+        )
+        self.config_complete.set()
+
+    def _require_configured_observations(self) -> None:
+        if not self.config_complete.is_set() or self.config_error is not None:
+            raise OcrAgentProcessError(
+                "OCR Agent emitted an observation before apply_config completed"
+            )
+
+    def _observe_applied_revision(self, revision: int | None) -> None:
+        self._supervisor.update_details(
+            _OCR_WORKER_NAME,
+            applied_config_revision=revision,
+        )
 
     def _apply_agent_state(
         self,
@@ -507,6 +627,10 @@ def _stop_process_gracefully(transport: OcrProcessTransport) -> None:
         )
     except Exception:
         logger.debug("ocr_agent_shutdown_command_failed", exc_info=True)
+    try:
+        transport.close_stdin()
+    except Exception:
+        logger.debug("ocr_agent_shutdown_stdin_close_failed", exc_info=True)
     if transport.wait(timeout_s=3.0) is not None:
         return
     _force_stop_process(transport)

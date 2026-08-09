@@ -60,6 +60,9 @@ Input modes:
 - `ZML_OCR_TRANSPORT`: `embedded` (default rollback path) or `agent` (managed child process).
 - `ZML_OCR_AGENT_PATH`: optional path to a standalone OCR Agent executable; source runs use the
   current Python environment and `python -m zml_ocr_agent stdio` when this is unset.
+- `ZML_OCR_CAPTURE_HZ`: desired agent capture frequency, defaults to `10`.
+- `ZML_OCR_CAPTURE_ARTIFACTS_DIR`: directory reserved for command-driven OCR captures.
+- `ZML_OCR_PROFILE_PATH`: ROI profile loaded by Game Bridge into the complete desired agent config.
 - `ZML_MOCK_INPUTS`: enable mock mining input.
 - `ZML_MOCK_MINING_INTERVAL_MS`: mock drop interval.
 - `ZML_FINDER_DEBUG`: enable detailed finder OCR debug logging.

@@ -132,6 +132,8 @@ def _settings_table(settings: Settings) -> Table:
     table.add_row("ocr_enabled", _format_bool(settings.ocr_enabled))
     table.add_row("ocr_transport", settings.ocr_transport)
     table.add_row("ocr_agent_path", _format_path(settings.ocr_agent_path))
+    table.add_row("ocr_capture_hz", str(settings.ocr_capture_hz))
+    table.add_row("ocr_capture_artifacts_dir", str(settings.ocr_capture_artifacts_dir))
     table.add_row("mock_inputs_enabled", _format_bool(settings.mock_inputs_enabled))
     table.add_row("mock_mining_interval_ms", str(settings.mock_mining_interval_ms))
     table.add_row(
@@ -143,6 +145,7 @@ def _settings_table(settings: Settings) -> Table:
         str(settings.claim_expiration_maintenance_interval_s),
     )
     table.add_row("finder_recording_modes", settings.finder_recording_modes or "[dim]<off>[/]")
+    table.add_row("finder_debug_logging", _format_bool(settings.finder_debug_logging))
     table.add_row("finder_recording_dir", str(settings.finder_recording_dir))
     table.add_row("finder_recording_interval_s", str(settings.finder_recording_interval_s))
     table.add_row("finder_recording_max_samples", str(settings.finder_recording_max_samples))

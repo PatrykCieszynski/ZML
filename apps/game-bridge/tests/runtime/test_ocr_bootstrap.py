@@ -27,12 +27,17 @@ def test_embedded_transport_remains_the_default(monkeypatch: pytest.MonkeyPatch)
     assert isinstance(source, EmbeddedOcrInputSource)
 
 
-def test_agent_transport_uses_current_python_or_configured_executable() -> None:
-    default_settings = Settings(ocr_enabled=False, ocr_transport="agent")
+def test_agent_transport_uses_current_python_or_configured_executable(tmp_path: Path) -> None:
+    default_settings = Settings(
+        ocr_enabled=False,
+        ocr_transport="agent",
+        ocr_profile_path=tmp_path / "default-profile.json",
+    )
     configured_settings = Settings(
         ocr_enabled=False,
         ocr_transport="agent",
         ocr_agent_path=Path("C:/ZML/zml-ocr-agent.exe"),
+        ocr_profile_path=tmp_path / "configured-profile.json",
     )
 
     default_source = build_ocr_input_source(
@@ -52,9 +57,9 @@ def test_agent_transport_uses_current_python_or_configured_executable() -> None:
     assert default_source.config.process.command == (sys.executable, "-m", "zml_ocr_agent", "stdio")
     assert isinstance(configured_source, OcrAgentSupervisor)
     assert configured_source.config.process.command == ("C:\\ZML\\zml-ocr-agent.exe", "stdio")
-    assert configured_source.config.process.environment["ZML_OCR_PROFILE_PATH"] == str(
-        configured_settings.ocr_profile_path
-    )
+    assert configured_source.config.process.environment == {}
+    assert configured_source.config.desired_config.revision == 1
+    assert configured_source.config.desired_config.config.roi_profile.name == "mvp-default"
 
 
 def test_invalid_ocr_transport_environment_fails_fast(

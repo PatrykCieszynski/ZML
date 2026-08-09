@@ -8,6 +8,13 @@ from pathlib import Path
 from typing import Literal
 
 import numpy as np
+from zml_ocr_protocol.messages import (
+    ApplyConfigPayload,
+    OcrRoiProfilePayload,
+    PixelRectPayload,
+    RelativeRectPayload,
+    ScreenRoiPayload,
+)
 
 from zml_ocr_agent.capture.model import RoiRect
 from zml_ocr_agent.pipelines.image import RelativeRect
@@ -100,6 +107,102 @@ class OcrRoiProfile:
     screen_rois: OcrScreenRois
     position_rois: PositionRoiConfig
     finder_panel: FinderPanelLayoutConfig
+
+
+@dataclass(frozen=True, slots=True)
+class AppliedOcrConfig:
+    revision: int
+    capture_hz: float
+    capture_artifacts_dir: Path
+    roi_profile: OcrRoiProfile
+    finder_debug_logging: bool
+    finder_recording_modes: str
+    finder_recording_dir: Path
+    finder_recording_interval_s: float
+    finder_recording_max_samples: int
+    finder_presence_check_enabled: bool
+    position_roi_snapshot_enabled: bool
+    position_roi_snapshot_dir: Path
+    position_roi_snapshot_interval_s: float
+    position_roi_snapshot_max_samples: int
+    ocr_profiling_enabled: bool
+    ocr_profiling_interval_s: float
+
+
+def applied_ocr_config(payload: ApplyConfigPayload) -> AppliedOcrConfig:
+    config = payload.config
+    return AppliedOcrConfig(
+        revision=payload.revision,
+        capture_hz=config.capture_hz,
+        capture_artifacts_dir=Path(config.capture_artifacts_dir),
+        roi_profile=_profile_from_protocol(config.roi_profile),
+        finder_debug_logging=config.finder.debug_logging,
+        finder_recording_modes=",".join(config.finder.recording.modes),
+        finder_recording_dir=Path(config.finder.recording.directory),
+        finder_recording_interval_s=_milliseconds_to_seconds(config.finder.recording.interval_ms),
+        finder_recording_max_samples=config.finder.recording.max_samples,
+        finder_presence_check_enabled=config.finder.presence_check_enabled,
+        position_roi_snapshot_enabled=config.position.snapshot_recording.enabled,
+        position_roi_snapshot_dir=Path(config.position.snapshot_recording.directory),
+        position_roi_snapshot_interval_s=_milliseconds_to_seconds(
+            config.position.snapshot_recording.interval_ms
+        ),
+        position_roi_snapshot_max_samples=config.position.snapshot_recording.max_samples,
+        ocr_profiling_enabled=config.profiling.enabled,
+        ocr_profiling_interval_s=_milliseconds_to_seconds(config.profiling.interval_ms),
+    )
+
+
+def _profile_from_protocol(payload: OcrRoiProfilePayload) -> OcrRoiProfile:
+    return OcrRoiProfile(
+        name=payload.name,
+        screen_rois=OcrScreenRois(
+            compass=_screen_roi_from_protocol(payload.screen_rois.compass),
+            finder=_screen_roi_from_protocol(payload.screen_rois.finder),
+            deeds=_screen_roi_from_protocol(payload.screen_rois.deeds),
+            loot=(
+                None
+                if payload.screen_rois.loot is None
+                else _screen_roi_from_protocol(payload.screen_rois.loot)
+            ),
+        ),
+        position_rois=PositionRoiConfig(
+            planet=_pixel_rect_from_protocol(payload.position_rois.planet),
+            lon=_pixel_rect_from_protocol(payload.position_rois.lon),
+            lat=_pixel_rect_from_protocol(payload.position_rois.lat),
+        ),
+        finder_panel=FinderPanelLayoutConfig(
+            radar=_relative_rect_from_protocol(payload.finder_panel.radar),
+            modes=_relative_rect_from_protocol(payload.finder_panel.modes),
+            details=_relative_rect_from_protocol(payload.finder_panel.details),
+            units=_relative_rect_from_protocol(payload.finder_panel.units),
+            status=_relative_rect_from_protocol(payload.finder_panel.status),
+        ),
+    )
+
+
+def _screen_roi_from_protocol(payload: ScreenRoiPayload) -> ScreenRoiConfig:
+    return ScreenRoiConfig(
+        name=payload.name,
+        anchor=payload.anchor,
+        x=payload.x,
+        y=payload.y,
+        width=payload.width,
+        height=payload.height,
+        enabled=payload.enabled,
+    )
+
+
+def _pixel_rect_from_protocol(payload: PixelRectPayload) -> RoiRect:
+    return RoiRect(x1=payload.x1, x2=payload.x2, y1=payload.y1, y2=payload.y2)
+
+
+def _relative_rect_from_protocol(payload: RelativeRectPayload) -> RelativeRect:
+    return payload.x1, payload.y1, payload.x2, payload.y2
+
+
+def _milliseconds_to_seconds(value: int) -> float:
+    return value / 1_000.0
 
 
 def load_ocr_roi_profile(path: Path | None) -> OcrRoiProfile:

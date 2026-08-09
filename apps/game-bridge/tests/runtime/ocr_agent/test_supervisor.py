@@ -4,11 +4,14 @@ import queue
 import threading
 import time
 from collections.abc import Callable
+from pathlib import Path
 from typing import cast
 
 import pytest
 from zml_ocr_protocol import (
     AgentToBridgeMessage,
+    ApplyConfigCommand,
+    CommandResultMessage,
     FinderSignalMessage,
     HeartbeatMessage,
     HelloMessage,
@@ -17,6 +20,7 @@ from zml_ocr_protocol import (
 )
 from zml_ocr_protocol.messages import (
     AgentStatusState,
+    CommandResultPayload,
     FinderNoResourcesPayload,
     HeartbeatPayload,
     HelloPayload,
@@ -29,6 +33,7 @@ from zml_ocr_protocol.messages import (
 from zml_game_bridge.application.mining.signals.finder import FinderNoResourcesSignal
 from zml_game_bridge.application.position.model import PositionSnapshot
 from zml_game_bridge.events.base import SignalBase
+from zml_game_bridge.runtime.ocr_agent.config import build_desired_ocr_config
 from zml_game_bridge.runtime.ocr_agent.message_mapper import OcrAgentMessageMapper
 from zml_game_bridge.runtime.ocr_agent.process_transport import (
     OcrAgentProcessConfig,
@@ -42,6 +47,7 @@ from zml_game_bridge.runtime.ocr_agent.supervisor import (
     _ProtocolSession,
 )
 from zml_game_bridge.runtime.supervisor import WorkerSupervisor
+from zml_game_bridge.settings import Settings
 
 
 def test_protocol_session_requires_hello_before_observations() -> None:
@@ -54,8 +60,8 @@ def test_protocol_session_requires_hello_before_observations() -> None:
 def test_protocol_session_maps_observations_and_distinguishes_window_health() -> None:
     session, supervisor, positions, signals = _session(clock_ms=lambda: 2_000)
 
-    session.handle(_hello())
-    session.handle(_status_waiting(sequence_id=1))
+    _configure_session(session)
+    session.handle(_status_waiting(sequence_id=2))
 
     worker = _worker_health(supervisor)
     assert worker["state"] == "degraded"
@@ -63,9 +69,9 @@ def test_protocol_session_maps_observations_and_distinguishes_window_health() ->
     assert worker["details"]["process_state"] == "window_unavailable"
     assert worker["details"]["failure_kind"] == "capture"
 
-    session.handle(_position(sequence_id=2))
-    session.handle(_finder(sequence_id=3))
-    session.handle(_heartbeat(sequence_id=4, state="running", capture_available=True))
+    session.handle(_position(sequence_id=3))
+    session.handle(_finder(sequence_id=4))
+    session.handle(_heartbeat(sequence_id=5, state="running", capture_available=True))
 
     assert positions[0].observed_ts_ms == 1_000
     assert positions[0].received_ts_ms == 2_000
@@ -85,7 +91,7 @@ def test_protocol_session_maps_observations_and_distinguishes_window_health() ->
 
 def test_protocol_session_rejects_fatal_agent_status_and_non_monotonic_sequence() -> None:
     session, _, _, _ = _session()
-    session.handle(_hello())
+    _configure_session(session)
 
     with pytest.raises(OcrAgentProcessError, match="tesserocr unavailable"):
         session.handle(
@@ -93,7 +99,7 @@ def test_protocol_session_rejects_fatal_agent_status_and_non_monotonic_sequence(
                 protocol_version=1,
                 type="status",
                 message_id="f" * 32,
-                sequence_id=1,
+                sequence_id=2,
                 emitted_ts_ms=1_001,
                 payload=StatusPayload(
                     state="degraded",
@@ -106,14 +112,16 @@ def test_protocol_session_rejects_fatal_agent_status_and_non_monotonic_sequence(
         )
 
     session, _, _, _ = _session()
-    session.handle(_hello())
-    session.handle(_heartbeat(sequence_id=2, state="running", capture_available=True))
+    _configure_session(session)
+    session.handle(_heartbeat(sequence_id=3, state="running", capture_available=True))
     with pytest.raises(OcrAgentProcessError, match="increase monotonically"):
-        session.handle(_position(sequence_id=1))
+        session.handle(_position(sequence_id=2))
 
 
 @pytest.mark.timeout(2)
-def test_supervisor_restarts_agent_and_accepts_position_and_finder_after_restart() -> None:
+def test_supervisor_restarts_agent_and_accepts_position_and_finder_after_restart(
+    tmp_path: Path,
+) -> None:
     stop_event = threading.Event()
     positions: list[PositionSnapshot] = []
     signals: list[SignalBase] = []
@@ -122,10 +130,10 @@ def test_supervisor_restarts_agent_and_accepts_position_and_finder_after_restart
         _FakeTransport(
             [
                 _hello(pid=101),
-                _status_waiting(sequence_id=1),
-                _heartbeat(sequence_id=2, state="waiting_for_window", capture_available=False),
-                _position(sequence_id=3),
-                _finder(sequence_id=4),
+                _status_waiting(sequence_id=2),
+                _heartbeat(sequence_id=3, state="waiting_for_window", capture_available=False),
+                _position(sequence_id=4),
+                _finder(sequence_id=5),
             ],
             exit_after_messages=False,
             pid=101,
@@ -148,6 +156,9 @@ def test_supervisor_restarts_agent_and_accepts_position_and_finder_after_restart
         config=OcrAgentSupervisorConfig(
             enabled=True,
             process=OcrAgentProcessConfig(command=("fake-agent",), environment={}),
+            desired_config=build_desired_ocr_config(
+                Settings(ocr_profile_path=tmp_path / "ocr-profile.json")
+            ),
             handshake_timeout_s=0.5,
             heartbeat_timeout_s=0.5,
             monitor_interval_s=0.001,
@@ -201,6 +212,31 @@ def _worker_health(supervisor: WorkerSupervisor) -> dict[str, object]:
     return workers["ocr_worker"]
 
 
+def _configure_session(session: _ProtocolSession) -> None:
+    command_id = "0" * 32
+    session.handle(_hello())
+    session.expect_config(command_id=command_id, revision=1)
+    session.handle(_config_result(command_id=command_id, sequence_id=1))
+
+
+def _config_result(*, command_id: str, sequence_id: int) -> CommandResultMessage:
+    return CommandResultMessage(
+        protocol_version=1,
+        type="command_result",
+        message_id="f" * 32,
+        sequence_id=sequence_id,
+        emitted_ts_ms=1_001,
+        payload=CommandResultPayload(
+            command_id=command_id,
+            command_type="apply_config",
+            status="ok",
+            applied_revision=1,
+            capture=None,
+            error=None,
+        ),
+    )
+
+
 def _hello(*, pid: int = 123) -> HelloMessage:
     return HelloMessage(
         protocol_version=1,
@@ -212,7 +248,15 @@ def _hello(*, pid: int = 123) -> HelloMessage:
             agent_version="0.1.0",
             pid=pid,
             started_ts_ms=999,
-            capabilities=["stdio", "position", "finder", "status", "heartbeat"],
+            capabilities=[
+                "stdio",
+                "position",
+                "finder",
+                "status",
+                "heartbeat",
+                "apply_config",
+                "shutdown",
+            ],
         ),
     )
 
@@ -265,7 +309,7 @@ def _status_waiting(*, sequence_id: int) -> StatusMessage:
         payload=StatusPayload(
             state="waiting_for_window",
             capture_available=False,
-            applied_revision=None,
+            applied_revision=1,
             code="window_unavailable",
             detail="window missing",
         ),
@@ -287,7 +331,7 @@ def _heartbeat(
         payload=HeartbeatPayload(
             state=state,
             capture_available=capture_available,
-            applied_revision=None,
+            applied_revision=1,
         ),
     )
 
@@ -313,10 +357,7 @@ class _FakeTransport:
         self.sent_shutdown = False
 
     def start(self) -> None:
-        for message in self._messages:
-            self._stdout.put(encode_message(message))
-        if self._exit_after_messages:
-            self._stdout.put(_EOF)
+        self._stdout.put(encode_message(self._messages[0]))
 
     def read_stdout_line(self) -> bytes:
         item = self._stdout.get(timeout=1.0)
@@ -330,6 +371,31 @@ class _FakeTransport:
         return b"" if item is _EOF else cast(bytes, item)
 
     def send(self, message: object) -> None:
+        if isinstance(message, ApplyConfigCommand):
+            self._stdout.put(
+                encode_message(
+                    CommandResultMessage(
+                        protocol_version=1,
+                        type="command_result",
+                        message_id="f" * 32,
+                        sequence_id=1,
+                        emitted_ts_ms=1_004,
+                        payload=CommandResultPayload(
+                            command_id=message.command_id,
+                            command_type="apply_config",
+                            status="ok",
+                            applied_revision=message.payload.revision,
+                            capture=None,
+                            error=None,
+                        ),
+                    )
+                )
+            )
+            for observation in self._messages[1:]:
+                self._stdout.put(encode_message(observation))
+            if self._exit_after_messages:
+                self._stdout.put(_EOF)
+            return
         self.sent_shutdown = getattr(message, "type", None) == "shutdown"
         self._exit(0)
 

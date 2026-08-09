@@ -55,7 +55,8 @@ Z Mining Log is now a working local mining tracker prototype:
   - `apps/ocr-agent` now owns capture, pipelines, recording/profiling,
     finder debug tooling, native OCR dependencies, and tessdata;
   - OCR Agent has independent Ruff, Pyright, unit tests, `doctor`, `--version`,
-    and `stdio` commands; protocol mode emits `hello` and handles `shutdown`;
+    and `stdio` commands; protocol mode emits `hello`, waits for revisioned full
+    configuration, and handles `shutdown` or stdin EOF;
   - finder OCR migrated toward `tesserocr` wrapper;
   - profiling and finder crop recording hooks exist;
   - position outlier filtering exists;
@@ -63,7 +64,13 @@ Z Mining Log is now a working local mining tracker prototype:
   - OCR still runs in-process by default, but `ZML_OCR_TRANSPORT=agent` now
     selects a managed child process and `ZML_OCR_AGENT_PATH` can select its executable;
   - the subprocess supervisor validates `hello`, drains both output pipes,
-    monitors heartbeats, maps observations, and restarts with bounded backoff;
+    applies the complete desired config before accepting observations, monitors
+    heartbeats, maps observations, and restarts with bounded backoff;
+  - every restart resends the same desired config revision and health exposes
+    desired/applied revisions;
+  - deterministic real-process tests cover handshake/config, position/finder
+    mapping, stderr flood, malformed NDJSON, heartbeat timeout, unavailable
+    windows, crash/resync, EOF, and forced shutdown escalation;
   - structured worker health distinguishes process/protocol failure and restart
     state from an unavailable Entropia capture window;
   - the runner emits strict version 1 `packages/ocr-protocol` messages and
@@ -93,7 +100,7 @@ Z Mining Log is now a working local mining tracker prototype:
 See `ROADMAP_2025-05-26.md` for the ordered roadmap. The highest-value items are:
 
 1. Managed OCR Agent migration:
-   - synchronize full configuration snapshots and validate real-game behavior;
+   - validate agent mode during real gameplay;
    - package both executables before removing embedded OCR.
 
 2. Runtime config and live settings:
