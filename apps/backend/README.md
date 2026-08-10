@@ -2,7 +2,7 @@
 
 The Backend is the local Python application that turns noisy game inputs into durable mining state and exposes that state to the Desktop.
 
-It owns FastAPI, application/domain logic, runtime orchestration, SQLite persistence, chat-log input, and supervision of the standalone OCR Worker.
+It owns FastAPI, application/domain logic, runtime orchestration, SQLite persistence, chat-log input, supervision of the standalone OCR Worker, and optional background claim synchronization to ZML Cloud.
 
 ## Boundary
 
@@ -15,6 +15,8 @@ flowchart TB
     App -->|writes durable events + projections| DB[(SQLite)]
     DB -.->|reads projections + history| API[FastAPI]
     App -->|commands / live state| API
+    DB -.->|complete unsynced claims| CloudSync[Cloud sync worker]
+    CloudSync -->|privacy-minimized HTTP batches| Cloud[ZML Cloud]
 
     API -->|REST / SSE / WebSocket| Desktop[Desktop]
 ```
@@ -101,13 +103,48 @@ A missing Entropia window is treated as a recoverable capture condition rather t
 
 The architecture test `tests/test_ocr_process_boundary.py` protects this separation.
 
+## Cloud claim synchronization
+
+Cloud synchronization is opt-in and runs in a background worker. Local SQLite remains the source of truth and recording a claim never waits for the network.
+
+A claim becomes eligible when the local projection contains all public-map fields required by ZML Cloud:
+
+```text
+claim_id
+planet_name
+x / y
+resource_name
+size_index
+observed_ts_ms
+```
+
+The worker uploads up to 250 pending claims at a time to `POST /api/v1/sync/claims`. Server outcomes are stored durably in `cloud_claim_sync` through `DbWriterWorker`; `accepted` and `already_present` are both terminal successful outcomes, while permanent per-item rejection is retained with its reason.
+
+Transient HTTP/network failures do not change local claim state and are retried on a later interval. No cost, ammo, finder, amplifier, run-return, or bankroll data is included in the cloud payload.
+
+For development against a local ZML Cloud instance:
+
+```text
+ZML_CLOUD_BASE_URL=http://localhost:8080
+ZML_CLOUD_SYNC_TOKEN=zml_<secret>
+```
+
+Optional tuning:
+
+```text
+ZML_CLOUD_SYNC_INTERVAL_S=600
+ZML_CLOUD_SYNC_BATCH_SIZE=250
+```
+
+The sync token is treated as a secret and is never written to logs or SQLite by this feature. Browser-based device pairing will replace manual token configuration later; the cloud transport intentionally does not depend on Discord credentials.
+
 ## Persistence rules
 
 SQLite has one writer: `DbWriterWorker`.
 
 - Durable events and their projections are written in the same transaction.
-- API routes may open separate read connections.
-- Input threads and API handlers must not create a second ad-hoc write path.
+- API routes and background workers may open separate read connections.
+- Input threads, API handlers, and background workers must not create a second ad-hoc write path.
 - Player-position ticks are live telemetry and are not persisted as a raw stream.
 
 Monetary amounts are stored as integer mPEC to avoid floating-point drift:
@@ -146,10 +183,12 @@ ZML_OCR_WORKER_PATH
 ZML_OCR_CAPTURE_HZ
 ZML_OCR_PROFILE_PATH
 ZML_MOCK_INPUTS
+ZML_CLOUD_BASE_URL
+ZML_CLOUD_SYNC_TOKEN
 ZML_LOG_LEVEL
 ```
 
-OCR recording/profiling and path overrides are also available; use `just backend config` and `settings.py` as the authoritative list rather than duplicating every setting here.
+OCR recording/profiling and path overrides are also available; `settings.py` is the authoritative configuration source.
 
 ## Application data
 
