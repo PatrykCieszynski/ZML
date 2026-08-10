@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 
+from .cloud_sync import router as cloud_sync_router
 from .events import router as events_router
 from .health import router as health_router
 from .mining import router as mining_router
@@ -15,4 +16,5 @@ def register_routes(app: FastAPI) -> None:
     app.include_router(runs_router)
     app.include_router(mining_router)
     app.include_router(mining_tools_router)
+    app.include_router(cloud_sync_router)
     app.include_router(position_router)
