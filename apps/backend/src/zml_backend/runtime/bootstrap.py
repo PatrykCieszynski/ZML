@@ -21,6 +21,10 @@ from zml_backend.persistence.event_projector import CompositeEventProjector
 from zml_backend.persistence.mining_claims import MiningClaimProjector
 from zml_backend.persistence.mining_drops import MiningDropProjector
 from zml_backend.persistence.mining_loot import MiningLootProjector
+from zml_backend.persistence.position_state import (
+    SetLastKnownPlanetCommand,
+    load_last_known_planet,
+)
 from zml_backend.persistence.runs import RunSegmentProjector
 from zml_backend.resources.mining_resources import MiningResourceCatalog
 from zml_backend.runtime.channels import EventChannel, RuntimeInputChannel
@@ -66,10 +70,15 @@ def build_runtime_components(
     pending_events = EventChannel()
     pending_db_commands = DbCommandChannel()
     persisted_events = InMemoryPersistedEventBus()
-    position_service = PositionTrackingService()
+    position_service = PositionTrackingService(
+        initial_planet_name=load_last_known_planet(settings.db_path)
+    )
 
     def ingest_ocr_position(snapshot: PositionSnapshot) -> None:
         position_service.ingest_snapshot(snapshot)
+
+    def persist_trusted_planet(planet_name: str) -> None:
+        pending_db_commands.execute(SetLastKnownPlanetCommand(planet_name=planet_name))
 
     ocr_input_source = build_ocr_input_source(
         settings,
@@ -111,7 +120,10 @@ def build_runtime_components(
         pending_events=pending_events,
         input_processor=CompositeInputProcessor(
             [
-                PositionInputProcessor(position_service),
+                PositionInputProcessor(
+                    position_service,
+                    planet_observer=persist_trusted_planet,
+                ),
                 mining_coordinator,
             ]
         ),
