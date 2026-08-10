@@ -33,7 +33,7 @@ jobs:
           enable-cache: true
 
       - name: Install Python
-        run: uv python install
+        run: uv python install 3.13
 
       - name: Sync Python workspace
         run: uv sync --locked --all-packages
