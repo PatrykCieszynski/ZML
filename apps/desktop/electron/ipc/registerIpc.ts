@@ -13,6 +13,7 @@ import {
 } from "@desktop/shared";
 import { runtime } from "../runtime";
 import type { BackendClient } from "../backend/restClient.ts";
+import type { CloudConnectionService } from "../cloud/cloudConnectionService.ts";
 import { pushStatePatch } from "./pushStatePatch.ts";
 import { replaceMiningClaims, replaceMiningDrops } from "../mining/miningDropsState.ts";
 import { replaceMiningLoot, replaceMiningLootTotals } from "../mining/miningLootState.ts";
@@ -22,11 +23,17 @@ type RegisterIpcDeps = {
     backendRestClient: BackendClient;
     toggleMapWindow: () => Promise<boolean>;
     toggleOverlayWindow: () => Promise<boolean>;
+    cloudConnectionService: CloudConnectionService;
 };
 
 let registered = false;
 
-export function registerIpc({ backendRestClient, toggleMapWindow, toggleOverlayWindow }: RegisterIpcDeps): void {
+export function registerIpc({
+    backendRestClient,
+    toggleMapWindow,
+    toggleOverlayWindow,
+    cloudConnectionService,
+}: RegisterIpcDeps): void {
     if (registered) return;
     registered = true;
 
@@ -39,6 +46,7 @@ export function registerIpc({ backendRestClient, toggleMapWindow, toggleOverlayW
             nowTsMs: Date.now(),
             agent: runtime.agent,
             streams: runtime.streams,
+            cloud: runtime.cloud,
             position: runtime.lastPosition,
             mapWindowVisible: runtime.mapWindowVisible,
             overlayWindowVisible: runtime.overlayWindowVisible,
@@ -309,4 +317,7 @@ export function registerIpc({ backendRestClient, toggleMapWindow, toggleOverlayW
         pushStatePatch({ activeMiningTools });
         return activeMiningTools;
     });
+
+    ipcMain.handle(IPC_CMD.CONNECT_CLOUD, async () => cloudConnectionService.connect());
+    ipcMain.handle(IPC_CMD.DISCONNECT_CLOUD, async () => cloudConnectionService.disconnect());
 }
