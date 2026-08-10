@@ -2,6 +2,7 @@ import type {
     BootstrapAgentState,
     BootstrapStreamsState,
     ActiveMiningToolsDto,
+    CloudConnectionState,
     MiningClaimDto,
     MiningDropDto,
     MiningLootItemDto,
@@ -16,6 +17,7 @@ export type RuntimeState = {
     seq: number;
     agent: BootstrapAgentState;
     streams: BootstrapStreamsState;
+    cloud: CloudConnectionState;
     lastError?: string | null;
     lastPosition?: OcrPositionDTO;
     mapWindowVisible: boolean;
@@ -35,6 +37,7 @@ export const runtime: RuntimeState = {
     seq: 0,
     agent: { status: "connecting" },
     streams: { ws: false, sse: false },
+    cloud: { status: "disconnected" },
     lastPosition: undefined,
     mapWindowVisible: false,
     overlayWindowVisible: false,
