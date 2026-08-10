@@ -27,6 +27,7 @@ export class BackendProcessManager {
   private readonly startupTimeoutMs: number;
   private readonly shutdownTimeoutMs: number;
   private readonly maxRestartsPerMinute: number;
+  private readonly environmentOverrides: Record<string, string> = {};
 
   private child: ChildProcessWithoutNullStreams | null = null;
   private restartTimer: NodeJS.Timeout | null = null;
@@ -46,6 +47,18 @@ export class BackendProcessManager {
     this.startupTimeoutMs = startupTimeoutMs;
     this.shutdownTimeoutMs = shutdownTimeoutMs;
     this.maxRestartsPerMinute = maxRestartsPerMinute;
+  }
+
+  isExternalBackend(): boolean {
+    return this.usingExternalBackend;
+  }
+
+  setEnvironmentOverride(name: string, value: string | undefined): void {
+    if (value === undefined) {
+      delete this.environmentOverrides[name];
+      return;
+    }
+    this.environmentOverrides[name] = value;
   }
 
   async start(): Promise<boolean> {
@@ -121,6 +134,7 @@ export class BackendProcessManager {
         PYTHONUNBUFFERED: "1",
         ZML_PARENT_MANAGED: "1",
         ...this.launch.environment,
+        ...this.environmentOverrides,
       },
       shell: false,
       stdio: ["pipe", "pipe", "pipe"],
