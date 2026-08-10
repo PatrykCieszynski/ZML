@@ -49,21 +49,11 @@ class _Worker:
 
 
 class _CloudSyncWorker(_Worker):
-    def __init__(self) -> None:
-        self.wake_calls = 0
+    def configure(self, *, base_url: str | None, token: str | None) -> None:
+        del base_url, token
 
     def request_sync(self) -> None:
-        self.wake_calls += 1
-
-
-class _Subscription:
-    def close(self) -> None:
         pass
-
-
-class _PersistedEvents:
-    def subscribe(self, _handler: object) -> _Subscription:
-        return _Subscription()
 
 
 class _Restorer:
@@ -106,7 +96,6 @@ def test_app_runtime_delegates_ocr_lifecycle_to_input_source() -> None:
     pending_events = _Channel()
     pending_db_commands = _Channel()
     restorer = _Restorer()
-    cloud_sync_worker = _CloudSyncWorker()
     components = cast(
         RuntimeComponents,
         _Components(
@@ -115,7 +104,6 @@ def test_app_runtime_delegates_ocr_lifecycle_to_input_source() -> None:
             pending_events=pending_events,
             pending_db_commands=pending_db_commands,
             restorer=restorer,
-            cloud_sync_worker=cloud_sync_worker,
         ),
     )
     supervisor = _Supervisor()
@@ -145,9 +133,8 @@ def test_app_runtime_delegates_ocr_lifecycle_to_input_source() -> None:
 
     assert ocr_source.stop_event.is_set()
     assert ocr_source.stop_calls == 1
-    assert cloud_sync_worker.wake_calls == 1
-    assert "cloud_sync" in supervisor.joined
     assert "ocr_worker" not in supervisor.joined
+    assert "cloud_sync" in supervisor.joined
     assert pending_inputs.closed
     assert pending_events.closed
     assert pending_db_commands.closed
@@ -162,15 +149,14 @@ class _Components:
         pending_events: _Channel,
         pending_db_commands: _Channel,
         restorer: _Restorer,
-        cloud_sync_worker: _CloudSyncWorker,
     ) -> None:
         self.pending_inputs = pending_inputs
         self.pending_events = pending_events
         self.pending_db_commands = pending_db_commands
-        self.persisted_events = _PersistedEvents()
+        self.persisted_events = object()
         self.position_service = _PositionService()
         self.ocr_input_source = ocr_source
-        self.cloud_sync_worker = cloud_sync_worker
+        self.cloud_sync_worker = _CloudSyncWorker()
         self.mining_equipment_service = object()
         self.run_session_service = object()
         self.mining_coordinator = object()
