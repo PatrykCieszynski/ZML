@@ -144,7 +144,27 @@ def test_position_tracking_service_keeps_trusted_planet_for_following_ocr_positi
     assert decision.snapshot is not None
     assert decision.snapshot.position.planet_name == "Calypso"
     assert service.get_latest() == decision.snapshot
+    assert service.get_last_known_planet_name() == "Calypso"
     assert ocr_position.position.planet_name == ""
+
+
+def test_position_tracking_service_restores_planet_without_restoring_coordinates() -> None:
+    service = PositionTrackingService(initial_planet_name="Calypso")
+
+    assert service.get_latest() is None
+    assert service.get_latest_world_pos() is None
+    assert service.get_last_known_planet_name() == "Calypso"
+
+    decision = service.ingest_snapshot(_position(ts_ms=1_000, x=58_000, y=84_000))
+
+    assert decision.accepted
+    assert decision.snapshot is not None
+    assert decision.snapshot.position == WorldPos(
+        planet_name="Calypso",
+        x=58_000,
+        y=84_000,
+        z=None,
+    )
 
 
 def test_position_tracking_service_prunes_history_by_window_and_limit() -> None:
