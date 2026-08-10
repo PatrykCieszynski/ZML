@@ -27,6 +27,10 @@ export interface CloudPairingClientLike {
   exchangePairing(pairingId: string, deviceSecret: string): Promise<ExchangedCloudCredential>;
 }
 
+type CloudRequestInit = Omit<RequestInit, "headers"> & {
+  headers?: Record<string, string>;
+};
+
 export class CloudPairingClient implements CloudPairingClientLike {
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
@@ -63,7 +67,7 @@ export class CloudPairingClient implements CloudPairingClientLike {
     return parseExchangedCredential(payload);
   }
 
-  private async requestJson(pathname: string, init: RequestInit): Promise<unknown> {
+  private async requestJson(pathname: string, init: CloudRequestInit): Promise<unknown> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
@@ -82,7 +86,7 @@ export class CloudPairingClient implements CloudPairingClientLike {
       return await response.json();
     } catch (error) {
       if (controller.signal.aborted) {
-        throw new Error("ZML Cloud request timed out", { cause: error });
+        throw new Error("ZML Cloud request timed out");
       }
       throw error;
     } finally {
