@@ -47,15 +47,15 @@ export class CloudCredentialStore implements CloudCredentialStoreLike {
         throw new Error("Invalid credential envelope");
       }
       envelope = { version: 1, encrypted: parsed.encrypted };
-    } catch (error) {
-      throw new Error("Stored ZML Cloud credential is invalid", { cause: error });
+    } catch {
+      throw new Error("Stored ZML Cloud credential is invalid");
     }
 
     try {
       const plaintext = safeStorage.decryptString(Buffer.from(envelope.encrypted, "base64"));
       return parseCredential(JSON.parse(plaintext) as unknown);
-    } catch (error) {
-      throw new Error("Stored ZML Cloud credential could not be decrypted", { cause: error });
+    } catch {
+      throw new Error("Stored ZML Cloud credential could not be decrypted");
     }
   }
 
