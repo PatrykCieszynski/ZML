@@ -5,6 +5,7 @@ import type {
   BootstrapAgentState,
   BootstrapState,
   BootstrapStreamsState,
+  CloudConnectionState,
   CreateMiningToolProfileRequest,
   MiningClaimDto,
   MiningDropDto,
@@ -26,6 +27,7 @@ export type ZmlRendererState = {
   bootstrapping: boolean;
   agent: BootstrapAgentState;
   streams: BootstrapStreamsState;
+  cloud: CloudConnectionState;
   position?: OcrPositionDTO;
   positionEvent?: OcrPositionEvent;
   mapWindowVisible: boolean;
@@ -55,6 +57,7 @@ const initialState: ZmlRendererState = {
   bootstrapping: false,
   agent: { status: "connecting" },
   streams: { ws: false, sse: false },
+  cloud: { status: "disconnected" },
   mapWindowVisible: false,
   overlayWindowVisible: false,
   activeRun: null,
@@ -105,6 +108,7 @@ function applyBootstrap(bootstrap: BootstrapState): void {
     bootstrapping: false,
     agent: bootstrap.agent,
     streams: bootstrap.streams,
+    cloud: bootstrap.cloud,
     position: bootstrap.position ?? state.position,
     mapWindowVisible: bootstrap.mapWindowVisible ?? state.mapWindowVisible,
     overlayWindowVisible: bootstrap.overlayWindowVisible ?? state.overlayWindowVisible,
@@ -702,6 +706,42 @@ export async function setActiveMiningTools(request: SetActiveMiningToolsRequest)
       toolCommandPending: false,
       lastCommandError: errorToMessage(error),
     });
+  }
+}
+
+export async function connectCloud(): Promise<void> {
+  let api;
+  try {
+    api = getZml();
+  } catch (error) {
+    setState({ lastCommandError: errorToMessage(error) });
+    return;
+  }
+
+  setState({ lastCommandError: null });
+  try {
+    const cloud = await api.connectCloud();
+    setState({ cloud, lastCommandError: cloud.lastError ?? null });
+  } catch (error) {
+    setState({ lastCommandError: errorToMessage(error) });
+  }
+}
+
+export async function disconnectCloud(): Promise<void> {
+  let api;
+  try {
+    api = getZml();
+  } catch (error) {
+    setState({ lastCommandError: errorToMessage(error) });
+    return;
+  }
+
+  setState({ lastCommandError: null });
+  try {
+    const cloud = await api.disconnectCloud();
+    setState({ cloud, lastCommandError: cloud.lastError ?? null });
+  } catch (error) {
+    setState({ lastCommandError: errorToMessage(error) });
   }
 }
 
