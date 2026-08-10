@@ -14,6 +14,7 @@ from zml_backend.application.mining.claims.commands import (
 from zml_backend.application.mining.equipment.service import MiningEquipmentService
 from zml_backend.application.mining.segments.session import RunSessionService
 from zml_backend.application.position.tracking import PositionTrackingService
+from zml_backend.events.envelope import EventEnvelope
 from zml_backend.inputs.chat.runner import start_chat_input
 from zml_backend.inputs.mock.mining import start_mock_mining_input
 from zml_backend.runtime.bootstrap import RuntimeComponents
@@ -28,6 +29,11 @@ from zml_backend.runtime.supervisor import WorkerSupervisor
 from zml_backend.settings import Settings
 
 logger = logging.getLogger(__name__)
+
+_CLOUD_SYNC_WAKE_EVENT_TYPES = {
+    "MiningClaimCreatedEvent",
+    "MiningClaimUpdatedEvent",
+}
 
 
 class AppRuntime:
@@ -46,6 +52,7 @@ class AppRuntime:
         self._supervisor = supervisor
         self._stop_event = threading.Event()
         self._sub_sse = None
+        self._sub_cloud_sync = None
         self._sse_hub = sse_hub
         self._position_hub = position_hub
         self._shutdown_signal = shutdown_signal
@@ -86,6 +93,9 @@ class AppRuntime:
 
     def execute_db_command[T](self, command: DbCommand[T], *, timeout_s: float = 5.0) -> T:
         return self._components.pending_db_commands.execute(command, timeout_s=timeout_s)
+
+    def configure_cloud_sync(self, *, base_url: str | None, token: str | None) -> None:
+        self._components.cloud_sync_worker.configure(base_url=base_url, token=token)
 
     def health(self) -> dict[str, object]:
         return self._supervisor.health()
@@ -140,18 +150,21 @@ class AppRuntime:
             self._settings.ocr_profiling_enabled,
         )
 
+        self._sub_cloud_sync = self._components.persisted_events.subscribe(
+            self._on_persisted_event_for_cloud_sync
+        )
+
         self._supervisor.start_thread(
             name="db_writer",
             target=self._components.db_writer_worker.run,
             worker_kwargs={"stop_event": self._stop_event},
         )
 
-        if self._components.cloud_sync_worker is not None:
-            self._supervisor.start_thread(
-                name="cloud_sync",
-                target=self._components.cloud_sync_worker.run,
-                worker_kwargs={"stop_event": self._stop_event},
-            )
+        self._supervisor.start_thread(
+            name="cloud_sync",
+            target=self._components.cloud_sync_worker.run,
+            worker_kwargs={"stop_event": self._stop_event},
+        )
 
         self._supervisor.start_thread(
             name="input_coordinator",
@@ -192,6 +205,10 @@ class AppRuntime:
 
         if self._sse_hub is not None:
             self._sub_sse = self._components.persisted_events.subscribe(self._sse_hub.on_envelope)
+
+    def _on_persisted_event_for_cloud_sync(self, envelope: EventEnvelope) -> None:
+        if envelope.event_type in _CLOUD_SYNC_WAKE_EVENT_TYPES:
+            self._components.cloud_sync_worker.request_sync()
 
     def _run_claim_expiration_maintenance(self, *, stop_event: threading.Event) -> None:
         interval_s = max(1.0, self._settings.claim_expiration_maintenance_interval_s)
@@ -236,17 +253,20 @@ class AppRuntime:
             return
         logger.info("app_stopping")
         self._stop_event.set()
+        self._components.cloud_sync_worker.request_sync()
 
         if self._sub_sse is not None:
             self._sub_sse.close()
             self._sub_sse = None
+        if self._sub_cloud_sync is not None:
+            self._sub_cloud_sync.close()
+            self._sub_cloud_sync = None
 
         self._supervisor.join_thread("chat_tail")
         self._components.ocr_input_source.stop()
         self._supervisor.join_thread("mock_mining_input")
         self._supervisor.join_thread("claim_expiration_maintenance")
-        if self._components.cloud_sync_worker is not None:
-            self._supervisor.join_thread("cloud_sync")
+        self._supervisor.join_thread("cloud_sync")
 
         self._components.pending_inputs.close()
         self._supervisor.join_thread("input_coordinator")
