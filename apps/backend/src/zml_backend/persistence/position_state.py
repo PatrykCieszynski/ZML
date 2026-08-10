@@ -25,12 +25,23 @@ class SetLastKnownPlanetCommand:
 
 
 def load_last_known_planet(db_path: Path | str) -> str | None:
-    conn = open_read_connection(db_path)
+    path = Path(db_path)
+    if not path.exists():
+        return None
+
     try:
-        row = conn.execute(
-            "SELECT value FROM app_state WHERE key = ?",
-            (LAST_KNOWN_PLANET_KEY,),
-        ).fetchone()
+        conn = open_read_connection(path)
+    except sqlite3.OperationalError:
+        return None
+
+    try:
+        try:
+            row = conn.execute(
+                "SELECT value FROM app_state WHERE key = ?",
+                (LAST_KNOWN_PLANET_KEY,),
+            ).fetchone()
+        except sqlite3.OperationalError:
+            return None
     finally:
         conn.close()
 
