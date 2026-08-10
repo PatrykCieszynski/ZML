@@ -289,7 +289,7 @@ function createCloudConnectionService(): CloudConnectionService {
 }
 
 function updateWindowVisibilityState(): void {
-  runtime.mapWindowVisible = Boolean(mainWin && !mainWin.isDestroyed() && mainWin.isVisible());
+  runtime.mapWindowVisible = Boolean(mapWin && !mapWin.isDestroyed() && mapWin.isVisible());
   runtime.overlayWindowVisible = Boolean(overlayWin && !overlayWin.isDestroyed() && overlayWin.isVisible());
   pushStatePatch({
     mapWindowVisible: runtime.mapWindowVisible,
