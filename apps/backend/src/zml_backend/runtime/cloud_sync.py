@@ -7,7 +7,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -185,10 +185,12 @@ def _parse_outcomes(
 ) -> list[CloudSyncOutcome]:
     if not isinstance(payload, dict):
         raise CloudSyncProtocolError("Cloud sync response must be an object")
+    response = cast(dict[str, object], payload)
 
-    raw_results = payload.get("results")
+    raw_results = response.get("results")
     if not isinstance(raw_results, list):
         raise CloudSyncProtocolError("Cloud sync response is missing results")
+    results = cast(list[object], raw_results)
 
     expected_ids = {claim.claim_id for claim in claims}
     if len(expected_ids) != len(claims):
@@ -196,18 +198,19 @@ def _parse_outcomes(
 
     outcomes: list[CloudSyncOutcome] = []
     seen_ids: set[str] = set()
-    for item in raw_results:
+    for item in results:
         if not isinstance(item, dict):
             raise CloudSyncProtocolError("Cloud sync result item must be an object")
+        result = cast(dict[str, object], item)
 
-        claim_id = item.get("claimId")
-        status = item.get("status")
-        reason = item.get("reason")
+        claim_id = result.get("claimId")
+        status = result.get("status")
+        reason = result.get("reason")
         if not isinstance(claim_id, str) or claim_id not in expected_ids:
             raise CloudSyncProtocolError("Cloud sync response contains an unexpected claim ID")
         if claim_id in seen_ids:
             raise CloudSyncProtocolError("Cloud sync response contains a duplicate claim ID")
-        if status not in {"accepted", "already_present", "rejected"}:
+        if not isinstance(status, str) or status not in {"accepted", "already_present", "rejected"}:
             raise CloudSyncProtocolError("Cloud sync response contains an invalid status")
         if reason is not None and not isinstance(reason, str):
             raise CloudSyncProtocolError("Cloud sync response contains an invalid reason")
