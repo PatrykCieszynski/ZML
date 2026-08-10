@@ -108,15 +108,34 @@ class CloudSyncWorker:
         *,
         db_path: Path,
         pending_db_commands: DbCommandChannel,
-        client: CloudSyncClient,
+        client: CloudSyncClient | None,
         interval_s: float,
         batch_size: int,
     ) -> None:
         self._db_path = db_path
         self._pending_db_commands = pending_db_commands
         self._client = client
+        self._client_lock = threading.Lock()
+        self._wake_event = threading.Event()
         self._interval_s = max(5.0, interval_s)
         self._batch_size = max(1, min(250, batch_size))
+
+    def configure(self, *, base_url: str | None, token: str | None) -> None:
+        if (base_url is None) != (token is None):
+            raise ValueError("Cloud sync base URL and token must be configured together")
+
+        client = None
+        if base_url is not None and token is not None:
+            client = CloudSyncClient(base_url=base_url, token=token)
+
+        with self._client_lock:
+            self._client = client
+
+        logger.info("cloud_sync_configuration_changed enabled=%s", client is not None)
+        self.request_sync()
+
+    def request_sync(self) -> None:
+        self._wake_event.set()
 
     def run(self, *, stop_event: threading.Event) -> None:
         logger.info(
@@ -143,21 +162,32 @@ class CloudSyncWorker:
                 if synced_count:
                     logger.info("cloud_sync_completed claims=%s", synced_count)
 
-            stop_event.wait(self._interval_s)
+            self._wait_until_next_sync(stop_event)
         logger.info("cloud_sync_stopped")
 
     def sync_once(self) -> int:
+        with self._client_lock:
+            client = self._client
+        if client is None:
+            return 0
+
         claims = self._read_pending_claims()
         if not claims:
             return 0
 
-        outcomes = self._client.upload_claims(claims)
+        outcomes = client.upload_claims(claims)
         command = RecordCloudSyncOutcomesCommand(
             outcomes=tuple(outcomes),
             updated_ts_ms=_now_ms(),
         )
         self._pending_db_commands.execute(command, timeout_s=10.0)
         return len(outcomes)
+
+    def _wait_until_next_sync(self, stop_event: threading.Event) -> None:
+        self._wake_event.clear()
+        if stop_event.is_set():
+            return
+        self._wake_event.wait(self._interval_s)
 
     def _read_pending_claims(self) -> list[PendingCloudClaim]:
         conn = open_read_connection(self._db_path)
