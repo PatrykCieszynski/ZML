@@ -8,11 +8,11 @@ APP_DATA_DIR_NAME = "z-mining-log"
 
 
 def get_agent_project_root() -> Path:
-    return Path(__file__).resolve().parents[2]
+    return Path(__file__).resolve().parents[5]
 
 
 def get_workspace_root() -> Path:
-    return get_agent_project_root().parents[1]
+    return get_agent_project_root().parents[2]
 
 
 def get_app_data_dir(explicit_path: str | Path | None = None) -> Path:
