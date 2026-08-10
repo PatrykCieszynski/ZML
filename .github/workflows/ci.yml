@@ -28,7 +28,7 @@ jobs:
           enable-cache: true
 
       - name: Install Python
-        run: uv python install
+        run: uv python install 3.13
 
       - name: Sync protocol dependencies
         run: uv sync --locked --package zml-ocr-protocol
@@ -53,7 +53,7 @@ jobs:
           enable-cache: true
 
       - name: Install Python
-        run: uv python install
+        run: uv python install 3.13
 
       - name: Sync OCR Worker dependencies
         run: uv sync --locked --package zml-ocr-worker
@@ -78,7 +78,7 @@ jobs:
           enable-cache: true
 
       - name: Install Python
-        run: uv python install
+        run: uv python install 3.13
 
       - name: Sync backend dependencies
         run: uv sync --locked --package zml-backend
@@ -103,7 +103,7 @@ jobs:
           enable-cache: true
 
       - name: Install Python
-        run: uv python install
+        run: uv python install 3.13
 
       - name: Sync Python workspace
         run: uv sync --locked --all-packages
@@ -135,7 +135,7 @@ jobs:
           enable-cache: true
 
       - name: Install Python
-        run: uv python install
+        run: uv python install 3.13
 
       - name: Sync backend dependencies
         run: uv sync --locked --package zml-backend

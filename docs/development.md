@@ -1,13 +1,13 @@
 # Development
 
-Updated: 2026-08-09
+Updated: 2026-08-10
 
 Z Mining Log uses `just` as the repository command interface, `uv` for the Python workspace, and pnpm for the TypeScript workspace.
 
 ## Prerequisites
 
 - Windows 10/11 for live OCR and Windows packaging.
-- Python 3.13 (the root `.python-version` and uv workspace require 3.13).
+- Python 3.13 (the root `pyproject.toml` requires `>=3.13,<3.14`).
 - `uv`.
 - Node.js 22.
 - pnpm 10.27 (pinned by the root `package.json`).
@@ -20,7 +20,7 @@ Corepack is optional. Use it if it is your preferred way to activate the pnpm ve
 From the repository root:
 
 ```powershell
-uv python install
+uv python install 3.13
 pnpm install --frozen-lockfile
 just python-sync
 ```
@@ -86,8 +86,8 @@ Input modes are implemented by the backend developer CLI:
 
 - `env`: use environment configuration as-is;
 - `live`: OCR on, mock mining off;
-- `mock`: OCR off, mock mining on;
-- `hybrid`: OCR and mock mining on;
+- `mock`: OCR off, mock mining enabled;
+- `hybrid`: OCR and mock mining enabled;
 - `no-inputs`: neither source enabled.
 
 See [`../apps/backend/README.md`](../apps/backend/README.md) for backend-specific configuration.

@@ -198,6 +198,14 @@ def _env_float(name: str, *, default: float) -> float:
         return default
 
 
+def _env_text(name: str) -> str | None:
+    value = os.getenv(name)
+    if value is None:
+        return None
+    normalized = value.strip()
+    return normalized or None
+
+
 def _default_host() -> str:
     value = os.getenv("ZML_HOST", "127.0.0.1").strip()
     return value or "127.0.0.1"
@@ -217,6 +225,23 @@ def _default_claim_expiration_maintenance_enabled() -> bool:
 
 def _default_claim_expiration_maintenance_interval_s() -> float:
     return _env_float("ZML_CLAIM_EXPIRATION_MAINTENANCE_INTERVAL_S", default=5.0)
+
+
+def _default_cloud_sync_base_url() -> str | None:
+    value = _env_text("ZML_CLOUD_BASE_URL")
+    return value.rstrip("/") if value is not None else None
+
+
+def _default_cloud_sync_token() -> str | None:
+    return _env_text("ZML_CLOUD_SYNC_TOKEN")
+
+
+def _default_cloud_sync_interval_s() -> float:
+    return max(5.0, _env_float("ZML_CLOUD_SYNC_INTERVAL_S", default=600.0))
+
+
+def _default_cloud_sync_batch_size() -> int:
+    return max(1, min(250, _env_int("ZML_CLOUD_SYNC_BATCH_SIZE", default=250)))
 
 
 def _default_finder_recording_modes() -> str:
@@ -364,6 +389,10 @@ class Settings:
     claim_expiration_maintenance_interval_s: float = field(
         default_factory=_default_claim_expiration_maintenance_interval_s
     )
+    cloud_sync_base_url: str | None = field(default_factory=_default_cloud_sync_base_url)
+    cloud_sync_token: str | None = field(default_factory=_default_cloud_sync_token, repr=False)
+    cloud_sync_interval_s: float = field(default_factory=_default_cloud_sync_interval_s)
+    cloud_sync_batch_size: int = field(default_factory=_default_cloud_sync_batch_size)
     finder_recording_modes: str = field(default_factory=_default_finder_recording_modes)
     finder_debug_logging: bool = field(default_factory=_default_finder_debug_logging)
     finder_recording_dir: Path = field(default_factory=_default_finder_recording_dir)
@@ -384,3 +413,7 @@ class Settings:
     )
     ocr_profiling_enabled: bool = field(default_factory=_default_ocr_profiling_enabled)
     ocr_profiling_interval_s: float = field(default_factory=_default_ocr_profiling_interval_s)
+
+    @property
+    def cloud_sync_enabled(self) -> bool:
+        return self.cloud_sync_base_url is not None and self.cloud_sync_token is not None

@@ -19,11 +19,16 @@ class OtherSignal(SignalBase):
 
 def test_position_input_processor_ingests_player_pos_waypoint_as_trusted_chat_position() -> None:
     published: list[PositionSnapshot] = []
+    observed_planets: list[str] = []
     service = PositionTrackingService(
         publisher=published.append,
         config=PositionTrackingConfig(max_jump_m=20.0, max_speed_mps=20.0),
     )
-    processor = PositionInputProcessor(service, clock_ms=lambda: 10_000)
+    processor = PositionInputProcessor(
+        service,
+        clock_ms=lambda: 10_000,
+        planet_observer=observed_planets.append,
+    )
 
     stable = PositionSnapshot(
         observed_ts_ms=1_000,
@@ -53,13 +58,20 @@ def test_position_input_processor_ingests_player_pos_waypoint_as_trusted_chat_po
     assert latest.observed_ts_ms == 10_000
     assert latest.received_ts_ms == 10_000
     assert published == [stable, latest]
+    assert observed_planets == ["ROCKTROPIA"]
 
 
 def test_position_input_processor_ignores_non_position_signal() -> None:
+    observed_planets: list[str] = []
     service = PositionTrackingService()
-    processor = PositionInputProcessor(service, clock_ms=lambda: 10_000)
+    processor = PositionInputProcessor(
+        service,
+        clock_ms=lambda: 10_000,
+        planet_observer=observed_planets.append,
+    )
 
     events = processor.process_signal(OtherSignal())
 
     assert events == ()
     assert service.get_latest() is None
+    assert observed_planets == []

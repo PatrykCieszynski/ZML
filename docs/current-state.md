@@ -1,6 +1,6 @@
 # Current State
 
-Updated: 2026-08-09
+Updated: 2026-08-10
 
 This is a short handoff for the current product state. Architecture details belong in `architecture.md`; component commands belong in component READMEs.
 
@@ -22,6 +22,7 @@ Current capabilities include:
 - mining-tool profiles and active setup state;
 - drop, claim, and loot views;
 - dashboard, map, overlay, health, and debugging UI;
+- opt-in background upload of complete claim observations to ZML Cloud;
 - mock input paths for development;
 - Windows installer packaging with both Python processes bundled.
 
@@ -40,6 +41,15 @@ The large OCR/repository refactor is complete:
 - application names are now consistently `desktop`, `backend`, and `ocr-worker`.
 - Windows CI verifies both raw and Electron-bundled Backend/OCR process trees.
 
+The first ZML Cloud write boundary is also intentionally narrow:
+
+- local SQLite remains the source of truth for the user's mining history;
+- a cloud outage never blocks OCR, claim persistence, or local UI updates;
+- only complete claim map observations are uploaded;
+- no ammo, cost, finder, amplifier, bankroll, or run-return data is sent;
+- per-claim cloud outcomes are written back through `DbWriterWorker`, not an ad-hoc SQLite writer;
+- manual `zml_...` token configuration is temporary until browser-based device pairing exists.
+
 ## Stable design rules
 
 Do not rebuild these casually:
@@ -51,6 +61,7 @@ Do not rebuild these casually:
 - Backend does not import OCR implementation.
 - OCR observations are rejected until the full desired config revision is acknowledged.
 - Desktop renderer remains behind the preload/IPC boundary.
+- Cloud synchronization stays asynchronous and local-first.
 
 ## Highest-value next work
 
@@ -59,18 +70,23 @@ Do not rebuild these casually:
    - observe worker restart/health behavior under real game conditions;
    - tune OCR based on captured evidence rather than architecture churn.
 
-2. **Runtime configuration UX**
+2. **Cloud connection UX**
+   - replace manual sync-token configuration with browser-based device pairing;
+   - expose connection/sync status without leaking credentials;
+   - validate periodic uploads on real mining sessions before expanding the payload.
+
+3. **Runtime configuration UX**
    - expose safe OCR/runtime settings beyond environment-only configuration;
    - define which changes apply live and which require worker restart.
 
-3. **ROI calibration**
+4. **ROI calibration**
    - finish finder calibration UX;
    - add compass/lon/lat calibration and reusable presets.
 
-4. **Debug/operator UX**
+5. **Debug/operator UX**
    - replace JSON-heavy diagnostics with concise worker/OCR/run/event/warning panels.
 
-5. **Persistence/domain cleanup as features demand it**
+6. **Persistence/domain cleanup as features demand it**
    - keep the event journal focused on durable reconstruction facts;
    - revisit unused fields only when product behavior makes the decision clear.
 
@@ -92,6 +108,7 @@ Backend:
 zml_backend.api.app.create_app
 zml_backend.runtime.runtime.AppRuntime
 zml_backend.runtime.bootstrap.build_runtime_components
+zml_backend.runtime.cloud_sync.CloudSyncWorker
 zml_backend.application.mining.coordinator.MiningCoordinator
 zml_backend.application.position.tracking.PositionTrackingService
 zml_backend.runtime.db_writer.DbWriterWorker

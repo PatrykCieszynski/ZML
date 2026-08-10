@@ -123,8 +123,8 @@ class AppRuntime:
         logger.info(
             "app_started db_path=%s chat_log_path=%s mining_resource_catalog_path=%s "
             "mining_tools_path=%s ocr_profile_path=%s ocr_enabled=%s mock_inputs_enabled=%s "
-            "claim_expiration_maintenance_enabled=%s finder_recording_modes=%s "
-            "position_roi_snapshot_enabled=%s ocr_profiling_enabled=%s",
+            "claim_expiration_maintenance_enabled=%s cloud_sync_enabled=%s cloud_sync_base_url=%s "
+            "finder_recording_modes=%s position_roi_snapshot_enabled=%s ocr_profiling_enabled=%s",
             self._settings.db_path,
             self._settings.chat_log_path,
             self._settings.mining_resource_catalog_path,
@@ -133,6 +133,8 @@ class AppRuntime:
             self._settings.ocr_enabled,
             self._settings.mock_inputs_enabled,
             self._settings.claim_expiration_maintenance_enabled,
+            self._settings.cloud_sync_enabled,
+            self._settings.cloud_sync_base_url,
             self._settings.finder_recording_modes,
             self._settings.position_roi_snapshot_enabled,
             self._settings.ocr_profiling_enabled,
@@ -143,6 +145,13 @@ class AppRuntime:
             target=self._components.db_writer_worker.run,
             worker_kwargs={"stop_event": self._stop_event},
         )
+
+        if self._components.cloud_sync_worker is not None:
+            self._supervisor.start_thread(
+                name="cloud_sync",
+                target=self._components.cloud_sync_worker.run,
+                worker_kwargs={"stop_event": self._stop_event},
+            )
 
         self._supervisor.start_thread(
             name="input_coordinator",
@@ -236,6 +245,8 @@ class AppRuntime:
         self._components.ocr_input_source.stop()
         self._supervisor.join_thread("mock_mining_input")
         self._supervisor.join_thread("claim_expiration_maintenance")
+        if self._components.cloud_sync_worker is not None:
+            self._supervisor.join_thread("cloud_sync")
 
         self._components.pending_inputs.close()
         self._supervisor.join_thread("input_coordinator")

@@ -15,6 +15,7 @@ from zml_backend.runtime.runtime_commands import (
 )
 
 ClockMs = Callable[[], int]
+PlanetObserver = Callable[[str], None]
 logger = logging.getLogger(__name__)
 
 
@@ -24,9 +25,11 @@ class PositionInputProcessor:
         position_service: PositionTrackingService,
         *,
         clock_ms: ClockMs | None = None,
+        planet_observer: PlanetObserver | None = None,
     ) -> None:
         self._position_service = position_service
         self._clock_ms = clock_ms or _now_ms
+        self._planet_observer = planet_observer
 
     def process_signal(self, signal: SignalBase) -> tuple[EventBase, ...]:
         if not isinstance(signal, PlayerPosWaypointSignal):
@@ -42,6 +45,8 @@ class PositionInputProcessor:
                 confidence=1.0,
             )
         )
+        if decision.accepted and signal.position.planet_name and self._planet_observer is not None:
+            self._planet_observer(signal.position.planet_name)
         logger.debug(
             "chat_position_signal_processed decision=%s event_dt=%s position=%s",
             decision.kind,

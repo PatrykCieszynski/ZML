@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import type { WindowType } from "@desktop/shared";
+import { useEffect, useMemo, useState } from "react";
+import { MAP_CONFIG, type PlanetId, type WindowType } from "@desktop/shared";
 import { MapViewport } from "../widgets/map/mapViewport.tsx";
 import {
   ignoreMiningClaim,
@@ -17,6 +17,11 @@ export function MapWindow() {
   const state = useZmlRendererStore(windowType);
   const [followPlayer, setFollowPlayer] = useState(true);
   const [preferences, setPreferences] = useMapPreferences();
+  const detectedPlanetId = useMemo(
+    () => resolvePlanetId(state.position?.position.planetName),
+    [state.position?.position.planetName],
+  );
+  const [planetId, setPlanetId] = useState<PlanetId>(() => detectedPlanetId ?? "rocktropia");
 
   const point: MapPoint | null = useMemo(() => {
     const pos = state.position?.position;
@@ -24,15 +29,18 @@ export function MapWindow() {
     return { x: pos.x, y: pos.y };
   }, [state.position]);
 
-  // hardcoded planet for now
-  const planetId = "rocktropia" as const;
+  useEffect(() => {
+    if (detectedPlanetId !== null) {
+      setPlanetId(detectedPlanetId);
+    }
+  }, [detectedPlanetId]);
 
   return (
     <div className="zml-map-window">
       <header className="zml-map-titlebar">
         <div className="zml-map-title">
           <strong>Z Mining Log Map</strong>
-          <span>{planetId}</span>
+          <span>{MAP_CONFIG.planets[planetId].name}</span>
         </div>
         <div className="zml-map-actions">
           <label className="zml-map-setting">
@@ -100,5 +108,16 @@ export function MapWindow() {
         </div>
       )}
     </div>
+  );
+}
+
+function resolvePlanetId(planetName: string | undefined): PlanetId | null {
+  const normalizedName = planetName?.trim().toLowerCase();
+  if (!normalizedName) return null;
+
+  return (
+    Object.values(MAP_CONFIG.planets).find(
+      (planet) => planet.name.toLowerCase() === normalizedName,
+    )?.id ?? null
   );
 }
