@@ -144,6 +144,7 @@ class CloudSyncWorker:
             self._batch_size,
         )
         while not stop_event.is_set():
+            self._wake_event.clear()
             try:
                 synced_count = self.sync_once()
             except ChannelClosedError:
@@ -162,7 +163,9 @@ class CloudSyncWorker:
                 if synced_count:
                     logger.info("cloud_sync_completed claims=%s", synced_count)
 
-            self._wait_until_next_sync(stop_event)
+            if stop_event.is_set():
+                break
+            self._wake_event.wait(self._interval_s)
         logger.info("cloud_sync_stopped")
 
     def sync_once(self) -> int:
@@ -182,12 +185,6 @@ class CloudSyncWorker:
         )
         self._pending_db_commands.execute(command, timeout_s=10.0)
         return len(outcomes)
-
-    def _wait_until_next_sync(self, stop_event: threading.Event) -> None:
-        self._wake_event.clear()
-        if stop_event.is_set():
-            return
-        self._wake_event.wait(self._interval_s)
 
     def _read_pending_claims(self) -> list[PendingCloudClaim]:
         conn = open_read_connection(self._db_path)
