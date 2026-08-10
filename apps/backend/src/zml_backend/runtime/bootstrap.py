@@ -52,7 +52,7 @@ class RuntimeComponents:
     persisted_events: InMemoryPersistedEventBus
     position_service: PositionTrackingService
     ocr_input_source: OcrInputSource
-    cloud_sync_worker: CloudSyncWorker | None
+    cloud_sync_worker: CloudSyncWorker
     mining_equipment_service: MiningEquipmentService
     run_session_service: RunSessionService
     mining_coordinator: MiningCoordinator
@@ -204,16 +204,19 @@ def build_cloud_sync_worker(
     settings: Settings,
     *,
     pending_db_commands: DbCommandChannel,
-) -> CloudSyncWorker | None:
+) -> CloudSyncWorker:
     base_url = settings.cloud_sync_base_url
     token = settings.cloud_sync_token
-    if base_url is None or token is None:
-        return None
+    client = (
+        CloudSyncClient(base_url=base_url, token=token)
+        if base_url is not None and token is not None
+        else None
+    )
 
     return CloudSyncWorker(
         db_path=settings.db_path,
         pending_db_commands=pending_db_commands,
-        client=CloudSyncClient(base_url=base_url, token=token),
+        client=client,
         interval_s=settings.cloud_sync_interval_s,
         batch_size=settings.cloud_sync_batch_size,
     )
@@ -227,7 +230,7 @@ def build_worker_supervisor(settings: Settings) -> WorkerSupervisor:
         "claim_expiration_maintenance",
         enabled=settings.claim_expiration_maintenance_enabled,
     )
-    supervisor.register("cloud_sync", enabled=settings.cloud_sync_enabled)
+    supervisor.register("cloud_sync", enabled=True)
     supervisor.register("chat_tail", enabled=True)
     supervisor.register("ocr_worker", enabled=settings.ocr_enabled)
     supervisor.register("mock_mining_input", enabled=settings.mock_inputs_enabled)
