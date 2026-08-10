@@ -1,6 +1,6 @@
 # Z Mining Log
 
-Z Mining Log is a local-first desktop mining assistant for **Entropia Universe**. It combines screen OCR, chat-log parsing, durable local state, and a live map/dashboard so mining runs can be tracked without sending gameplay data to an external service.
+Z Mining Log is a local-first desktop mining assistant for **Entropia Universe**. It combines screen OCR, chat-log parsing, durable local state, and a live map/dashboard so mining runs can be tracked locally first, with optional privacy-minimized claim observations synchronized to ZML Cloud.
 
 The project is intentionally built as a small multi-process desktop system rather than a single OCR script glued to a UI. Its main engineering challenge is turning noisy, timing-sensitive game observations into reliable domain state while keeping native OCR, persistence, realtime transport, and Electron lifecycle concerns isolated from each other.
 
@@ -16,6 +16,7 @@ The project is intentionally built as a small multi-process desktop system rathe
 - Reads finder OCR for drops, hit hints, no-resource results, and claim timing data.
 - Tails Entropia `chat.log` for claim deeds, loot, enhancer breaks, and depletion messages.
 - Persists durable mining facts and read models in local SQLite.
+- Optionally synchronizes claim location, resource, size, and observation time to ZML Cloud.
 - Tracks runs, setup segments, drops, active claims, loot, and mining tools.
 - Provides dashboard, map, overlay, health, and debugging views in Electron/React.
 - Supports mock input for development without the game running.
@@ -65,15 +66,16 @@ flowchart TB
 
     Backend -->|writes events + projections| SQLite[(SQLite)]
     SQLite -.->|reads projections + event history| Backend
+    Backend -.->|optional claim batches| Cloud[ZML Cloud]
 
     Backend -->|REST / SSE / WebSocket| Main[Electron main]
     Main -->|typed IPC| Renderer[React renderer]
 ```
 
-The three runtime boundaries are intentional:
+The three local runtime boundaries are intentional:
 
 - **Desktop** owns windows, renderer state, Electron IPC, and the local backend lifecycle.
-- **Backend** owns domain logic, persistence, APIs, input coordination, and OCR Worker supervision.
+- **Backend** owns domain logic, persistence, APIs, input coordination, OCR Worker supervision, and optional outbound claim synchronization.
 - **OCR Worker** owns screen capture, native OCR dependencies, and recognition pipelines.
 
 Backend never imports the OCR implementation. It depends only on the versioned `zml-ocr-protocol` package and talks to the worker as a child process.
@@ -113,7 +115,7 @@ Prerequisites:
 From the repository root:
 
 ```powershell
-uv python install
+uv python install 3.13
 pnpm install --frozen-lockfile
 just dev
 ```
@@ -134,7 +136,7 @@ Run `just --list` to see the complete root command surface. Component commands a
 
 ## Contracts
 
-Two explicit contracts cross runtime boundaries:
+Two explicit contracts cross local runtime boundaries:
 
 ```mermaid
 flowchart TB
