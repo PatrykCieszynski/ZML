@@ -146,6 +146,7 @@ class _Components:
         self.persisted_events = object()
         self.position_service = _PositionService()
         self.ocr_input_source = ocr_source
+        self.cloud_sync_worker = None
         self.mining_equipment_service = object()
         self.run_session_service = object()
         self.mining_coordinator = object()
