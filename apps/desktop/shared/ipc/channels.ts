@@ -22,6 +22,8 @@ export const IPC_CMD = {
     DELETE_MINING_TOOL: `${IPC_NAMESPACE}:cmd:delete_mining_tool`,
     GET_ACTIVE_MINING_TOOLS: `${IPC_NAMESPACE}:cmd:get_active_mining_tools`,
     SET_ACTIVE_MINING_TOOLS: `${IPC_NAMESPACE}:cmd:set_active_mining_tools`,
+    CONNECT_CLOUD: `${IPC_NAMESPACE}:cmd:connect_cloud`,
+    DISCONNECT_CLOUD: `${IPC_NAMESPACE}:cmd:disconnect_cloud`,
 } as const;
 
 export const IPC_PUSH = {
