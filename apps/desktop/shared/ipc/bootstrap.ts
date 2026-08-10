@@ -5,6 +5,7 @@ import type { MiningDropDto } from "../dto/miningDrops";
 import type { MiningLootItemDto, MiningLootTotalDto } from "../dto/miningLoot";
 import type { ActiveMiningToolsDto, MiningToolProfileDto } from "../dto/miningTools";
 import type { RunDto, RunSegmentDto } from "../backend/runs";
+import type { CloudConnectionState } from "../cloud/cloudConnection";
 
 export const IPC_VERSION = 1 as const;
 export type IpcVersion = typeof IPC_VERSION;
@@ -33,6 +34,7 @@ export type BootstrapState = {
 
     agent: BootstrapAgentState;
     streams: BootstrapStreamsState;
+    cloud: CloudConnectionState;
 
     // Last known position (if any)
     position?: OcrPositionDTO;

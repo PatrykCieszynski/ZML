@@ -3,6 +3,8 @@ export * from "./ipc/bootstrap.js";
 export * from "./ipc/push.js";
 export * from "./ipc/channels.js";
 
+export * from "./cloud/cloudConnection.js";
+
 export * from "./dto/worldPos.js";
 export * from "./dto/ocrPosition.js";
 export * from "./dto/miningClaims.js";

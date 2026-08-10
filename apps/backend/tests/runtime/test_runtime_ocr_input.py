@@ -48,6 +48,14 @@ class _Worker:
         del stop_event
 
 
+class _CloudSyncWorker(_Worker):
+    def configure(self, *, base_url: str | None, token: str | None) -> None:
+        del base_url, token
+
+    def request_sync(self) -> None:
+        pass
+
+
 class _Restorer:
     def __init__(self) -> None:
         self.restore_calls = 0
@@ -117,6 +125,7 @@ def test_app_runtime_delegates_ocr_lifecycle_to_input_source() -> None:
     assert ocr_source.stop_event is not None
     assert not ocr_source.stop_event.is_set()
     assert "ocr_worker" not in supervisor.started
+    assert "cloud_sync" in supervisor.started
     assert restorer.restore_calls == 1
     assert shutdown_signal.install_calls == 1
 
@@ -125,6 +134,7 @@ def test_app_runtime_delegates_ocr_lifecycle_to_input_source() -> None:
     assert ocr_source.stop_event.is_set()
     assert ocr_source.stop_calls == 1
     assert "ocr_worker" not in supervisor.joined
+    assert "cloud_sync" in supervisor.joined
     assert pending_inputs.closed
     assert pending_events.closed
     assert pending_db_commands.closed
@@ -146,7 +156,7 @@ class _Components:
         self.persisted_events = object()
         self.position_service = _PositionService()
         self.ocr_input_source = ocr_source
-        self.cloud_sync_worker = None
+        self.cloud_sync_worker = _CloudSyncWorker()
         self.mining_equipment_service = object()
         self.run_session_service = object()
         self.mining_coordinator = object()

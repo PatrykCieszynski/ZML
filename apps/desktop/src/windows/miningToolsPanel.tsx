@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import type {
   ActiveMiningToolsDto,
+  CloudConnectionState,
   MiningToolKind,
   MiningToolProfileDto,
 } from "@desktop/shared";
 import {
+  connectCloud,
   createMiningTool,
   deleteMiningTool,
+  disconnectCloud,
   refreshMiningTools,
   setActiveMiningTools,
+  useZmlRendererStore,
 } from "../state/zmlRendererStore";
 
 type MiningToolsPanelProps = {
@@ -39,6 +43,7 @@ export function MiningToolsPanel({
   loading,
   pending,
 }: MiningToolsPanelProps) {
+  const cloud = useZmlRendererStore("main").cloud;
   const [kind, setKind] = useState<MiningToolKind>("finder");
   const [name, setName] = useState("");
   const [decayMpec, setDecayMpec] = useState("0");
@@ -106,6 +111,8 @@ export function MiningToolsPanel({
 
   return (
     <section style={panelStyle}>
+      <CloudConnectionSection cloud={cloud} />
+
       <div style={panelHeaderStyle}>
         <h3 style={{ margin: 0 }}>Mining Tools</h3>
         <button
@@ -345,6 +352,76 @@ export function MiningToolsPanel({
   );
 }
 
+function CloudConnectionSection({ cloud }: { cloud: CloudConnectionState }) {
+  const pending = cloud.status === "connecting" || cloud.status === "waiting_for_approval";
+  const environmentManaged = cloud.credentialSource === "environment";
+  const statusLabel = cloudStatusLabel(cloud);
+
+  return (
+    <div style={cloudSectionStyle}>
+      <div style={cloudCopyStyle}>
+        <div style={cloudTitleRowStyle}>
+          <h3 style={{ margin: 0 }}>ZML Cloud</h3>
+          <span style={cloudStatusStyle(cloud.status === "connected")}>{statusLabel}</span>
+        </div>
+        <div style={mutedStyle}>
+          Sync complete mining claim observations through your ZML account. Discord authorization opens in your browser; Desktop stores only a revocable ZML credential.
+        </div>
+        {cloud.status === "waiting_for_approval" && cloud.pairingExpiresAtTsMs !== undefined && (
+          <div style={cloudHintStyle}>
+            Waiting for browser approval. Request expires at {new Date(cloud.pairingExpiresAtTsMs).toLocaleTimeString()}.
+          </div>
+        )}
+        {cloud.status === "connected" && (
+          <div style={cloudHintStyle}>
+            {environmentManaged
+              ? "Connected using the ZML_CLOUD_SYNC_TOKEN development override."
+              : "Connected. The credential is encrypted for this operating-system user and restored on restart."}
+          </div>
+        )}
+        {cloud.lastError && <div style={errorStyle}>{cloud.lastError}</div>}
+      </div>
+
+      <div style={cloudActionsStyle}>
+        {(cloud.status === "disconnected" || cloud.status === "error") && (
+          <button type="button" onClick={() => void connectCloud()} disabled={environmentManaged}>
+            Connect ZML Cloud
+          </button>
+        )}
+        {pending && (
+          <button type="button" onClick={() => void disconnectCloud()}>
+            Cancel
+          </button>
+        )}
+        {cloud.status === "connected" && (
+          <button
+            type="button"
+            onClick={() => void disconnectCloud()}
+            disabled={environmentManaged}
+          >
+            {environmentManaged ? "Managed by environment" : "Disconnect"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function cloudStatusLabel(cloud: CloudConnectionState): string {
+  switch (cloud.status) {
+    case "disconnected":
+      return "Not connected";
+    case "connecting":
+      return "Connecting...";
+    case "waiting_for_approval":
+      return "Waiting for approval";
+    case "connected":
+      return "Connected";
+    case "error":
+      return "Connection error";
+  }
+}
+
 function parseToolForm({
   kind,
   name,
@@ -427,6 +504,52 @@ const panelHeaderStyle = {
   gap: 12,
   alignItems: "center",
 } satisfies CSSProperties;
+
+const cloudSectionStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 16,
+  marginBottom: 16,
+  padding: 12,
+  border: "1px solid #2c3f52",
+  borderRadius: 8,
+  background: "#101923",
+} satisfies CSSProperties;
+
+const cloudCopyStyle = {
+  display: "grid",
+  gap: 6,
+  minWidth: 0,
+} satisfies CSSProperties;
+
+const cloudTitleRowStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+} satisfies CSSProperties;
+
+const cloudActionsStyle = {
+  display: "flex",
+  alignItems: "center",
+  flexShrink: 0,
+} satisfies CSSProperties;
+
+const cloudHintStyle = {
+  color: "#a7d7ff",
+  fontSize: 12,
+} satisfies CSSProperties;
+
+function cloudStatusStyle(connected: boolean): CSSProperties {
+  return {
+    padding: "3px 7px",
+    border: `1px solid ${connected ? "#316b4a" : "#4b5666"}`,
+    borderRadius: 99,
+    color: connected ? "#8ee3af" : "#a9b6c8",
+    fontSize: 11,
+    fontWeight: 700,
+  };
+}
 
 const splitGridStyle = {
   display: "grid",

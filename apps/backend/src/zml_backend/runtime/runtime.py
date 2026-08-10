@@ -87,6 +87,9 @@ class AppRuntime:
     def execute_db_command[T](self, command: DbCommand[T], *, timeout_s: float = 5.0) -> T:
         return self._components.pending_db_commands.execute(command, timeout_s=timeout_s)
 
+    def configure_cloud_sync(self, *, base_url: str | None, token: str | None) -> None:
+        self._components.cloud_sync_worker.configure(base_url=base_url, token=token)
+
     def health(self) -> dict[str, object]:
         return self._supervisor.health()
 
@@ -146,12 +149,11 @@ class AppRuntime:
             worker_kwargs={"stop_event": self._stop_event},
         )
 
-        if self._components.cloud_sync_worker is not None:
-            self._supervisor.start_thread(
-                name="cloud_sync",
-                target=self._components.cloud_sync_worker.run,
-                worker_kwargs={"stop_event": self._stop_event},
-            )
+        self._supervisor.start_thread(
+            name="cloud_sync",
+            target=self._components.cloud_sync_worker.run,
+            worker_kwargs={"stop_event": self._stop_event},
+        )
 
         self._supervisor.start_thread(
             name="input_coordinator",
@@ -236,6 +238,7 @@ class AppRuntime:
             return
         logger.info("app_stopping")
         self._stop_event.set()
+        self._components.cloud_sync_worker.request_sync()
 
         if self._sub_sse is not None:
             self._sub_sse.close()
@@ -245,8 +248,7 @@ class AppRuntime:
         self._components.ocr_input_source.stop()
         self._supervisor.join_thread("mock_mining_input")
         self._supervisor.join_thread("claim_expiration_maintenance")
-        if self._components.cloud_sync_worker is not None:
-            self._supervisor.join_thread("cloud_sync")
+        self._supervisor.join_thread("cloud_sync")
 
         self._components.pending_inputs.close()
         self._supervisor.join_thread("input_coordinator")

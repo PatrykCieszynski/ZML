@@ -23,6 +23,7 @@ Current capabilities include:
 - drop, claim, and loot views;
 - dashboard, map, overlay, health, and debugging UI;
 - opt-in background upload of complete claim observations to ZML Cloud;
+- browser-based ZML Cloud device pairing through Atlas, with an encrypted Desktop credential;
 - mock input paths for development;
 - Windows installer packaging with both Python processes bundled.
 
@@ -41,14 +42,17 @@ The large OCR/repository refactor is complete:
 - application names are now consistently `desktop`, `backend`, and `ocr-worker`.
 - Windows CI verifies both raw and Electron-bundled Backend/OCR process trees.
 
-The first ZML Cloud write boundary is also intentionally narrow:
+The ZML Cloud write boundary is intentionally narrow:
 
 - local SQLite remains the source of truth for the user's mining history;
 - a cloud outage never blocks OCR, claim persistence, or local UI updates;
 - only complete claim map observations are uploaded;
 - no ammo, cost, finder, amplifier, bankroll, or run-return data is sent;
 - per-claim cloud outcomes are written back through `DbWriterWorker`, not an ad-hoc SQLite writer;
-- manual `zml_...` token configuration is temporary until browser-based device pairing exists.
+- normal Desktop connection uses short-lived browser/device pairing through ZML Atlas;
+- Discord credentials never enter Electron and the final `zml_...` credential never enters the renderer;
+- the Desktop credential is encrypted with Electron `safeStorage` and restored before the managed Backend starts;
+- manual `ZML_CLOUD_SYNC_TOKEN` configuration remains only as a development/operator override.
 
 ## Stable design rules
 
@@ -62,31 +66,38 @@ Do not rebuild these casually:
 - OCR observations are rejected until the full desired config revision is acknowledged.
 - Desktop renderer remains behind the preload/IPC boundary.
 - Cloud synchronization stays asynchronous and local-first.
+- Desktop pairing credentials stay in Electron main / Backend process boundaries, never renderer state.
 
 ## Highest-value next work
 
-1. **Operational gameplay validation**
+1. **Cloud connection production smoke**
+   - run the packaged Desktop through Connect -> Discord -> approve -> automatic exchange;
+   - verify the managed Backend restarts with the encrypted credential and pending complete claims upload;
+   - restart Desktop and verify the connection restores without a second Discord login;
+   - verify Disconnect removes the local credential and restarts without cloud sync.
+
+2. **Operational gameplay validation**
    - longer packaged gameplay smoke/soak sessions;
    - observe worker restart/health behavior under real game conditions;
    - tune OCR based on captured evidence rather than architecture churn.
 
-2. **Cloud connection UX**
-   - replace manual sync-token configuration with browser-based device pairing;
-   - expose connection/sync status without leaking credentials;
-   - validate periodic uploads on real mining sessions before expanding the payload.
+3. **Public Atlas read path**
+   - expose purpose-built anonymous claim reads from ZML Cloud;
+   - query by planet and visible viewport rather than downloading the whole dataset;
+   - replace Atlas sample points with real observations before adding clustering/heatmaps.
 
-3. **Runtime configuration UX**
+4. **Runtime configuration UX**
    - expose safe OCR/runtime settings beyond environment-only configuration;
    - define which changes apply live and which require worker restart.
 
-4. **ROI calibration**
+5. **ROI calibration**
    - finish finder calibration UX;
    - add compass/lon/lat calibration and reusable presets.
 
-5. **Debug/operator UX**
+6. **Debug/operator UX**
    - replace JSON-heavy diagnostics with concise worker/OCR/run/event/warning panels.
 
-6. **Persistence/domain cleanup as features demand it**
+7. **Persistence/domain cleanup as features demand it**
    - keep the event journal focused on durable reconstruction facts;
    - revisit unused fields only when product behavior makes the decision clear.
 
@@ -94,6 +105,7 @@ Do not rebuild these casually:
 
 These are useful but do not justify another large refactor by themselves:
 
+- server-side revocation/account management for paired Desktop credentials beyond local Disconnect;
 - move the `openapi-typescript` generator into the pnpm lock instead of invoking it through `pnpm dlx`;
 - consider a stronger typed contract for SSE event payloads if manual runtime validators become costly;
 - clean remaining non-protocol `Agent` naming where it still means Backend rather than OCR protocol vocabulary;
@@ -119,6 +131,8 @@ Desktop:
 ```text
 apps/desktop/electron/main.ts
 apps/desktop/electron/backend/backendProcessManager.ts
+apps/desktop/electron/cloud/cloudConnectionService.ts
+apps/desktop/electron/cloud/cloudCredentialStore.ts
 apps/desktop/electron/ipc/registerIpc.ts
 apps/desktop/electron/preload.ts
 apps/desktop/src/state/zmlRendererStore.ts

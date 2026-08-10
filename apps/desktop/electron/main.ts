@@ -1,6 +1,6 @@
-import { app, BrowserWindow } from 'electron'
-import { fileURLToPath } from 'node:url'
-import path from 'node:path'
+import { app, BrowserWindow, shell } from "electron";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 
 import { resolveDevelopmentAppDataPaths } from "./appDataPaths.ts";
 import { registerIpc } from "./ipc/registerIpc";
@@ -10,13 +10,13 @@ import { createOverlayWindow } from "./windows/createOverlayWindow";
 import { loadRenderer } from "./windows/loadRenderer";
 import { registerWindow } from "./windows/registry";
 
-import {runtime} from "./runtime.ts";
+import { runtime } from "./runtime.ts";
 import {
   startAgentEventStream,
   type AgentEventStreamStatus,
   type StopAgentEventStream,
 } from "./backend/eventStreamClient.ts";
-import {startPositionWsClient} from "./backend/positionWsClient.ts";
+import { startPositionWsClient } from "./backend/positionWsClient.ts";
 import { BackendRestClient } from "./backend/restClient.ts";
 import { isUiMockMode } from "./mocks/mockConfig.ts";
 import { MockBackendRestClient } from "./mocks/mockBackendRestClient.ts";
@@ -36,10 +36,13 @@ import {
 } from "./mining/miningLootState.ts";
 import { applyRunEvent, replaceActiveRun, replaceRunSegments } from "./runs/runSegmentsState.ts";
 import type { PositionSourceOptions, PositionSourceStatus, StopPositionSource } from "./backend/positionSource.ts";
+import { CloudPairingClient } from "./cloud/cloudPairingClient.ts";
+import { CloudCredentialStore } from "./cloud/cloudCredentialStore.ts";
+import { CloudConnectionService } from "./cloud/cloudConnectionService.ts";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-process.env.APP_ROOT = path.join(__dirname, '..')
+process.env.APP_ROOT = path.join(__dirname, "..");
 
 if (!app.isPackaged) {
   const devAppData = resolveDevelopmentAppDataPaths(process.env.APP_ROOT);
@@ -47,13 +50,17 @@ if (!app.isPackaged) {
   process.env.ZML_APP_DATA_DIR ??= devAppData.backend;
 }
 
-export const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
-export const MAIN_DIST = path.join(process.env.APP_ROOT, 'dist-electron')
-export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
-export const preloadPath = path.join(MAIN_DIST, 'preload.mjs')
-process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 'public') : RENDERER_DIST
+export const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
+export const MAIN_DIST = path.join(process.env.APP_ROOT, "dist-electron");
+export const RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
+export const preloadPath = path.join(MAIN_DIST, "preload.mjs");
+process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, "public") : RENDERER_DIST;
 
 const BACKEND_URL = process.env.ZML_BACKEND_URL ?? "http://127.0.0.1:17171";
+const CLOUD_GATEWAY_URL = normalizeCloudUrl(
+  process.env.ZML_CLOUD_GATEWAY_URL ?? "https://zml-atlas.zabulog.workers.dev",
+);
+const CLOUD_SYNC_BASE_URL = normalizeCloudUrl(process.env.ZML_CLOUD_BASE_URL ?? CLOUD_GATEWAY_URL);
 const UI_MOCKS_ENABLED = isUiMockMode();
 const MANAGE_BACKEND = shouldManageBackend({
   mocksEnabled: UI_MOCKS_ENABLED,
@@ -77,6 +84,7 @@ let mapWin: BrowserWindow | null = null;
 let overlayWin: BrowserWindow | null = null;
 let stopPositionStream: StopPositionSource | null = null;
 let stopEventStream: StopAgentEventStream | null = null;
+let cloudConnectionService: CloudConnectionService | null = null;
 let appIsQuitting = false;
 let backendShutdownComplete = false;
 let backendShutdownPromise: Promise<void> | null = null;
@@ -99,10 +107,9 @@ function startPositionStream() {
     onEvent: pushPosition,
   };
 
-  stopPositionStream =
-    UI_MOCKS_ENABLED
-      ? startMockPositionSource(options)
-      : startPositionWsClient({
+  stopPositionStream = UI_MOCKS_ENABLED
+    ? startMockPositionSource(options)
+    : startPositionWsClient({
         ...options,
         baseUrl: BACKEND_URL,
       });
@@ -209,6 +216,78 @@ function stopPositionStreamIfRunning() {
   stopEventStream = null;
 }
 
+async function applyCloudCredential(
+  token: string | null,
+  applyToRunningBackend: boolean,
+): Promise<void> {
+  backendProcessManager.setEnvironmentOverride(
+    "ZML_CLOUD_BASE_URL",
+    token === null ? undefined : CLOUD_SYNC_BASE_URL,
+  );
+  backendProcessManager.setEnvironmentOverride(
+    "ZML_CLOUD_SYNC_TOKEN",
+    token === null ? undefined : token,
+  );
+
+  if (!applyToRunningBackend) return;
+  if (!MANAGE_BACKEND || backendProcessManager.isExternalBackend()) {
+    throw new Error("Cannot update cloud credentials for an external Backend");
+  }
+
+  await configureRunningBackendCloudSync(token);
+}
+
+async function configureRunningBackendCloudSync(token: string | null): Promise<void> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5_000);
+  try {
+    const response = await fetch(new URL("/api/v1/runtime/cloud-sync", BACKEND_URL), {
+      method: "PUT",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        base_url: token === null ? null : CLOUD_SYNC_BASE_URL,
+        token,
+      }),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(`Backend cloud sync configuration failed (${response.status})`);
+    }
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("Backend cloud sync configuration timed out");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function updateCloudState(state: ReturnType<CloudConnectionService["getState"]>): void {
+  runtime.cloud = state;
+  pushStatePatch({ cloud: state });
+}
+
+function createCloudConnectionService(): CloudConnectionService {
+  return new CloudConnectionService({
+    pairingClient: new CloudPairingClient({ baseUrl: CLOUD_GATEWAY_URL }),
+    credentialStore: new CloudCredentialStore(
+      path.join(app.getPath("userData"), "cloud-credential.json"),
+    ),
+    approvalBaseUrl: CLOUD_GATEWAY_URL,
+    openExternal: async (url) => {
+      await shell.openExternal(url);
+    },
+    applyCredential: applyCloudCredential,
+    canApplyCredential: () => MANAGE_BACKEND && !backendProcessManager.isExternalBackend(),
+    onState: updateCloudState,
+    environmentToken: process.env.ZML_CLOUD_SYNC_TOKEN,
+  });
+}
+
 function updateWindowVisibilityState(): void {
   runtime.mapWindowVisible = Boolean(mapWin && !mapWin.isDestroyed() && mapWin.isVisible());
   runtime.overlayWindowVisible = Boolean(overlayWin && !overlayWin.isDestroyed() && overlayWin.isVisible());
@@ -275,9 +354,16 @@ function wireHideOnClose(win: BrowserWindow): void {
 }
 
 async function createWindows() {
-  registerIpc({ backendRestClient, toggleMapWindow, toggleOverlayWindow });
+  if (cloudConnectionService === null) {
+    throw new Error("Cloud connection service is not initialized");
+  }
+  registerIpc({
+    backendRestClient,
+    toggleMapWindow,
+    toggleOverlayWindow,
+    cloudConnectionService,
+  });
 
-  // Windows
   mainWin = createMainWindow(preloadPath);
   registerWindow("main", mainWin);
   mainWin.on("closed", () => {
@@ -290,8 +376,6 @@ async function createWindows() {
   await ensureMapWindow();
   await ensureOverlayWindow();
 
-
-  // backend connector (single source of truth)
   startPositionStream();
   startEventStream();
   void refreshRunSnapshot();
@@ -299,6 +383,9 @@ async function createWindows() {
 }
 
 async function startApplication(): Promise<void> {
+  cloudConnectionService = createCloudConnectionService();
+  await cloudConnectionService.restore();
+
   const backendStartup = MANAGE_BACKEND
     ? backendProcessManager.start().catch((error: unknown) => {
         console.error("[backend] failed to start managed backend", error);
@@ -327,27 +414,26 @@ app.on("before-quit", (event) => {
   });
 });
 
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
-    mainWin = null
-    mapWin = null
-    overlayWin = null
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") {
+    app.quit();
+    mainWin = null;
+    mapWin = null;
+    overlayWin = null;
   }
-})
+});
 
-app.on('activate', () => {
-  // On OS X it's common to re-create a window in the app when the
-  // dock icon is clicked and there are no other windows open.
+app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) {
-    createWindows()
+    void createWindows();
   }
-})
+});
 
 void app.whenReady().then(startApplication).catch((error: unknown) => {
   console.error("Application startup failed", error);
   app.quit();
-})
+});
+
+function normalizeCloudUrl(value: string): string {
+  return value.trim().replace(/\/+$/, "");
+}

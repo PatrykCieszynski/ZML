@@ -2,6 +2,7 @@ import type {
   BackendHealthDto,
   ActiveMiningToolsDto,
   BootstrapState,
+  CloudConnectionState,
   CreateMiningToolProfileRequest,
   MiningClaimDto,
   MiningToolProfileDto,
@@ -40,6 +41,8 @@ declare global {
       deleteMiningTool: (toolId: string) => Promise<void>;
       getActiveMiningTools: () => Promise<ActiveMiningToolsDto>;
       setActiveMiningTools: (request: SetActiveMiningToolsRequest) => Promise<ActiveMiningToolsDto>;
+      connectCloud: () => Promise<CloudConnectionState>;
+      disconnectCloud: () => Promise<CloudConnectionState>;
       onPosition: (cb: (event: OcrPositionEvent) => void) => () => void;
       onStatePatch: (cb: (patch: RuntimeStatePatch) => void) => () => void;
     };

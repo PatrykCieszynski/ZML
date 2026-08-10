@@ -1,6 +1,6 @@
 # Z Mining Log Desktop
 
-The Desktop is the Electron + React application. It owns user-facing windows, the renderer security boundary, local Backend process ownership, Backend clients, and distribution of live state to renderer windows.
+The Desktop is the Electron + React application. It owns user-facing windows, the renderer security boundary, local Backend process ownership, Backend clients, ZML Cloud account pairing, and distribution of live state to renderer windows.
 
 ## Runtime boundary
 
@@ -12,15 +12,17 @@ flowchart TB
     Backend -->|SSE events| Main
     Backend -->|WebSocket position| Main
     Main -->|state patches| Renderer
+    Main -->|device-style pairing| Atlas[ZML Atlas / Cloud gateway]
 ```
 
-Renderer windows do not talk directly to Python and do not receive Node integration.
+Renderer windows do not talk directly to Python or ZML Cloud and do not receive Node integration.
 
 ## Source layout
 
 ```text
 electron/
   backend/      REST/SSE/WS clients and Backend process manager
+  cloud/        browser pairing, secure credential storage, connection orchestration
   ipc/          IPC handlers and state pushes
   mining/       Electron-side mining state application
   runs/         Electron-side run state application
@@ -47,6 +49,14 @@ nodeIntegration = false
 
 The preload exposes a narrow `window.zml` API backed by known IPC commands. Prefer adding a specific command over exposing generic filesystem/process access to renderer code.
 
+The ZML Cloud browser-pairing flow also stays behind Electron main:
+
+- Discord OAuth happens only in the system browser through ZML Atlas/ZML Cloud;
+- the renderer receives connection state, never the final `zml_...` credential;
+- the one-time sync credential is encrypted with Electron `safeStorage` before it is persisted;
+- the encrypted credential is restored for the current operating-system user on application restart;
+- the Desktop-managed Backend receives the credential only through its process environment.
+
 ## Backend lifecycle
 
 In the default local development and packaged paths, Electron owns Backend lifecycle.
@@ -58,11 +68,11 @@ sequenceDiagram
     participant W as OCR Worker
 
     D->>B: spawn
-    B->>W: spawn
+    B->>W: spawn OCR Worker
     D->>B: poll /health
     B-->>D: ready/degraded
     Note over D,W: application runs
-    D->>B: shutdown over parent stdin
+    D->>B: shutdown via parent stdin
     B->>W: protocol shutdown
     W-->>B: exit
     B-->>D: exit
@@ -76,6 +86,46 @@ Environment overrides:
 ZML_BACKEND_URL
 ZML_MANAGE_BACKEND
 ```
+
+## ZML Cloud connection
+
+The Setup view can connect the Desktop to ZML Cloud without asking the user to copy a sync token manually.
+
+```mermaid
+sequenceDiagram
+    participant D as Desktop
+    participant A as ZML Atlas
+    participant C as ZML Cloud
+    participant B as Browser
+
+    D->>A: POST /api/v1/pairing
+    A-->>D: pairing id + device secret + browser code
+    D->>B: open /pair?id=...&code=...
+    B->>C: Discord login + approve
+    loop until approved
+        D->>A: poll with device secret
+    end
+    D->>A: one-time exchange
+    A-->>D: zml_... credential
+    D->>D: encrypt with safeStorage
+    D->>D: restart managed Backend with credential
+```
+
+The production pairing gateway defaults to:
+
+```text
+https://zml-atlas.zabulog.workers.dev
+```
+
+Development/operator overrides:
+
+```text
+ZML_CLOUD_GATEWAY_URL   # pairing/browser gateway
+ZML_CLOUD_BASE_URL      # Backend claim-sync endpoint override
+ZML_CLOUD_SYNC_TOKEN    # manual token override; takes precedence over secure storage
+```
+
+The environment-token path remains useful for development and debugging. Normal users should use browser pairing. An explicitly external Backend cannot be reconfigured by the Desktop pairing UI and should continue to receive cloud configuration through its own environment.
 
 ## REST contract
 
@@ -129,9 +179,9 @@ The mock Desktop path exercises renderer/Electron behavior without creating the 
 
 ## Desktop state
 
-Electron main keeps an in-memory runtime snapshot containing run/mining/tool/stream state. It pushes bootstrap state and incremental patches through IPC to all renderer windows.
+Electron main keeps an in-memory runtime snapshot containing run/mining/tool/stream/cloud state. It pushes bootstrap state and incremental patches through IPC to all renderer windows.
 
-The renderer should treat Electron main as the Desktop-side source for live state rather than opening independent REST/SSE/WS connections from every window.
+The renderer should treat Electron main as the Desktop-side source for live state rather than opening independent REST/SSE/WS/cloud connections from every window.
 
 ## Windows
 

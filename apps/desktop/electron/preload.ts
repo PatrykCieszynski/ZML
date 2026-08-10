@@ -3,6 +3,7 @@ import type {
   BackendHealthDto,
   ActiveMiningToolsDto,
   BootstrapState,
+  CloudConnectionState,
   CreateMiningToolProfileRequest,
   GetBootstrapStateReq,
   MiningClaimDto,
@@ -45,6 +46,8 @@ type ZmlApi = {
   deleteMiningTool: (toolId: string) => Promise<void>;
   getActiveMiningTools: () => Promise<ActiveMiningToolsDto>;
   setActiveMiningTools: (request: SetActiveMiningToolsRequest) => Promise<ActiveMiningToolsDto>;
+  connectCloud: () => Promise<CloudConnectionState>;
+  disconnectCloud: () => Promise<CloudConnectionState>;
   onPosition: (cb: (event: OcrPositionEvent) => void) => Unsubscribe;
   onStatePatch: (cb: (patch: RuntimeStatePatch) => void) => Unsubscribe;
 };
@@ -133,6 +136,14 @@ const api: ZmlApi = {
 
   async setActiveMiningTools(request) {
     return ipcRenderer.invoke(IPC_CMD.SET_ACTIVE_MINING_TOOLS, request) as Promise<ActiveMiningToolsDto>;
+  },
+
+  async connectCloud() {
+    return ipcRenderer.invoke(IPC_CMD.CONNECT_CLOUD) as Promise<CloudConnectionState>;
+  },
+
+  async disconnectCloud() {
+    return ipcRenderer.invoke(IPC_CMD.DISCONNECT_CLOUD) as Promise<CloudConnectionState>;
   },
 
   onPosition(cb) {
