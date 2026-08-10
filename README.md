@@ -6,6 +6,10 @@ The project is intentionally built as a small multi-process desktop system rathe
 
 > **Status:** active work in progress. The core runtime architecture, automated quality gates, and Windows packaging pipeline are in place; live OCR quality and product UX are still being iterated through gameplay testing.
 
+![Z Mining Log running alongside Entropia Universe](docs/screenshots/live-gameplay.webp)
+
+*Live gameplay with the ZML map and run-stat overlays active alongside Entropia Universe.*
+
 ## What it does
 
 - Tracks player position from OCR and streams it to the desktop map.
@@ -30,6 +34,26 @@ Z Mining Log goes beyond a typical CRUD desktop application in a few deliberate 
 - **Strict automated verification.** Python components use Ruff, Pyright, and Pytest; Desktop uses strict TypeScript, ESLint, Vitest, and production builds; Windows CI additionally verifies packaged executables.
 
 The result is still a personal desktop application, but the reliability and boundary problems are much closer to a small local distributed system than to a conventional single-process utility.
+
+## Screenshots
+
+### Claims
+
+![Z Mining Log claims view](docs/screenshots/claims.webp)
+
+Active claim distribution, extraction state, expiry tracking, resource breakdown, and run claim history are kept in one operational view.
+
+### Loot
+
+![Z Mining Log loot view](docs/screenshots/loot.webp)
+
+Run-level loot is aggregated from raw chat-derived events into resource totals, extraction cost, net return, and distribution while the underlying event history remains inspectable.
+
+### Live map
+
+![Z Mining Log live map overlay](docs/screenshots/map-overlay.webp)
+
+The compact map follows the player in real time and combines drop circles, claim timers, player position, and hex-grid coverage without taking over the game screen.
 
 ## Architecture
 
