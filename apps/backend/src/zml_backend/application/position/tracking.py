@@ -22,8 +22,8 @@ class PositionTrackingService:
     Owns volatile position state and publishes accepted position updates.
 
     Position updates are high-frequency and are not part of the durable event
-    store. This service is the application-level boundary between position
-    inputs and consumers such as the map, mining coordinator, and claim lifecycle.
+    store. Only the last trusted planet name may be restored separately as
+    low-frequency app context; coordinates remain ephemeral.
     """
 
     def __init__(
@@ -32,6 +32,7 @@ class PositionTrackingService:
         publisher: PositionPublisher | None = None,
         config: PositionTrackingConfig | None = None,
         outlier_policy: PositionOutlierPolicy | None = None,
+        initial_planet_name: str | None = None,
     ) -> None:
         self._config = config or PositionTrackingConfig()
         self._lock = Lock()
@@ -39,6 +40,7 @@ class PositionTrackingService:
         self._history: list[PositionSnapshot] = []
         self._publisher = publisher
         self._outlier_policy = outlier_policy or PositionOutlierPolicy(self._config)
+        self._last_known_planet_name = _normalized_planet_name(initial_planet_name)
 
     def set_publisher(self, publisher: PositionPublisher | None) -> None:
         with self._lock:
@@ -50,7 +52,10 @@ class PositionTrackingService:
 
     def ingest_snapshot(self, snapshot: PositionSnapshot) -> PositionDecision:
         with self._lock:
-            snapshot = _inherit_known_planet(snapshot, latest=self._latest)
+            snapshot = _inherit_known_planet(
+                snapshot,
+                planet_name=self._last_known_planet_name,
+            )
             decision = self._outlier_policy.evaluate(
                 snapshot,
                 stable_snapshot=self._latest,
@@ -60,6 +65,9 @@ class PositionTrackingService:
             else:
                 assert decision.snapshot is not None
                 self._latest = decision.snapshot
+                accepted_planet = _normalized_planet_name(decision.snapshot.position.planet_name)
+                if accepted_planet is not None:
+                    self._last_known_planet_name = accepted_planet
                 self._append_history(decision.snapshot)
                 publisher = self._publisher
 
@@ -80,6 +88,10 @@ class PositionTrackingService:
     def get_latest_world_pos(self) -> WorldPos | None:
         latest = self.get_latest()
         return latest.position if latest is not None else None
+
+    def get_last_known_planet_name(self) -> str | None:
+        with self._lock:
+            return self._last_known_planet_name
 
     def _append_history(self, snapshot: PositionSnapshot) -> None:
         cutoff_ts_ms = snapshot.observed_ts_ms - int(self._config.history_window_s * 1000)
@@ -113,17 +125,22 @@ def _format_float(value: float | None) -> str | None:
 def _inherit_known_planet(
     snapshot: PositionSnapshot,
     *,
-    latest: PositionSnapshot | None,
+    planet_name: str | None,
 ) -> PositionSnapshot:
-    if snapshot.position.planet_name:
-        return snapshot
-    if latest is None or not latest.position.planet_name:
+    if snapshot.position.planet_name or planet_name is None:
         return snapshot
 
     return replace(
         snapshot,
         position=replace(
             snapshot.position,
-            planet_name=latest.position.planet_name,
+            planet_name=planet_name,
         ),
     )
+
+
+def _normalized_planet_name(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    return normalized or None
