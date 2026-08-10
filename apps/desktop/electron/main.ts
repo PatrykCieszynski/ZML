@@ -216,7 +216,10 @@ function stopPositionStreamIfRunning() {
   stopEventStream = null;
 }
 
-async function applyCloudCredential(token: string | null, restartBackend: boolean): Promise<void> {
+async function applyCloudCredential(
+  token: string | null,
+  applyToRunningBackend: boolean,
+): Promise<void> {
   backendProcessManager.setEnvironmentOverride(
     "ZML_CLOUD_BASE_URL",
     token === null ? undefined : CLOUD_SYNC_BASE_URL,
@@ -226,22 +229,41 @@ async function applyCloudCredential(token: string | null, restartBackend: boolea
     token === null ? undefined : token,
   );
 
-  if (!restartBackend) return;
+  if (!applyToRunningBackend) return;
   if (!MANAGE_BACKEND || backendProcessManager.isExternalBackend()) {
     throw new Error("Cannot update cloud credentials for an external Backend");
   }
 
-  stopPositionStreamIfRunning();
-  await backendProcessManager.stop();
-  const ready = await backendProcessManager.start();
-  if (!ready) {
-    throw new Error("Backend did not become ready after updating ZML Cloud credentials");
-  }
+  await configureRunningBackendCloudSync(token);
+}
 
-  startPositionStream();
-  startEventStream();
-  void refreshRunSnapshot();
-  void refreshMiningToolSnapshot();
+async function configureRunningBackendCloudSync(token: string | null): Promise<void> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5_000);
+  try {
+    const response = await fetch(new URL("/api/v1/runtime/cloud-sync", BACKEND_URL), {
+      method: "PUT",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        base_url: token === null ? null : CLOUD_SYNC_BASE_URL,
+        token,
+      }),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(`Backend cloud sync configuration failed (${response.status})`);
+    }
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("Backend cloud sync configuration timed out");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function updateCloudState(state: ReturnType<CloudConnectionService["getState"]>): void {
@@ -267,7 +289,7 @@ function createCloudConnectionService(): CloudConnectionService {
 }
 
 function updateWindowVisibilityState(): void {
-  runtime.mapWindowVisible = Boolean(mapWin && !mapWin.isDestroyed() && mapWin.isVisible());
+  runtime.mapWindowVisible = Boolean(mainWin && !mainWin.isDestroyed() && mainWin.isVisible());
   runtime.overlayWindowVisible = Boolean(overlayWin && !overlayWin.isDestroyed() && overlayWin.isVisible());
   pushStatePatch({
     mapWindowVisible: runtime.mapWindowVisible,
