@@ -62,7 +62,10 @@ function createService({
   const openExternal = vi.fn(async (url: string) => {
     openedUrl = url;
   });
-  const applyCredential = vi.fn(async (_token: string | null, _restartBackend: boolean) => undefined);
+  const applyCredential = vi.fn(async (token: string | null, restartBackend: boolean) => {
+    void token;
+    void restartBackend;
+  });
   const onState = vi.fn();
   const service = new CloudConnectionService({
     pairingClient,
