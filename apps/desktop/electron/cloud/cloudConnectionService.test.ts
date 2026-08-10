@@ -58,8 +58,11 @@ function createService({
   pairingClient?: FakePairingClient;
   credentialStore?: FakeCredentialStore;
 } = {}) {
-  const openExternal = vi.fn(async () => undefined);
-  const applyCredential = vi.fn(async () => undefined);
+  let openedUrl: string | null = null;
+  const openExternal = vi.fn(async (url: string) => {
+    openedUrl = url;
+  });
+  const applyCredential = vi.fn(async (_token: string | null, _restartBackend: boolean) => undefined);
   const onState = vi.fn();
   const service = new CloudConnectionService({
     pairingClient,
@@ -75,6 +78,7 @@ function createService({
     pairingClient,
     credentialStore,
     openExternal,
+    getOpenedUrl: () => openedUrl,
     applyCredential,
     onState,
   };
@@ -99,7 +103,14 @@ describe("CloudConnectionService", () => {
   });
 
   it("pairs through the browser and activates the issued credential", async () => {
-    const { service, pairingClient, credentialStore, openExternal, applyCredential } = createService();
+    const {
+      service,
+      pairingClient,
+      credentialStore,
+      openExternal,
+      getOpenedUrl,
+      applyCredential,
+    } = createService();
 
     const state = await service.connect();
 
@@ -107,7 +118,9 @@ describe("CloudConnectionService", () => {
     expect(state.credentialSource).toBe("secure_store");
     expect(pairingClient.createPairing).toHaveBeenCalledWith("ZML Desktop");
     expect(openExternal).toHaveBeenCalledTimes(1);
-    const approvalUrl = new URL(openExternal.mock.calls[0][0]);
+    const openedUrl = getOpenedUrl();
+    expect(openedUrl).not.toBeNull();
+    const approvalUrl = new URL(openedUrl ?? "https://invalid.example");
     expect(approvalUrl.origin).toBe("https://zml-atlas.example");
     expect(approvalUrl.pathname).toBe("/pair");
     expect(approvalUrl.searchParams.get("id")).toBe("pairing-id");
