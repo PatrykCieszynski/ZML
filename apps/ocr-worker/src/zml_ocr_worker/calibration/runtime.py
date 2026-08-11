@@ -18,6 +18,7 @@ from zml_ocr_worker.pipelines.position.pipeline import PositionPipeline, Positio
 class CompassCalibrationRuntimeConfig:
     search_interval_ms: int = 1000
     reacquire_delay_ms: int = 250
+    min_ocr_confidence: float = 0.35
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,13 +95,13 @@ class CompassCalibrationRuntime:
             return _empty_step(reacquire_requested=True)
 
         read = self._read_variant(compass_roi, ts_ms=ts_ms, index=recovery.layout_index)
-        decision = recovery.observe(read_healthy=read.valid)
+        decision = recovery.observe(read_healthy=self._read_is_healthy(read))
 
         if decision.action == "use_layout":
             # Once the hysteresis threshold is reached, retry the shifted line layout
             # on the same frame instead of waiting for another capture tick.
             read = self._read_variant(compass_roi, ts_ms=ts_ms, index=decision.layout_index)
-            if read.valid:
+            if self._read_is_healthy(read):
                 recovery.observe(read_healthy=True)
 
         if decision.action == "relocate_compass":
@@ -145,6 +146,9 @@ class CompassCalibrationRuntime:
             ts_ms,
             variant.roi_candidates,
         )
+
+    def _read_is_healthy(self, read: PositionReadResult) -> bool:
+        return read.is_healthy(min_confidence=self._config.min_ocr_confidence)
 
 
 def _empty_step(*, reacquire_requested: bool = False) -> CalibratedPositionStep:
