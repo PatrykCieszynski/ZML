@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 import numpy as np
@@ -12,6 +13,8 @@ from zml_ocr_worker.calibration.coordinates import (
 from zml_ocr_worker.calibration.model import LocatedCompass
 from zml_ocr_worker.calibration.recovery import CompassRecoveryPolicy
 from zml_ocr_worker.pipelines.position.pipeline import PositionPipeline, PositionReadResult
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,6 +101,13 @@ class CompassCalibrationRuntime:
         decision = recovery.observe(read_healthy=self._read_is_healthy(read))
 
         if decision.action == "use_layout":
+            logger.info(
+                "compass_coordinate_layout_shift layout=%s lon=%s lat=%s confidence=%s",
+                decision.layout_index,
+                read.longitude,
+                read.latitude,
+                _format_confidence(read.confidence),
+            )
             # Once the hysteresis threshold is reached, retry the shifted line layout
             # on the same frame instead of waiting for another capture tick.
             read = self._read_variant(compass_roi, ts_ms=ts_ms, index=decision.layout_index)
@@ -105,6 +115,30 @@ class CompassCalibrationRuntime:
                 recovery.observe(read_healthy=True)
 
         if decision.action == "relocate_compass":
+            # Exhausting coordinate-line variants does not prove that the Compass moved.
+            # First validate the already locked radar at its known center/radius. This is
+            # much cheaper than another full-frame Hough search and prevents a bad OCR
+            # crop/confidence streak from causing an endless locate -> fail -> locate loop.
+            locked_score = self._locator.validate_locked(frame, compass)
+            if self._locator.locked_is_valid(frame, compass):
+                logger.info(
+                    "compass_coordinate_recovery_kept_locked score=%.3f lon=%s lat=%s confidence=%s",
+                    locked_score,
+                    read.longitude,
+                    read.latitude,
+                    _format_confidence(read.confidence),
+                )
+                recovery.reset_after_relocation()
+                return CalibratedPositionStep(
+                    compass=compass,
+                    compass_roi=compass_roi,
+                    read=read,
+                )
+
+            logger.info(
+                "compass_locked_geometry_invalid score=%.3f; requesting full reacquire",
+                locked_score,
+            )
             self.invalidate(next_search_ts_ms=ts_ms + self._config.reacquire_delay_ms)
             return CalibratedPositionStep(
                 compass=compass,
@@ -165,3 +199,7 @@ def _empty_step(*, reacquire_requested: bool = False) -> CalibratedPositionStep:
 
 def _empty_read() -> PositionReadResult:
     return PositionReadResult(longitude=None, latitude=None, position=None)
+
+
+def _format_confidence(value: float | None) -> str:
+    return "none" if value is None else f"{value:.3f}"
