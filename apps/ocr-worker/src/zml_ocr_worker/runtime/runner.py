@@ -185,7 +185,12 @@ def start_ocr_input(
     deeds_every_n = 10  # 1Hz
     tick = 0
     finder_future: Future[list[MiningFinderSignal]] | None = None
+    finder_locator_future: Future[LocatedRegion | None] | None = None
     finder_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="zml-finder-ocr")
+    finder_locator_executor = ThreadPoolExecutor(
+        max_workers=1,
+        thread_name_prefix="zml-finder-locator",
+    )
     target_window_available: bool | None = None
 
     try:
@@ -307,24 +312,42 @@ def start_ocr_input(
                 finally:
                     finder_future = None
 
+            if finder_locator_future is not None and finder_locator_future.done():
+                try:
+                    located_finder = finder_locator_future.result()
+                except Exception:
+                    logger.exception("finder_locator_worker_crashed")
+                    located_finder = None
+                else:
+                    if located_finder is not None:
+                        rect = located_finder.rect
+                        logger.info(
+                            "finder_auto_calibrated rect=%s confidence=%.3f scale=%.3f",
+                            (rect.x1, rect.y1, rect.x2, rect.y2),
+                            located_finder.confidence,
+                            located_finder.scale,
+                        )
+                finally:
+                    finder_locator_future = None
+                    next_finder_search_at = time.perf_counter() + _FINDER_REACQUIRE_INTERVAL_S
+
             if tick % finder_every_n == 0 and finder_future is None:
                 finder: np.ndarray | None = None
                 if finder_locator is not None:
                     if located_finder is not None:
                         finder = located_finder.rect.crop(frame)
-                    if finder is None and time.perf_counter() >= next_finder_search_at:
-                        with profiler.measure("finder.auto_calibration"):
-                            located_finder = finder_locator.locate(frame)
-                        next_finder_search_at = time.perf_counter() + _FINDER_REACQUIRE_INTERVAL_S
-                        if located_finder is not None:
-                            rect = located_finder.rect
-                            logger.info(
-                                "finder_auto_calibrated rect=%s confidence=%.3f scale=%.3f",
-                                (rect.x1, rect.y1, rect.x2, rect.y2),
-                                located_finder.confidence,
-                                located_finder.scale,
-                            )
-                            finder = located_finder.rect.crop(frame)
+                    if (
+                        finder is None
+                        and finder_locator_future is None
+                        and time.perf_counter() >= next_finder_search_at
+                    ):
+                        # Full-frame Finder discovery is much more expensive than the
+                        # locked presence guard. Run it off the capture thread so an
+                        # absent/moved Finder cannot stall position OCR for seconds.
+                        finder_locator_future = finder_locator_executor.submit(
+                            finder_locator.locate,
+                            frame,
+                        )
                 else:
                     with profiler.measure("finder.screen_crop"):
                         finder = roi_profile.screen_rois.finder.crop(frame)
@@ -374,7 +397,10 @@ def start_ocr_input(
     finally:
         if finder_future is not None:
             finder_future.cancel()
+        if finder_locator_future is not None:
+            finder_locator_future.cancel()
         finder_executor.shutdown(wait=True, cancel_futures=True)
+        finder_locator_executor.shutdown(wait=True, cancel_futures=True)
         cap.close()
         position_pipeline.close()
         finder_pipeline.close()
