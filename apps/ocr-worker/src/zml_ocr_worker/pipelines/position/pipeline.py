@@ -12,6 +12,7 @@ from zml_ocr_worker.pipelines.position.preprocess import (
     DigitsPreprocessConfig,
     DigitsPreprocessor,
 )
+from zml_ocr_worker.pipelines.position.token_extractor import NumericTokenExtractor
 from zml_ocr_worker.pipelines.text import digits_only
 from zml_ocr_worker.runtime.profiling import OcrProfiler
 
@@ -46,12 +47,14 @@ class PositionPipeline:
         rois: PositionRois | CoordinateRois,
         *,
         engine: TesserDigitsEngine | None = None,
+        token_extractor: NumericTokenExtractor | None = None,
         pre_cfg: DigitsPreprocessConfig | None = None,
         cfg: PositionPipelineConfig | None = None,
         profiler: OcrProfiler | None = None,
     ) -> None:
         self._rois = rois.coordinates() if isinstance(rois, PositionRois) else rois
         self._engine = engine or TesserDigitsEngine()
+        self._token_extractor = token_extractor
         self._pre_cfg = pre_cfg or DigitsPreprocessConfig()
         self._pre = DigitsPreprocessor(pre_cfg)
         self._cfg = cfg or PositionPipelineConfig()
@@ -87,6 +90,13 @@ class PositionPipeline:
 
             if lon_img is None or lat_img is None:
                 return PositionReadResult(longitude=None, latitude=None, position=None)
+
+            if self._token_extractor is not None:
+                with self._measure("position.token_extract"):
+                    lon_img = self._token_extractor.extract(lon_img)
+                    lat_img = self._token_extractor.extract(lat_img)
+                if lon_img is None or lat_img is None:
+                    return PositionReadResult(longitude=None, latitude=None, position=None)
 
             lon, lon_confidence = self._read_int(lon_img)
             lat, lat_confidence = self._read_int(lat_img)
