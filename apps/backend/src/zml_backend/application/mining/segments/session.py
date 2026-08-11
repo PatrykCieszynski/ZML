@@ -74,8 +74,7 @@ class RunSessionService:
         setup: MiningSegmentSetup,
     ) -> DropRunContext:
         setup_snapshot = mining_segment_setup_snapshot(setup)
-        setup_json = _stable_json(setup_snapshot)
-        setup_hash = _setup_hash(setup_json)
+        setup_hash = mining_segment_setup_hash(setup)
 
         with self._lock:
             run_id = self._load_active_run_id()
@@ -85,9 +84,7 @@ class RunSessionService:
 
             lifecycle_events: list[RunSegmentEndedEvent | RunSegmentStartedEvent] = []
             if run_id != self._active_run_id:
-                self._active_run_id = run_id
-                self._next_segment_index = self._load_next_segment_index(run_id)
-                self._segments_by_setup_hash = self._load_segments_by_setup_hash(run_id)
+                self._load_run_segments(run_id)
 
             segment = self._segments_by_setup_hash.get(setup_hash)
             if segment is None:
@@ -138,11 +135,19 @@ class RunSessionService:
                 self._reset_run_segments()
                 return None
             if run_id != self._active_run_id:
-                self._active_run_id = run_id
-                self._segments_by_setup_hash = self._load_segments_by_setup_hash(run_id)
-                self._last_segment_id = None
-                self._next_segment_index = self._load_next_segment_index(run_id)
+                self._load_run_segments(run_id)
             return self._last_segment_id
+
+    def invalidate_cache(self) -> None:
+        """Reload segment assignments on the next runtime access after a manual correction."""
+        with self._lock:
+            self._reset_run_segments()
+
+    def _load_run_segments(self, run_id: int) -> None:
+        self._active_run_id = run_id
+        self._segments_by_setup_hash = self._load_segments_by_setup_hash(run_id)
+        self._last_segment_id = self._load_last_segment_id(run_id)
+        self._next_segment_index = self._load_next_segment_index(run_id)
 
     def _reset_run_segments(self) -> None:
         self._active_run_id = None
@@ -203,6 +208,23 @@ class RunSessionService:
         finally:
             conn.close()
 
+    def _load_last_segment_id(self, run_id: int) -> str | None:
+        conn = self._connect(self._db_path)
+        try:
+            row = conn.execute(
+                """
+                SELECT segment_id
+                FROM run_segments
+                WHERE run_id = ? AND status = 'active'
+                ORDER BY started_ts_ms DESC, segment_index DESC, segment_id DESC
+                LIMIT 1
+                """,
+                (run_id,),
+            ).fetchone()
+            return str(row["segment_id"]) if row is not None else None
+        finally:
+            conn.close()
+
 
 def mining_segment_setup_snapshot(setup: MiningSegmentSetup) -> dict[str, object]:
     """Snapshot fields that define mining drop segment boundaries.
@@ -225,6 +247,10 @@ def mining_segment_setup_snapshot(setup: MiningSegmentSetup) -> dict[str, object
         "fallback_ammo_per_drop": profile.fallback_ammo_per_drop,
         "fallback_probes_per_drop": profile.fallback_probes_per_drop,
     }
+
+
+def mining_segment_setup_hash(setup: MiningSegmentSetup) -> str:
+    return _setup_hash(_stable_json(mining_segment_setup_snapshot(setup)))
 
 
 def _tool_snapshot(tool: MiningToolProfile | None) -> dict[str, object] | None:
