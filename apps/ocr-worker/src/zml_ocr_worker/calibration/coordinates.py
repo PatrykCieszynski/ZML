@@ -10,10 +10,10 @@ from zml_ocr_worker.pipelines.position.model import CoordinateRois
 @dataclass(frozen=True, slots=True)
 class CompassCoordinateLayoutConfig:
     # Ratios are relative to the detected radar center/radius, not the outer crop.
-    # The defaults are derived from the existing known-good MVP Lon/Lat pixel ROIs.
-    longitude_left_radius: float = -0.64
-    latitude_left_radius: float = -0.60
-    right_radius_candidates: tuple[float, ...] = (-0.18, -0.02, 0.14)
+    # Lon/Lat are rendered as complete right-aligned strings, so one fixed line ROI
+    # can cover both the label and every supported coordinate length.
+    line_left_radius: float = -1.02
+    line_right_radius: float = -0.14
     longitude_top_radius: float = 0.94
     longitude_bottom_radius: float = 1.14
     latitude_top_radius: float = 1.10
@@ -24,59 +24,50 @@ class CompassCoordinateLayoutConfig:
 @dataclass(frozen=True, slots=True)
 class CompassCoordinateLayoutVariant:
     vertical_offset_radius: float
-    roi_candidates: tuple[CoordinateRois, ...]
+    rois: CoordinateRois
 
 
 class CompassCoordinateLayout:
-    """Derive scale-aware Lon/Lat digit ROIs from a located Compass.
+    """Derive scale-aware fixed Lon/Lat line ROIs from a located Compass.
 
-    This class deliberately does no OCR. It only tells the existing PositionPipeline
-    where to look. Each vertical variant contains progressively wider digit strips so
-    the pipeline can handle planets with shorter or longer coordinate values without
-    scanning an arbitrary text block.
+    This class deliberately does no OCR. Each ROI contains the complete right-aligned
+    coordinate line. The PositionPipeline cheaply extracts the rightmost numeric token
+    before invoking its existing digits-only Tesseract engine.
     """
 
     def __init__(self, *, config: CompassCoordinateLayoutConfig | None = None) -> None:
         self._config = config or CompassCoordinateLayoutConfig()
 
     def variants(self, compass: LocatedCompass) -> tuple[CompassCoordinateLayoutVariant, ...]:
-        variants: list[CompassCoordinateLayoutVariant] = []
-        for vertical_offset in self._config.vertical_offset_candidates:
-            roi_candidates = tuple(
-                self._coordinate_rois(
+        return tuple(
+            CompassCoordinateLayoutVariant(
+                vertical_offset_radius=vertical_offset,
+                rois=self._coordinate_rois(
                     compass,
-                    right_radius=right_radius,
                     vertical_offset=vertical_offset,
-                )
-                for right_radius in self._config.right_radius_candidates
+                ),
             )
-            variants.append(
-                CompassCoordinateLayoutVariant(
-                    vertical_offset_radius=vertical_offset,
-                    roi_candidates=roi_candidates,
-                )
-            )
-        return tuple(variants)
+            for vertical_offset in self._config.vertical_offset_candidates
+        )
 
     def _coordinate_rois(
         self,
         compass: LocatedCompass,
         *,
-        right_radius: float,
         vertical_offset: float,
     ) -> CoordinateRois:
         return CoordinateRois(
             lon=_local_rect_from_radar(
                 compass,
-                left_radius=self._config.longitude_left_radius,
-                right_radius=right_radius,
+                left_radius=self._config.line_left_radius,
+                right_radius=self._config.line_right_radius,
                 top_radius=self._config.longitude_top_radius + vertical_offset,
                 bottom_radius=self._config.longitude_bottom_radius + vertical_offset,
             ),
             lat=_local_rect_from_radar(
                 compass,
-                left_radius=self._config.latitude_left_radius,
-                right_radius=right_radius,
+                left_radius=self._config.line_left_radius,
+                right_radius=self._config.line_right_radius,
                 top_radius=self._config.latitude_top_radius + vertical_offset,
                 bottom_radius=self._config.latitude_bottom_radius + vertical_offset,
             ),
