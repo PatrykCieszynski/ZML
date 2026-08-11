@@ -100,8 +100,12 @@ class SplitRunSegmentCommand(DbCommand[RunSegmentRow]):
         if self.selection not in ("first", "last"):
             raise InvalidSegmentCorrectionError(f"Unsupported split selection: {self.selection}")
 
-        selected = drops[: self.drop_count] if self.selection == "first" else drops[-self.drop_count :]
-        remaining = drops[self.drop_count :] if self.selection == "first" else drops[: -self.drop_count]
+        selected = (
+            drops[: self.drop_count] if self.selection == "first" else drops[-self.drop_count :]
+        )
+        remaining = (
+            drops[self.drop_count :] if self.selection == "first" else drops[: -self.drop_count]
+        )
         selected_drop_ids = [str(row["drop_id"]) for row in selected]
 
         corrected_setup = _patched_setup(
@@ -333,7 +337,11 @@ def _tool_from_snapshot(value: object, *, required: bool) -> MiningToolProfile |
     decay_mpec = item.get("decay_mpec")
     markup_ppm = item.get("markup_ppm", 1_000_000)
     radius_m = item.get("radius_m")
-    if not isinstance(name, str) or not isinstance(decay_mpec, int) or not isinstance(markup_ppm, int):
+    if (
+        not isinstance(name, str)
+        or not isinstance(decay_mpec, int)
+        or not isinstance(markup_ppm, int)
+    ):
         raise InvalidSegmentCorrectionError("Segment tool snapshot is incomplete")
     if radius_m is not None and not isinstance(radius_m, int | float):
         raise InvalidSegmentCorrectionError("Segment finder radius is invalid")
