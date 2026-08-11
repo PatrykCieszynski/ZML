@@ -22,7 +22,7 @@ from zml_backend.domain.mining_cost import (
 from zml_backend.domain.money import Mpec, mpec_to_int
 from zml_backend.domain.rate import Rate
 from zml_backend.persistence.run_state import RunState
-from zml_backend.persistence.runs import RunRow, RunSegmentRow, RunSegmentStore, RunStore
+from zml_backend.persistence.runs import RunSegmentRow, RunSegmentStore, RunStore
 from zml_backend.runtime.db_commands import DbCommand
 
 SegmentSplitSelection = Literal["first", "last"]
@@ -170,7 +170,7 @@ class MoveRunSegmentCommand(DbCommand[RunSegmentRow]):
     new_run_name: str | None = None
 
     def execute(self, conn: sqlite3.Connection) -> RunSegmentRow:
-        source = _require_segment(conn, run_id=self.run_id, segment_id=self.segment_id)
+        _require_segment(conn, run_id=self.run_id, segment_id=self.segment_id)
         if (self.target_run_id is None) == (self.new_run_name is None):
             raise InvalidSegmentCorrectionError(
                 "Choose either an existing target run or a new run name"
