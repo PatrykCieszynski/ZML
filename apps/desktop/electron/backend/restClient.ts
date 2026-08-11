@@ -10,10 +10,13 @@ import {
   isMiningLootItemWire,
   isMiningLootTotalWire,
   isMiningToolProfileWire,
+  moveRunSegmentRequestToWire,
   setActiveMiningToolsRequestToWire,
+  splitRunSegmentRequestToWire,
   startRunRequestToWire,
   stopRunRequestToWire,
   updateRunRequestToWire,
+  updateRunSegmentSetupRequestToWire,
   wireToBackendHealthDto,
   wireToActiveMiningToolsDto,
   wireToMiningClaimDto,
@@ -31,12 +34,15 @@ import {
   type MiningLootItemDto,
   type MiningLootTotalDto,
   type MiningToolProfileDto,
+  type MoveRunSegmentRequest,
   type RunDto,
   type RunSegmentDto,
   type SetActiveMiningToolsRequest,
+  type SplitRunSegmentRequest,
   type StartRunRequest,
   type StopRunRequest,
   type UpdateRunRequest,
+  type UpdateRunSegmentSetupRequest,
 } from "@desktop/shared";
 
 type FetchLike = typeof fetch;
@@ -56,6 +62,21 @@ export type BackendClient = {
   deleteRun: (runId: number) => Promise<RunDto>;
   listActiveRunSegments: () => Promise<RunSegmentDto[]>;
   listRunSegments: (runId: number) => Promise<RunSegmentDto[]>;
+  updateRunSegmentSetup: (
+    runId: number,
+    segmentId: string,
+    request: UpdateRunSegmentSetupRequest,
+  ) => Promise<RunSegmentDto>;
+  splitRunSegment: (
+    runId: number,
+    segmentId: string,
+    request: SplitRunSegmentRequest,
+  ) => Promise<RunSegmentDto>;
+  moveRunSegment: (
+    runId: number,
+    segmentId: string,
+    request: MoveRunSegmentRequest,
+  ) => Promise<RunSegmentDto>;
   startRun: (request: StartRunRequest) => Promise<RunDto>;
   stopRun: (request: StopRunRequest) => Promise<RunDto>;
   listMiningClaims: (request?: ListMiningClaimsRequest) => Promise<MiningClaimDto[]>;
@@ -181,6 +202,51 @@ export class BackendRestClient implements BackendClient {
       throw new Error("Agent run segments returned an invalid payload");
     }
     return data.map(wireToRunSegmentDto);
+  }
+
+  async updateRunSegmentSetup(
+    runId: number,
+    segmentId: string,
+    request: UpdateRunSegmentSetupRequest,
+  ): Promise<RunSegmentDto> {
+    const data = await this.patchJson(
+      `/api/v1/runs/${encodeURIComponent(String(runId))}/segments/${encodeURIComponent(segmentId)}/setup`,
+      updateRunSegmentSetupRequestToWire(request),
+    );
+    if (!isRunSegmentWire(data)) {
+      throw new Error("Agent update run segment setup returned an invalid payload");
+    }
+    return wireToRunSegmentDto(data);
+  }
+
+  async splitRunSegment(
+    runId: number,
+    segmentId: string,
+    request: SplitRunSegmentRequest,
+  ): Promise<RunSegmentDto> {
+    const data = await this.postJson(
+      `/api/v1/runs/${encodeURIComponent(String(runId))}/segments/${encodeURIComponent(segmentId)}/split`,
+      splitRunSegmentRequestToWire(request),
+    );
+    if (!isRunSegmentWire(data)) {
+      throw new Error("Agent split run segment returned an invalid payload");
+    }
+    return wireToRunSegmentDto(data);
+  }
+
+  async moveRunSegment(
+    runId: number,
+    segmentId: string,
+    request: MoveRunSegmentRequest,
+  ): Promise<RunSegmentDto> {
+    const data = await this.postJson(
+      `/api/v1/runs/${encodeURIComponent(String(runId))}/segments/${encodeURIComponent(segmentId)}/move`,
+      moveRunSegmentRequestToWire(request),
+    );
+    if (!isRunSegmentWire(data)) {
+      throw new Error("Agent move run segment returned an invalid payload");
+    }
+    return wireToRunSegmentDto(data);
   }
 
   async startRun(request: StartRunRequest): Promise<RunDto> {
@@ -411,4 +477,3 @@ function normalizeBaseUrl(baseUrl: string): string {
   if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(baseUrl)) return baseUrl;
   return `http://${baseUrl}`;
 }
-
