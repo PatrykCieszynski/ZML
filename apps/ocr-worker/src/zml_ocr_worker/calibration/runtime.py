@@ -21,7 +21,6 @@ logger = logging.getLogger(__name__)
 class CompassCalibrationRuntimeConfig:
     search_interval_ms: int = 1000
     reacquire_delay_ms: int = 250
-    min_ocr_confidence: float = 0.35
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,7 +35,7 @@ class CompassCalibrationRuntime:
     """Coordinate Compass location, line-layout recovery, and the existing position OCR.
 
     Calibration owns only geometry and recovery state. PositionPipeline remains the
-    single owner of image preprocessing, OCR, parsing, and sanity checks.
+    single owner of image preprocessing, OCR, parsing, sanity checks, and emission.
     """
 
     def __init__(
@@ -118,7 +117,7 @@ class CompassCalibrationRuntime:
             # Exhausting coordinate-line variants does not prove that the Compass moved.
             # First validate the already locked radar at its known center/radius. This is
             # much cheaper than another full-frame Hough search and prevents a bad OCR
-            # crop/confidence streak from causing an endless locate -> fail -> locate loop.
+            # crop streak from causing an endless locate -> fail -> locate loop.
             locked_score = self._locator.validate_locked(frame, compass)
             if self._locator.locked_is_valid(frame, compass):
                 logger.info(
@@ -175,17 +174,19 @@ class CompassCalibrationRuntime:
         index: int,
     ) -> PositionReadResult:
         variant = self._variants[index]
-        # A layout now has one fixed Lon line and one fixed Lat line. Numeric token
-        # extraction adapts their right-aligned values to the current digit count, so
-        # normal reads invoke Tesseract only once per coordinate.
-        return self._position_pipeline.read_candidates(
+        # There is exactly one Lon line and one Lat line per layout. MeanTextConf is
+        # useful diagnostic data, but live testing shows it can be zero for correctly
+        # parsed numeric-only reads, so it must not suppress emission or drive geometry
+        # recovery by itself.
+        return self._position_pipeline.read(
             compass_roi,
             ts_ms,
-            (variant.rois,),
+            rois=variant.rois,
         )
 
-    def _read_is_healthy(self, read: PositionReadResult) -> bool:
-        return read.is_healthy(min_confidence=self._config.min_ocr_confidence)
+    @staticmethod
+    def _read_is_healthy(read: PositionReadResult) -> bool:
+        return read.valid
 
 
 def _empty_step(*, reacquire_requested: bool = False) -> CalibratedPositionStep:
