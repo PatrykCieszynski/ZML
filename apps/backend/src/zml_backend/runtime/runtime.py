@@ -87,6 +87,10 @@ class AppRuntime:
     def execute_db_command[T](self, command: DbCommand[T], *, timeout_s: float = 5.0) -> T:
         return self._components.pending_db_commands.execute(command, timeout_s=timeout_s)
 
+    def refresh_after_segment_correction(self) -> None:
+        self._components.run_session_service.invalidate_cache()
+        self._components.lifecycle_restorer.restore_active_claims()
+
     def configure_cloud_sync(self, *, base_url: str | None, token: str | None) -> None:
         self._components.cloud_sync_worker.configure(base_url=base_url, token=token)
 
