@@ -12,14 +12,17 @@ from zml_ocr_worker.pipelines.image import to_gray_u8
 class NumericTokenExtractorConfig:
     tophat_kernel_height_ratio: float = 0.5
     min_component_height_ratio: float = 0.25
-    max_component_height_ratio: float = 0.9
+    max_component_height_ratio: float = 0.95
     max_component_width_height_ratio: float = 1.5
     # Real Entropia text can leave ~5 px gaps between narrow glyphs such as "1"
     # at a 21 px line height. Keep those inside one numeric token; the label/value
-    # gap is materially larger (12 px in the live sample that exposed this bug).
+    # gap is usually larger, but some community screenshots render it too tightly
+    # to depend on that separator alone.
     separator_gap_height_ratio: float = 0.30
     min_token_width_height_ratio: float = 1.0
     min_label_width_height_ratio: float = 0.75
+    min_suffix_cluster_width_height_ratio: float = 1.10
+    max_numeric_suffix_width_height_ratio: float = 3.20
     horizontal_padding_height_ratio: float = 0.06
 
 
@@ -43,13 +46,15 @@ class _TextCluster:
 
 
 class NumericTokenExtractor:
-    """Extract the right-aligned numeric value from a fixed Lon/Lat line crop.
+    """Extract the right-side numeric value from a Lon/Lat horizontal strip.
 
-    The Entropia coordinate strings are rendered as one right-aligned line, for
-    example ``Lon: 10000`` or ``Lon: 9999``. The label therefore moves together
-    with the value when its digit count changes. This extractor finds the visual
-    gap between the label and the right-side value using cheap image operations,
-    then returns only the value crop for the existing digits-only Tesseract path.
+    Entropia renders the coordinate strings right-aligned, but their whole text
+    block can move horizontally between observed UI variants. The caller therefore
+    supplies a wider strip. When the label/value gap is clear, this extractor keeps
+    the precise value cluster. When compression or scaling visually merges the label
+    and value into one cluster, it falls back to a bounded right-side suffix. The
+    existing digits-only Tesseract path then ignores any small label tail that may
+    remain in that fallback crop.
     """
 
     def __init__(self, *, config: NumericTokenExtractorConfig | None = None) -> None:
@@ -74,17 +79,52 @@ class NumericTokenExtractor:
 
         mask = self._text_mask(gray)
         runs = _occupied_runs(np.any(mask > 0, axis=0))
-        if len(runs) < 4:
+        if len(runs) < 2:
             return NumericTokenAnalysis(mask=mask, token=None, x1=None, x2=None)
 
         clusters = self._clusters(runs, line_height=height)
         token = self._rightmost_token(clusters, line_height=height)
-        if token is None:
-            return NumericTokenAnalysis(mask=mask, token=None, x1=None, x2=None)
+        if token is not None:
+            return self._crop_cluster(
+                line_roi,
+                mask=mask,
+                cluster=token,
+                line_height=height,
+                max_width=None,
+            )
 
-        padding = max(1, round(height * self._config.horizontal_padding_height_ratio))
-        x1 = max(0, token.x1 - padding)
-        x2 = min(width, token.x2 + padding)
+        # Some community screenshots have so little visual whitespace between
+        # ``Lat:`` and the digits that morphology produces one merged text cluster.
+        # The coordinate value is still the right-aligned suffix of that cluster.
+        suffix_cluster = self._rightmost_suffix_cluster(clusters, line_height=height)
+        if suffix_cluster is None:
+            return NumericTokenAnalysis(mask=mask, token=None, x1=None, x2=None)
+        return self._crop_cluster(
+            line_roi,
+            mask=mask,
+            cluster=suffix_cluster,
+            line_height=height,
+            max_width=max(
+                3,
+                round(height * self._config.max_numeric_suffix_width_height_ratio),
+            ),
+        )
+
+    def _crop_cluster(
+        self,
+        line_roi: np.ndarray,
+        *,
+        mask: np.ndarray,
+        cluster: _TextCluster,
+        line_height: int,
+        max_width: int | None,
+    ) -> NumericTokenAnalysis:
+        width = int(line_roi.shape[1])
+        padding = max(1, round(line_height * self._config.horizontal_padding_height_ratio))
+        x2 = min(width, cluster.x2 + padding)
+        x1 = max(0, cluster.x1 - padding)
+        if max_width is not None:
+            x1 = max(x1, x2 - max_width)
         if x2 <= x1:
             return NumericTokenAnalysis(mask=mask, token=None, x1=None, x2=None)
         return NumericTokenAnalysis(
@@ -164,6 +204,23 @@ class NumericTokenExtractor:
             ):
                 continue
             return candidate
+        return None
+
+    def _rightmost_suffix_cluster(
+        self,
+        clusters: tuple[_TextCluster, ...],
+        *,
+        line_height: int,
+    ) -> _TextCluster | None:
+        min_width = max(
+            3,
+            round(line_height * self._config.min_suffix_cluster_width_height_ratio),
+        )
+        for cluster in reversed(clusters):
+            # A lone compass cardinal such as S/N must not become the numeric crop.
+            if cluster.width < min_width or cluster.run_count < 2:
+                continue
+            return cluster
         return None
 
 
