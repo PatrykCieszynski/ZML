@@ -32,6 +32,7 @@ The runtime is pinned to Python 3.13 because the Windows `tesserocr` dependency 
 
 ```text
 src/zml_ocr_worker/
+  calibration/  Compass/Finder screen-region location experiments
   capture/      screen/window capture
   pipelines/    finder and position recognition pipelines
   runtime/      protocol runner, lifecycle, profiling, native runtime setup
@@ -85,6 +86,17 @@ just ocr package
 ```
 
 Useful direct CLI behavior is also exposed by `zml-ocr-worker --version`, `doctor`, and `stdio` inside the uv workspace.
+
+### UI locator POC
+
+The calibration prototype can evaluate a recorded **full Entropia client frame** without changing runtime OCR configuration:
+
+```powershell
+uv run --package zml-ocr-worker zml-ocr-worker locate-ui .\entropia.png
+uv run --package zml-ocr-worker zml-ocr-worker locate-ui .\entropia.png --annotated .\located.png
+```
+
+It prints the detected Finder/Compass rectangles, confidence, and Compass radar radius/scale. The optional annotated image is intended for tuning the locator against different resolutions, Finder positions, and Compass sizes before the calibration logic is enabled automatically in the runtime.
 
 ## Health behavior
 
