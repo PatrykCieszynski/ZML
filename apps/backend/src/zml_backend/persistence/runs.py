@@ -314,21 +314,28 @@ class RunSegmentStore:
         self._conn.execute("DELETE FROM run_segments WHERE segment_id = ?", (segment_id,))
 
     def reorder(self, run_id: int, *, ordered_segment_ids: list[str], ts_ms: int) -> None:
-        """
-        Apply ordering by updating segment_index.
-        Must validate all ids belong to run_id.
-        """
+        """Apply segment ordering without colliding with the per-run unique index."""
         known = {segment.segment_id for segment in self.list_for_run(run_id)}
-        if set(ordered_segment_ids) != known:
+        if set(ordered_segment_ids) != known or len(ordered_segment_ids) != len(known):
             raise ValueError("ordered_segment_ids must contain exactly all segment ids for the run")
-        for index, segment_id in enumerate(ordered_segment_ids, start=1):
+
+        for temporary_index, segment_id in enumerate(ordered_segment_ids, start=1):
             self._conn.execute(
                 """
                 UPDATE run_segments
                 SET segment_index = ?, updated_ts_ms = ?
                 WHERE run_id = ? AND segment_id = ?
                 """,
-                (index, ts_ms, run_id, segment_id),
+                (-temporary_index, ts_ms, run_id, segment_id),
+            )
+        for final_index, segment_id in enumerate(ordered_segment_ids, start=1):
+            self._conn.execute(
+                """
+                UPDATE run_segments
+                SET segment_index = ?, updated_ts_ms = ?
+                WHERE run_id = ? AND segment_id = ?
+                """,
+                (final_index, ts_ms, run_id, segment_id),
             )
 
     def calc_total_cost_mpec(self, run_id: int) -> Mpec:
