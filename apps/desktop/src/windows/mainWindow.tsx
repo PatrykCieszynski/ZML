@@ -30,6 +30,7 @@ import {
 import { MiningToolsPanel } from "./miningToolsPanel";
 import { useMapPreferences, type MapPreferences } from "./mapPreferences";
 import { useOverlayPreferences, type OverlayMetricKey } from "./overlayPreferences";
+import { SegmentsView as SegmentCorrectionsView } from "./segmentsView";
 import "./mainWindow.css";
 
 type MainView = "dashboard" | "runs" | "segments" | "loot" | "claims" | "setup" | "map" | "overlay" | "debug";
@@ -576,83 +577,15 @@ function SegmentsView({
   drops: MiningDropDto[];
   claims: MiningClaimDto[];
 }) {
-  const segmentRows = segments.map((segment) => {
-    const segmentDrops = drops.filter((drop) => drop.segmentId === segment.segmentId);
-    const segmentDropIds = new Set(segmentDrops.map((drop) => drop.dropId));
-    const segmentClaims = claims.filter((claim) => (
-      claim.segmentId === segment.segmentId ||
-      (claim.segmentId === null && claim.dropId !== null && segmentDropIds.has(claim.dropId))
-    ));
-    const ttCostPed =
-      segmentDrops.reduce((sum, drop) => sum + drop.cost.totalTtMpec, 0) / 100_000;
-    const withMarkupCostPed =
-      segmentDrops.reduce((sum, drop) => sum + drop.cost.totalWithMarkupMpec, 0) / 100_000;
-    return {
-      segment,
-      dropCount: segmentDrops.length,
-      claimCount: segmentClaims.length,
-      ttCostPed,
-      withMarkupCostPed,
-    };
-  });
-
+  const state = useZmlRendererStore("main");
   return (
-    <section className="zml-work-panel">
-      <div className="zml-section-head">
-        <div>
-          <h2>Segments</h2>
-          <span>Current run</span>
-        </div>
-      </div>
-      {segmentRows.length === 0 ? (
-        <EmptyState text="No segments yet" />
-      ) : (
-        <div className="zml-table-wrap">
-          <table className="zml-data-table">
-            <thead>
-              <tr>
-                <th>Segment</th>
-                <th>Status</th>
-                <th>Start</th>
-                <th>End</th>
-                <th>Finder</th>
-                <th>Amp</th>
-                <th>Mode</th>
-                <th>Ammo</th>
-                <th>Probes</th>
-                <th>Drops</th>
-                <th>Claims</th>
-                <th>Cost TT</th>
-                <th>Cost incl. MU</th>
-              </tr>
-            </thead>
-            <tbody>
-              {segmentRows.map(({ segment, dropCount, claimCount, ttCostPed, withMarkupCostPed }) => (
-                <tr key={segment.segmentId}>
-                  <td>#{segment.segmentIndex}</td>
-                  <td>
-                    <span className={segment.status === "active" ? "zml-tag is-active" : "zml-tag"}>
-                      {segment.status}
-                    </span>
-                  </td>
-                  <td>{formatTime(segment.startedTsMs)}</td>
-                  <td>{segment.endedTsMs === null ? "-" : formatTime(segment.endedTsMs)}</td>
-                  <td>{readToolSnapshotName(segment.setupSnapshot, "finder")}</td>
-                  <td>{readToolSnapshotName(segment.setupSnapshot, "amp")}</td>
-                  <td>{formatSegmentModes(readSnapshotNumber(segment.setupSnapshot, "modes_mask"))}</td>
-                  <td>{formatSnapshotUnits(readSnapshotNumber(segment.setupSnapshot, "ammo_per_drop"))}</td>
-                  <td>{formatSnapshotUnits(readSnapshotNumber(segment.setupSnapshot, "probes_per_drop"))}</td>
-                  <td>{dropCount}</td>
-                  <td>{claimCount}</td>
-                  <td>{formatPed(ttCostPed)}</td>
-                  <td>{formatPed(withMarkupCostPed)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
+    <SegmentCorrectionsView
+      segments={segments}
+      drops={drops}
+      claims={claims}
+      tools={state.miningTools}
+      runs={state.runs}
+    />
   );
 }
 
@@ -2023,38 +1956,4 @@ function formatExpires(tsMs: number | null): string {
   const minutes = totalMinutes % 60;
   if (hours === 0) return `${minutes}m`;
   return `${hours}h ${minutes.toString().padStart(2, "0")}m`;
-}
-
-function readToolSnapshotName(snapshot: Record<string, unknown>, key: "finder" | "amp"): string {
-  const value = snapshot[key];
-  if (!isRecord(value)) return key === "amp" ? "No amp" : "-";
-  return typeof value.name === "string" ? value.name : "-";
-}
-
-function readSnapshotNumber(snapshot: Record<string, unknown>, key: string): number | null {
-  const value = snapshot[key];
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
-function formatSegmentModes(mask: number | null): string {
-  if (mask === null) return "-";
-  if (mask === 0) return "None";
-
-  const labels: string[] = [];
-  if ((mask & 1) !== 0) labels.push("Ore");
-  if ((mask & 2) !== 0) labels.push("Enmatter");
-  if ((mask & 4) !== 0) labels.push("Treasure");
-
-  const unknownMask = mask & ~7;
-  if (unknownMask !== 0) labels.push(`Unknown ${unknownMask}`);
-  return labels.length > 0 ? labels.join(" + ") : `Unknown ${mask}`;
-}
-
-function formatSnapshotUnits(value: number | null): string {
-  if (value === null) return "-";
-  return value.toLocaleString();
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
