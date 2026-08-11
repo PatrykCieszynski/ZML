@@ -14,6 +14,10 @@ from zml_ocr_protocol.messages import AgentToBridgeMessage
 
 from zml_ocr_worker.calibration.finder import FinderLocator
 from zml_ocr_worker.calibration.model import LocatedRegion
+from zml_ocr_worker.calibration.recording import (
+    CalibrationSnapshotRecorder,
+    calibration_snapshot_config_from_env,
+)
 from zml_ocr_worker.calibration.runtime import CompassCalibrationRuntime
 from zml_ocr_worker.capture.window_capturer import (
     WindowCapturer,
@@ -111,6 +115,18 @@ def start_ocr_input(
         else None
     )
     last_compass_rect: tuple[int, int, int, int] | None = None
+
+    calibration_snapshot_config = calibration_snapshot_config_from_env()
+    calibration_snapshot_recorder = CalibrationSnapshotRecorder(
+        config=calibration_snapshot_config,
+    )
+    if auto_calibration_enabled and calibration_snapshot_config.enabled:
+        logger.info(
+            "ocr_auto_calibration_snapshots_enabled dir=%s interval_ms=%s max_samples=%s",
+            calibration_snapshot_config.root_dir,
+            calibration_snapshot_config.interval_ms,
+            calibration_snapshot_config.max_samples,
+        )
 
     position_snapshot_config = position_roi_snapshot_config_from_env(
         enabled=position_roi_snapshot_enabled,
@@ -256,7 +272,30 @@ def start_ocr_input(
                     logger.info("compass_auto_reacquire_requested")
                     last_compass_rect = None
 
-                if compass is not None:
+                if compass is not None and located_compass is not None:
+                    active_rois = compass_calibration.active_rois
+                    if active_rois is not None:
+                        try:
+                            sample_dir = calibration_snapshot_recorder.record(
+                                compass,
+                                compass=located_compass,
+                                rois=active_rois,
+                                read=calibrated_step.read,
+                                layout_index=compass_calibration.layout_index,
+                                ts_ms=ts_ms,
+                            )
+                            if sample_dir is not None:
+                                logger.info(
+                                    "ocr_auto_calibration_snapshot_recorded dir=%s",
+                                    sample_dir,
+                                )
+                        except Exception:
+                            logger.warning(
+                                "ocr_auto_calibration_snapshot_failed ts_ms=%s",
+                                ts_ms,
+                                exc_info=True,
+                            )
+
                     # The legacy snapshot recorder still describes fixed sub-ROIs, so
                     # do not write misleading lon/lat snapshots in auto-calibration mode.
                     pos = calibrated_step.read.position
