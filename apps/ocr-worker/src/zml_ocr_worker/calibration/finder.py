@@ -19,9 +19,9 @@ class FinderLocatorConfig:
     baseline_finder_width: int = 347
     baseline_finder_height: int = 239
     scale_tolerance: tuple[float, ...] = (0.98, 1.0, 1.02)
-    coarse_stride_fraction: float = 0.035
-    coarse_candidate_count: int = 12
-    min_confidence: float = 0.72
+    coarse_stride_fraction: float = 0.09
+    coarse_candidate_count: int = 8
+    min_confidence: float = 0.86
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,7 +127,11 @@ class FinderLocator:
         height: int,
         scale: float,
     ) -> list[_Candidate]:
-        stride = max(5, round(min(width, height) * self._config.coarse_stride_fraction))
+        # The old POC scanned ~8 px apart and then refined every pixel around every
+        # seed. That works, but at 2560x1440 it spends seconds in Python while the
+        # capture loop is waiting. Use a wider coarse grid, then two bounded refinement
+        # passes around only the strongest structural candidates.
+        stride = max(8, round(min(width, height) * self._config.coarse_stride_fraction))
         max_y = frame_height - height
         max_x = frame_width - width
         coarse: list[_Candidate] = []
@@ -146,14 +150,11 @@ class FinderLocator:
                 )
 
         coarse.sort(key=lambda item: item.fast_score, reverse=True)
-        refined: dict[tuple[int, int], _Candidate] = {}
+        medium_step = max(2, stride // 4)
+        medium: dict[tuple[int, int], _Candidate] = {}
         for seed in coarse[: self._config.coarse_candidate_count]:
-            x_start = max(0, seed.x - stride)
-            x_end = min(max_x, seed.x + stride)
-            y_start = max(0, seed.y - stride)
-            y_end = min(max_y, seed.y + stride)
-            for y in range(y_start, y_end + 1):
-                for x in range(x_start, x_end + 1):
+            for y in _bounded_positions(seed.y, stride, medium_step, max_y):
+                for x in _bounded_positions(seed.x, stride, medium_step, max_x):
                     candidate = _Candidate(
                         x=x,
                         y=y,
@@ -163,11 +164,30 @@ class FinderLocator:
                         fast_score=_fast_score(features, x=x, y=y, width=width, height=height),
                     )
                     key = (x, y)
-                    previous = refined.get(key)
+                    previous = medium.get(key)
                     if previous is None or candidate.fast_score > previous.fast_score:
-                        refined[key] = candidate
+                        medium[key] = candidate
 
-        result = sorted(refined.values(), key=lambda item: item.fast_score, reverse=True)
+        medium_ranked = sorted(medium.values(), key=lambda item: item.fast_score, reverse=True)
+        exact: dict[tuple[int, int], _Candidate] = {}
+        exact_seed_count = max(2, self._config.coarse_candidate_count // 2)
+        for seed in medium_ranked[:exact_seed_count]:
+            for y in _bounded_positions(seed.y, medium_step, 1, max_y):
+                for x in _bounded_positions(seed.x, medium_step, 1, max_x):
+                    candidate = _Candidate(
+                        x=x,
+                        y=y,
+                        width=width,
+                        height=height,
+                        scale=scale,
+                        fast_score=_fast_score(features, x=x, y=y, width=width, height=height),
+                    )
+                    key = (x, y)
+                    previous = exact.get(key)
+                    if previous is None or candidate.fast_score > previous.fast_score:
+                        exact[key] = candidate
+
+        result = sorted(exact.values(), key=lambda item: item.fast_score, reverse=True)
         return result[: self._config.coarse_candidate_count]
 
 
@@ -298,3 +318,9 @@ def _scan_positions(limit: int, stride: int) -> list[int]:
     if not positions or positions[-1] != limit:
         positions.append(limit)
     return positions
+
+
+def _bounded_positions(center: int, radius: int, step: int, limit: int) -> range:
+    start = max(0, center - radius)
+    end = min(limit, center + radius)
+    return range(start, end + 1, max(1, step))
