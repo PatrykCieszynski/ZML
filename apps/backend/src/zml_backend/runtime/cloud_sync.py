@@ -64,6 +64,7 @@ class CloudSyncClient:
                     "y": claim.y,
                     "resourceName": claim.resource_name,
                     "sizeIndex": claim.size_index,
+                    "depthM": claim.depth_m,
                     "observedTsMs": claim.observed_ts_ms,
                 }
                 for claim in claims
