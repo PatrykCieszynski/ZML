@@ -54,7 +54,7 @@ class PositionPipeline:
     ) -> None:
         self._rois = rois.coordinates() if isinstance(rois, PositionRois) else rois
         self._engine = engine or TesserDigitsEngine()
-        self._token_extractor = token_extractor
+        self._token_extractor = token_extractor or NumericTokenExtractor()
         self._pre_cfg = pre_cfg or DigitsPreprocessConfig()
         self._pre = DigitsPreprocessor(pre_cfg)
         self._cfg = cfg or PositionPipelineConfig()
@@ -91,7 +91,7 @@ class PositionPipeline:
             if lon_img is None or lat_img is None:
                 return PositionReadResult(longitude=None, latitude=None, position=None)
 
-            if self._token_extractor is not None:
+            if active_rois.extract_numeric_tokens:
                 with self._measure("position.token_extract"):
                     lon_img = self._token_extractor.extract(lon_img)
                     lat_img = self._token_extractor.extract(lat_img)
