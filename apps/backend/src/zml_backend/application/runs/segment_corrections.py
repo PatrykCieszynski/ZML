@@ -293,9 +293,10 @@ def _patched_setup(
     if finder_set and finder is None:
         raise InvalidSegmentCorrectionError("A segment must have a finder")
     profile = setup.profile
+    resolved_finder = cast(MiningToolProfile, finder) if finder_set else profile.finder
     return MiningSegmentSetup(
         profile=MiningEquipmentProfile(
-            finder=finder if finder_set else profile.finder,
+            finder=resolved_finder,
             amp=amp if amp_set else profile.amp,
             extractor=None,
             finder_range_enhancers=profile.finder_range_enhancers,
