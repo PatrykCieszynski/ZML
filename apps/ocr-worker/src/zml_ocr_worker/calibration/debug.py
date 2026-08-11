@@ -59,11 +59,11 @@ def _read_coordinates(frame, compass: LocatedCompass) -> dict[str, object]:
         return {"longitude": None, "latitude": None, "hasPosition": False}
 
     variants = CompassCoordinateLayout().variants(compass)
-    pipeline = PositionPipeline(variants[0].roi_candidates[0])
+    pipeline = PositionPipeline(variants[0].rois)
     try:
         last = PositionReadResult(longitude=None, latitude=None, position=None)
         for index, variant in enumerate(variants):
-            last = pipeline.read_candidates(compass_roi, 0, variant.roi_candidates)
+            last = pipeline.read_candidates(compass_roi, 0, (variant.rois,))
             if last.valid:
                 return {
                     "longitude": last.longitude,
