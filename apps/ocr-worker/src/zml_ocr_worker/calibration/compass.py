@@ -18,12 +18,15 @@ class CompassLocatorConfig:
     hough_param1: float = 120.0
     hough_param2: float = 30.0
     min_ring_contrast: float = 0.65
-    min_locked_ring_contrast: float = 0.40
     baseline_radius: float = 142.0
     left_radius_factor: float = 1.22
     top_radius_factor: float = 1.49
     width_radius_factor: float = 2.57
-    height_radius_factor: float = 2.82
+    # The old known-good 2560x1440 Compass crop was 446 px tall at ~142 px
+    # radar radius. Keep the extra area below the radar so Lat and recovery
+    # offsets are never clipped by the discovered outer rectangle.
+    height_radius_factor: float = 3.14
+    locked_validation_min_score: float = 0.55
 
 
 class CompassLocator:
@@ -90,28 +93,19 @@ class CompassLocator:
         )
 
     def validate_locked(self, frame: np.ndarray, compass: LocatedCompass) -> float:
-        """Cheaply validate an already-located Compass without running Hough again.
-
-        The locked center/radius are projected into the existing Compass crop and only
-        the known concentric-ring geometry is scored. A moved/resized/closed Compass
-        should lose this score, while transient Lon/Lat OCR failures must not force an
-        expensive full-frame relocation when the radar itself is still in place.
-        """
-        crop = compass.rect.crop(frame)
-        if crop is None or crop.size == 0:
+        """Cheaply validate the already-known radar without running Hough again."""
+        if frame.size == 0 or frame.ndim != 3:
             return 0.0
-
-        gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         edges = cv2.Canny(gray, 50, 140) > 0
-        local_circle = (
-            compass.center_x - compass.rect.x1,
-            compass.center_y - compass.rect.y1,
-            compass.radius,
+        score = _ring_contrast(
+            edges,
+            (compass.center_x, compass.center_y, compass.radius),
         )
-        return _ring_contrast(edges, local_circle)
+        return float(min(max(score, 0.0), 1.0))
 
     def locked_is_valid(self, frame: np.ndarray, compass: LocatedCompass) -> bool:
-        return self.validate_locked(frame, compass) >= self._config.min_locked_ring_contrast
+        return self.validate_locked(frame, compass) >= self._config.locked_validation_min_score
 
     def _search_frame(self, frame: np.ndarray) -> tuple[np.ndarray, float]:
         frame_width = int(frame.shape[1])
