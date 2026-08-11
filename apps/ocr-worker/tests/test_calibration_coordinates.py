@@ -69,7 +69,7 @@ def _compass(*, radius: float = 100.0) -> LocatedCompass:
             x1=x1,
             x2=x1 + round(radius * 2.57),
             y1=y1,
-            y2=y1 + round(radius * 2.82),
+            y2=y1 + round(radius * 3.14),
         ),
         confidence=0.9,
         scale=radius / 142.0,
@@ -113,24 +113,18 @@ def _render_right_aligned_line(
     return image
 
 
-def test_coordinate_layout_uses_one_fixed_line_roi_per_vertical_variant() -> None:
+def test_coordinate_layout_uses_one_wide_deterministic_strip_pair() -> None:
     variants = CompassCoordinateLayout().variants(_compass())
 
-    assert [variant.vertical_offset_radius for variant in variants] == [
-        0.0,
-        -0.03,
-        0.03,
-        -0.06,
-        0.06,
-    ]
-    nominal = variants[0].rois
-    assert nominal.extract_numeric_tokens
-    assert nominal.lon.x1 == nominal.lat.x1
-    assert nominal.lon.x2 == nominal.lat.x2
-    assert nominal.lon.y1 < nominal.lon.y2
-    assert nominal.lat.y1 < nominal.lat.y2
-    assert nominal.lon.y1 < nominal.lat.y1
-    assert nominal.lon.y2 < nominal.lat.y2
+    assert len(variants) == 1
+    assert variants[0].vertical_offset_radius == 0.0
+    rois = variants[0].rois
+    assert rois.extract_numeric_tokens
+    assert rois.lon.x1 == rois.lat.x1
+    assert rois.lon.x2 == rois.lat.x2
+    assert rois.lon.x1 <= 1
+    assert rois.lon.x2 - rois.lon.x1 >= 135
+    assert rois.lon.y1 < rois.lon.y2 < rois.lat.y1 < rois.lat.y2
 
 
 def test_coordinate_layout_scales_with_detected_compass_radius() -> None:
@@ -140,6 +134,10 @@ def test_coordinate_layout_scales_with_detected_compass_radius() -> None:
     small_width = small.lon.x2 - small.lon.x1
     large_width = large.lon.x2 - large.lon.x1
     assert large_width >= small_width * 2 - 2
+
+    small_lon_height = small.lon.y2 - small.lon.y1
+    large_lon_height = large.lon.y2 - large.lon.y1
+    assert large_lon_height >= small_lon_height * 2 - 2
 
 
 def test_numeric_token_extractor_tracks_five_to_four_digit_transition() -> None:
@@ -179,6 +177,33 @@ def test_numeric_token_extractor_keeps_narrow_digit_spacing_in_one_token() -> No
     assert analysis.x1 == 75
     assert analysis.x2 == 123
     assert analysis.token.shape[1] == 48
+
+
+def test_numeric_token_extractor_falls_back_to_bounded_right_suffix() -> None:
+    # Community screenshots can render Lat and its value so tightly that the
+    # morphology sees one merged cluster instead of a separate label/value pair.
+    mask = np.zeros((17, 130), dtype=np.uint8)
+    runs = (
+        (40, 47),
+        (49, 55),
+        (57, 64),
+        (66, 69),
+        (71, 78),
+        (80, 87),
+        (89, 96),
+        (98, 105),
+        (107, 114),
+    )
+    for x1, x2 in runs:
+        mask[3:14, x1:x2] = 255
+
+    line = np.zeros((17, 130, 3), dtype=np.uint8)
+    analysis = _MaskBackedTokenExtractor(mask).analyze(line)
+
+    assert analysis.token is not None
+    assert analysis.x2 == 115
+    assert analysis.token.shape[1] <= round(17 * 3.2)
+    assert analysis.token.shape[1] >= 40
 
 
 def test_numeric_token_extractor_ignores_single_trailing_compass_letter() -> None:
