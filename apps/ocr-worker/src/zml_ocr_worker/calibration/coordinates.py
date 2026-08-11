@@ -10,19 +10,19 @@ from zml_ocr_worker.pipelines.position.model import CoordinateRois
 @dataclass(frozen=True, slots=True)
 class CompassCoordinateLayoutConfig:
     # Ratios are relative to the detected radar center/radius, not the outer crop.
-    # Lon/Lat are rendered as complete right-aligned strings, so one fixed line ROI
-    # can cover both the label and every supported coordinate length.
-    line_left_radius: float = -1.02
-    line_right_radius: float = -0.14
-    # These defaults map the old known-good 2560x1440 pixel lines (Lon 350..370,
-    # Lat 375..395 inside the Compass crop) onto radar-relative geometry. Keep the
-    # two lines separate: overlapping crops make the token extractor see fragments
-    # from the neighboring coordinate line.
-    longitude_top_radius: float = 0.97
-    longitude_bottom_radius: float = 1.12
-    latitude_top_radius: float = 1.15
-    latitude_bottom_radius: float = 1.30
-    vertical_offset_candidates: tuple[float, ...] = (0.0, -0.03, 0.03, -0.06, 0.06)
+    # Community screenshots show that the Lon/Lat block can move horizontally
+    # relative to the radar while its vertical rows remain stable. Cover the full
+    # useful X range and let NumericTokenExtractor find the right-side value inside
+    # each short strip instead of trying to predict the block's X coordinate.
+    line_left_radius: float = -1.22
+    line_right_radius: float = 0.15
+
+    # Live and community calibration put the row centers at roughly 1.10r / 1.29r
+    # below the radar center. A small symmetric vertical margin absorbs rounding
+    # and anti-aliasing differences without probing alternate Y layouts.
+    longitude_center_radius: float = 1.10
+    latitude_center_radius: float = 1.29
+    line_half_height_radius: float = 0.09
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,48 +32,44 @@ class CompassCoordinateLayoutVariant:
 
 
 class CompassCoordinateLayout:
-    """Derive scale-aware fixed Lon/Lat line ROIs from a located Compass.
+    """Derive one scale-aware Lon/Lat strip pair from a located Compass.
 
-    This class deliberately does no OCR. Each ROI contains the complete right-aligned
-    coordinate line. The PositionPipeline cheaply extracts the rightmost numeric token
-    before invoking its existing digits-only Tesseract engine.
+    The radar center/radius determines Y and scale. X is intentionally a wider
+    search strip because the coordinate block is not at one stable radar-relative
+    horizontal offset across observed Entropia UI variants. PositionPipeline keeps
+    using digits-only OCR after NumericTokenExtractor reduces each strip to the
+    right-side numeric suffix.
     """
 
     def __init__(self, *, config: CompassCoordinateLayoutConfig | None = None) -> None:
         self._config = config or CompassCoordinateLayoutConfig()
 
     def variants(self, compass: LocatedCompass) -> tuple[CompassCoordinateLayoutVariant, ...]:
-        return tuple(
+        # Keep the variant wrapper for the runtime interface, but there is now only
+        # one deterministic Y layout. OCR failures no longer cause vertical probing.
+        return (
             CompassCoordinateLayoutVariant(
-                vertical_offset_radius=vertical_offset,
-                rois=self._coordinate_rois(
-                    compass,
-                    vertical_offset=vertical_offset,
-                ),
-            )
-            for vertical_offset in self._config.vertical_offset_candidates
+                vertical_offset_radius=0.0,
+                rois=self._coordinate_rois(compass),
+            ),
         )
 
-    def _coordinate_rois(
-        self,
-        compass: LocatedCompass,
-        *,
-        vertical_offset: float,
-    ) -> CoordinateRois:
+    def _coordinate_rois(self, compass: LocatedCompass) -> CoordinateRois:
+        half_height = self._config.line_half_height_radius
         return CoordinateRois(
             lon=_local_rect_from_radar(
                 compass,
                 left_radius=self._config.line_left_radius,
                 right_radius=self._config.line_right_radius,
-                top_radius=self._config.longitude_top_radius + vertical_offset,
-                bottom_radius=self._config.longitude_bottom_radius + vertical_offset,
+                top_radius=self._config.longitude_center_radius - half_height,
+                bottom_radius=self._config.longitude_center_radius + half_height,
             ),
             lat=_local_rect_from_radar(
                 compass,
                 left_radius=self._config.line_left_radius,
                 right_radius=self._config.line_right_radius,
-                top_radius=self._config.latitude_top_radius + vertical_offset,
-                bottom_radius=self._config.latitude_bottom_radius + vertical_offset,
+                top_radius=self._config.latitude_center_radius - half_height,
+                bottom_radius=self._config.latitude_center_radius + half_height,
             ),
             extract_numeric_tokens=True,
         )
