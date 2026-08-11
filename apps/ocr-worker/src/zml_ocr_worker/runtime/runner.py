@@ -138,7 +138,9 @@ def start_ocr_input(
         finder_presence_check_enabled = _env_bool("ZML_FINDER_PRESENCE_CHECK", default=True)
     finder_presence_detector = FinderPresenceDetector()
     finder_locator = (
-        FinderLocator(presence_detector=finder_presence_detector) if auto_calibration_enabled else None
+        FinderLocator(presence_detector=finder_presence_detector)
+        if auto_calibration_enabled
+        else None
     )
     located_finder: LocatedRegion | None = None
     next_finder_search_at = 0.0
