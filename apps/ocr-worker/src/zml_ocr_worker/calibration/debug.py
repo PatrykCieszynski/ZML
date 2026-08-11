@@ -6,8 +6,10 @@ from pathlib import Path
 import cv2
 
 from zml_ocr_worker.calibration.compass import CompassLocator
+from zml_ocr_worker.calibration.coordinates import CompassCoordinateRead, CompassCoordinateReader
 from zml_ocr_worker.calibration.finder import FinderLocator
 from zml_ocr_worker.calibration.model import LocatedCompass, LocatedRegion
+from zml_ocr_worker.pipelines.mining_finder.engine import TesserocrFinderTextEngine
 
 
 def run_calibration_debug(image_path: Path, *, annotated_path: Path | None = None) -> int:
@@ -17,13 +19,21 @@ def run_calibration_debug(image_path: Path, *, annotated_path: Path | None = Non
 
     finder = FinderLocator().locate(frame)
     compass = CompassLocator().locate(frame)
+    coordinate_read: CompassCoordinateRead | None = None
+    if compass is not None:
+        text_engine = TesserocrFinderTextEngine()
+        try:
+            coordinate_read = CompassCoordinateReader(text_engine=text_engine).read(frame, compass)
+        finally:
+            text_engine.close()
+
     payload = {
         "image": {
             "width": int(frame.shape[1]),
             "height": int(frame.shape[0]),
         },
         "finder": _region_payload(finder),
-        "compass": _compass_payload(compass),
+        "compass": _compass_payload(compass, coordinates=coordinate_read),
     }
     print(json.dumps(payload, indent=2, sort_keys=True))
 
@@ -62,7 +72,11 @@ def _region_payload(region: LocatedRegion | None) -> dict[str, object] | None:
     }
 
 
-def _compass_payload(compass: LocatedCompass | None) -> dict[str, object] | None:
+def _compass_payload(
+    compass: LocatedCompass | None,
+    *,
+    coordinates: CompassCoordinateRead | None,
+) -> dict[str, object] | None:
     payload = _region_payload(compass)
     if payload is None or compass is None:
         return None
@@ -71,7 +85,21 @@ def _compass_payload(compass: LocatedCompass | None) -> dict[str, object] | None
         "centerY": round(compass.center_y, 2),
         "radius": round(compass.radius, 2),
     }
+    payload["coordinates"] = _coordinate_payload(coordinates)
     return payload
+
+
+def _coordinate_payload(read: CompassCoordinateRead | None) -> dict[str, object] | None:
+    if read is None:
+        return None
+    return {
+        "longitude": read.longitude,
+        "latitude": read.latitude,
+        "longitudeUnknown": read.longitude_unknown,
+        "latitudeUnknown": read.latitude_unknown,
+        "hasPosition": read.has_position,
+        "rawText": read.raw_text,
+    }
 
 
 def _draw_region(frame, region: LocatedRegion, *, label: str) -> None:
