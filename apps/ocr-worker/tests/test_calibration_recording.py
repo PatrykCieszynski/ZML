@@ -80,8 +80,7 @@ def test_calibration_snapshot_records_visual_pipeline_crops(tmp_path: Path) -> N
 
 
 def _draw_right_aligned_line(image: np.ndarray, roi: RoiRect, text: str) -> None:
-    crop = roi.crop(image)
-    assert crop is not None
+    crop = np.ascontiguousarray(image[roi.y1 : roi.y2, roi.x1 : roi.x2].copy())
     font = cv2.FONT_HERSHEY_SIMPLEX
     scale = 0.55
     thickness = 1
@@ -98,3 +97,4 @@ def _draw_right_aligned_line(image: np.ndarray, roi: RoiRect, text: str) -> None
         thickness,
         cv2.LINE_AA,
     )
+    image[roi.y1 : roi.y2, roi.x1 : roi.x2] = crop
