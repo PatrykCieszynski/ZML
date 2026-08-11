@@ -289,12 +289,7 @@ def _rect_ratio(
     y2 = y + int(height * rect[3])
     if x2 <= x1 or y2 <= y1:
         return 0.0
-    total = (
-        integral[y2, x2]
-        - integral[y1, x2]
-        - integral[y2, x1]
-        + integral[y1, x1]
-    )
+    total = integral[y2, x2] - integral[y1, x2] - integral[y2, x1] + integral[y1, x1]
     return float(total) / float((x2 - x1) * (y2 - y1))
 
 
