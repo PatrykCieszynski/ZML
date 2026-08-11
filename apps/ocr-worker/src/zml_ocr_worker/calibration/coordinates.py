@@ -71,6 +71,7 @@ class CompassCoordinateLayout:
                 top_radius=self._config.latitude_top_radius + vertical_offset,
                 bottom_radius=self._config.latitude_bottom_radius + vertical_offset,
             ),
+            extract_numeric_tokens=True,
         )
 
 
