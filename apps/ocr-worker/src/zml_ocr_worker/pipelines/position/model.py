@@ -14,6 +14,7 @@ class OcrPosition:
 class CoordinateRois:
     lon: RoiRect
     lat: RoiRect
+    extract_numeric_tokens: bool = False
 
 
 @dataclass(frozen=True, slots=True)
