@@ -25,32 +25,46 @@ class CompassCoordinateRead:
         return self.longitude is not None and self.latitude is not None
 
 
-class CompassCoordinateReader:
-    """Read Lon/Lat from the local text area below a located Compass radar."""
+@dataclass(frozen=True, slots=True)
+class CompassCoordinateReaderConfig:
+    left_radius: float = -1.48
+    longitude_top_radius: float = 0.94
+    longitude_bottom_radius: float = 1.14
+    latitude_top_radius: float = 1.10
+    latitude_bottom_radius: float = 1.32
+    right_radius_candidates: tuple[float, ...] = (-0.50, -0.28, -0.04, 0.16)
+    upscale_factors: tuple[int, ...] = (3, 4)
+    page_seg_modes: tuple[int, ...] = (7, 11)
 
-    def __init__(self, *, text_engine: FinderTextEngine) -> None:
+
+class CompassCoordinateReader:
+    """Read fixed Lon/Lat lines derived from a located Compass radar."""
+
+    def __init__(
+        self,
+        *,
+        text_engine: FinderTextEngine,
+        config: CompassCoordinateReaderConfig | None = None,
+    ) -> None:
         self._text_engine = text_engine
+        self._config = config or CompassCoordinateReaderConfig()
 
     def read(self, frame: np.ndarray, compass: LocatedCompass) -> CompassCoordinateRead:
-        broad = _crop_coordinate_region(frame, compass)
-        broad_text = self._recognize_upscaled(broad, scale=2, psm=6)
-        longitude, longitude_unknown = _parse_labeled_value(broad_text, "lon")
-        latitude, latitude_unknown = _parse_labeled_value(broad_text, "lat")
-
-        fallback_texts: list[str] = []
-        if longitude is None and not longitude_unknown:
-            lon_line = _crop_coordinate_line(frame, compass, start_radius=0.94, end_radius=1.14)
-            lon_text = self._recognize_upscaled(lon_line, scale=3, psm=11)
-            fallback_texts.append(lon_text)
-            longitude, longitude_unknown = _parse_labeled_value(lon_text, "lon")
-
-        if latitude is None and not latitude_unknown:
-            lat_line = _crop_coordinate_line(frame, compass, start_radius=1.10, end_radius=1.34)
-            lat_text = self._recognize_upscaled(lat_line, scale=3, psm=11)
-            fallback_texts.append(lat_text)
-            latitude, latitude_unknown = _parse_labeled_value(lat_text, "lat")
-
-        raw_parts = [part.strip() for part in [broad_text, *fallback_texts] if part.strip()]
+        longitude, longitude_unknown, longitude_text = self._read_line(
+            frame,
+            compass,
+            label="lon",
+            top_radius=self._config.longitude_top_radius,
+            bottom_radius=self._config.longitude_bottom_radius,
+        )
+        latitude, latitude_unknown, latitude_text = self._read_line(
+            frame,
+            compass,
+            label="lat",
+            top_radius=self._config.latitude_top_radius,
+            bottom_radius=self._config.latitude_bottom_radius,
+        )
+        raw_parts = [part for part in (longitude_text, latitude_text) if part]
         return CompassCoordinateRead(
             longitude=longitude,
             latitude=latitude,
@@ -59,45 +73,54 @@ class CompassCoordinateReader:
             raw_text="\n---\n".join(raw_parts),
         )
 
-    def _recognize_upscaled(self, image: np.ndarray, *, scale: int, psm: int) -> str:
-        if image.size == 0:
-            return ""
-        if scale > 1:
-            image = cv2.resize(
-                image,
-                None,
-                fx=float(scale),
-                fy=float(scale),
-                interpolation=cv2.INTER_CUBIC,
+    def _read_line(
+        self,
+        frame: np.ndarray,
+        compass: LocatedCompass,
+        *,
+        label: str,
+        top_radius: float,
+        bottom_radius: float,
+    ) -> tuple[int | None, bool, str]:
+        attempts: list[str] = []
+        for right_radius in self._config.right_radius_candidates:
+            line = _crop_coordinate_line(
+                frame,
+                compass,
+                left_radius=self._config.left_radius,
+                right_radius=right_radius,
+                top_radius=top_radius,
+                bottom_radius=bottom_radius,
             )
-        return self._text_engine.recognize_text(image, psm=psm)
-
-
-def _crop_coordinate_region(frame: np.ndarray, compass: LocatedCompass) -> np.ndarray:
-    return _crop_from_radar(
-        frame,
-        compass,
-        left_radius=-1.45,
-        right_radius=0.15,
-        top_radius=0.82,
-        bottom_radius=1.52,
-    )
+            for scale in self._config.upscale_factors:
+                prepared = _upscale(line, scale=scale)
+                for psm in self._config.page_seg_modes:
+                    text = self._text_engine.recognize_text(prepared, psm=psm)
+                    stripped = text.strip()
+                    if stripped:
+                        attempts.append(stripped)
+                    value, unknown = _parse_labeled_value(text, label)
+                    if value is not None or unknown:
+                        return value, unknown, "\n".join(attempts)
+        return None, False, "\n".join(attempts)
 
 
 def _crop_coordinate_line(
     frame: np.ndarray,
     compass: LocatedCompass,
     *,
-    start_radius: float,
-    end_radius: float,
+    left_radius: float,
+    right_radius: float,
+    top_radius: float,
+    bottom_radius: float,
 ) -> np.ndarray:
     return _crop_from_radar(
         frame,
         compass,
-        left_radius=-1.50,
-        right_radius=-0.08,
-        top_radius=start_radius,
-        bottom_radius=end_radius,
+        left_radius=left_radius,
+        right_radius=right_radius,
+        top_radius=top_radius,
+        bottom_radius=bottom_radius,
     )
 
 
@@ -120,6 +143,18 @@ def _crop_from_radar(
     if x2 <= x1 or y2 <= y1:
         return np.zeros((1, 1, 3), dtype=np.uint8)
     return np.ascontiguousarray(frame[y1:y2, x1:x2])
+
+
+def _upscale(image: np.ndarray, *, scale: int) -> np.ndarray:
+    if image.size == 0 or scale <= 1:
+        return image
+    return cv2.resize(
+        image,
+        None,
+        fx=float(scale),
+        fy=float(scale),
+        interpolation=cv2.INTER_CUBIC,
+    )
 
 
 def _parse_labeled_value(text: str, label: str) -> tuple[int | None, bool]:
