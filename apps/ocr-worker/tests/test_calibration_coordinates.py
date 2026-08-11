@@ -49,6 +49,16 @@ class _FakeConfidenceDigitsEngine:
         return None
 
 
+class _MaskBackedTokenExtractor(NumericTokenExtractor):
+    def __init__(self, mask: np.ndarray) -> None:
+        super().__init__()
+        self._mask = mask
+
+    def _text_mask(self, gray: np.ndarray) -> np.ndarray:
+        assert gray.shape == self._mask.shape
+        return self._mask
+
+
 def _compass(*, radius: float = 100.0) -> LocatedCompass:
     center_x = 450.0
     center_y = 250.0
@@ -141,6 +151,34 @@ def test_numeric_token_extractor_tracks_five_to_four_digit_transition() -> None:
     assert five_digits is not None
     assert four_digits is not None
     assert five_digits.shape[1] > four_digits.shape[1]
+
+
+def test_numeric_token_extractor_keeps_narrow_digit_spacing_in_one_token() -> None:
+    # Regression for a real 21 px Entropia Lon line. Its foreground projection
+    # contained a 5 px gap between narrow numeric glyphs, while the actual
+    # label/value separator was 12 px. The old 0.18h threshold split 31167 into
+    # 31 + 167 and sent only 167 to digit OCR.
+    mask = np.zeros((21, 123), dtype=np.uint8)
+    runs = (
+        (36, 44),
+        (45, 54),
+        (56, 64),
+        (76, 84),
+        (86, 91),
+        (96, 101),
+        (105, 114),
+        (115, 123),
+    )
+    for x1, x2 in runs:
+        mask[4:18, x1:x2] = 255
+
+    line = np.zeros((21, 123, 3), dtype=np.uint8)
+    analysis = _MaskBackedTokenExtractor(mask).analyze(line)
+
+    assert analysis.token is not None
+    assert analysis.x1 == 75
+    assert analysis.x2 == 123
+    assert analysis.token.shape[1] == 48
 
 
 def test_numeric_token_extractor_ignores_single_trailing_compass_letter() -> None:
