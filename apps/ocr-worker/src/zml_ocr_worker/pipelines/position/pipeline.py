@@ -77,6 +77,7 @@ class PositionPipeline:
         ts_ms: int,
         *,
         rois: CoordinateRois | None = None,
+        emit: bool = True,
     ) -> PositionReadResult:
         active_rois = rois or self._rois
         with self._measure("position.step"):
@@ -90,33 +91,15 @@ class PositionPipeline:
             lon, lon_confidence = self._read_int(lon_img)
             lat, lat_confidence = self._read_int(lat_img)
             confidence = _combined_confidence(lon_confidence, lat_confidence)
-            if lon is None or lat is None:
-                return PositionReadResult(
-                    longitude=lon,
-                    latitude=lat,
-                    position=None,
-                    confidence=confidence,
-                )
-
-            emitted: OcrPosition | None = None
-            if (lon, lat) != self._last_emitted:
-                self._last_emitted = (lon, lat)
-                emitted = OcrPosition(
-                    ts_ms=ts_ms,
-                    position=WorldPosition(
-                        planet_name="",  # fill later when planet OCR returns
-                        x=lon,
-                        y=lat,
-                        z=None,
-                    ),
-                )
-
-            return PositionReadResult(
+            result = PositionReadResult(
                 longitude=lon,
                 latitude=lat,
-                position=emitted,
+                position=None,
                 confidence=confidence,
             )
+            if not result.valid or not emit:
+                return result
+            return self._emit_position(result, ts_ms=ts_ms)
 
     def read_candidates(
         self,
@@ -126,10 +109,36 @@ class PositionPipeline:
     ) -> PositionReadResult:
         last = PositionReadResult(longitude=None, latitude=None, position=None)
         for candidate in roi_candidates:
-            last = self.read(compass_roi, ts_ms, rois=candidate)
+            last = self.read(compass_roi, ts_ms, rois=candidate, emit=False)
             if last.is_healthy(min_confidence=self._cfg.candidate_min_confidence):
-                return last
+                return self._emit_position(last, ts_ms=ts_ms)
         return last
+
+    def _emit_position(self, read: PositionReadResult, *, ts_ms: int) -> PositionReadResult:
+        if not read.valid:
+            return read
+        lon = read.longitude
+        lat = read.latitude
+        if lon is None or lat is None:
+            return read
+        if (lon, lat) == self._last_emitted:
+            return read
+
+        self._last_emitted = (lon, lat)
+        return PositionReadResult(
+            longitude=lon,
+            latitude=lat,
+            position=OcrPosition(
+                ts_ms=ts_ms,
+                position=WorldPosition(
+                    planet_name="",  # fill later when planet OCR returns
+                    x=lon,
+                    y=lat,
+                    z=None,
+                ),
+            ),
+            confidence=read.confidence,
+        )
 
     def _read_int(self, img: np.ndarray) -> tuple[int | None, float | None]:
         with self._measure("position.preprocess"):
