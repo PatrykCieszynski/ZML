@@ -24,6 +24,24 @@ class _FakeDigitsEngine:
         return None
 
 
+class _FakeConfidenceDigitsEngine:
+    def __init__(self, *responses: tuple[str, float]) -> None:
+        self._responses = deque(responses)
+        self.last_confidence: float | None = None
+
+    def recognize_digits(self, img: np.ndarray) -> str:
+        assert img.size > 0
+        if not self._responses:
+            self.last_confidence = 0.0
+            return ""
+        text, confidence = self._responses.popleft()
+        self.last_confidence = confidence
+        return text
+
+    def close(self) -> None:
+        return None
+
+
 def _compass(*, radius: float = 100.0) -> LocatedCompass:
     center_x = 450.0
     center_y = 250.0
@@ -105,3 +123,25 @@ def test_position_pipeline_tries_wider_coordinate_candidates() -> None:
 
     assert result.valid
     assert (result.longitude, result.latitude) == (135708, 83952)
+
+
+def test_position_pipeline_retries_valid_but_low_confidence_candidate_before_emitting() -> None:
+    candidates = CompassCoordinateLayout().variants(_compass())[0].roi_candidates
+    engine = _FakeConfidenceDigitsEngine(
+        ("61460", 0.10),
+        ("75048", 0.12),
+        ("61460", 0.91),
+        ("75048", 0.88),
+    )
+    pipeline = PositionPipeline(candidates[0], engine=engine)  # type: ignore[arg-type]
+    compass_roi = np.zeros((282, 257, 3), dtype=np.uint8)
+    try:
+        result = pipeline.read_candidates(compass_roi, ts_ms=1, roi_candidates=candidates)
+    finally:
+        pipeline.close()
+
+    assert result.valid
+    assert result.confidence == 0.88
+    assert result.is_healthy(min_confidence=0.35)
+    assert result.position is not None
+    assert (result.position.position.x, result.position.position.y) == (61460, 75048)
