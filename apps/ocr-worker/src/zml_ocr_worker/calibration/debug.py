@@ -6,10 +6,10 @@ from pathlib import Path
 import cv2
 
 from zml_ocr_worker.calibration.compass import CompassLocator
-from zml_ocr_worker.calibration.coordinates import CompassCoordinateRead, CompassCoordinateReader
+from zml_ocr_worker.calibration.coordinates import CompassCoordinateLayout
 from zml_ocr_worker.calibration.finder import FinderLocator
 from zml_ocr_worker.calibration.model import LocatedCompass, LocatedRegion
-from zml_ocr_worker.pipelines.mining_finder.engine import TesserocrFinderTextEngine
+from zml_ocr_worker.pipelines.position.pipeline import PositionPipeline, PositionReadResult
 
 
 def run_calibration_debug(image_path: Path, *, annotated_path: Path | None = None) -> int:
@@ -19,13 +19,9 @@ def run_calibration_debug(image_path: Path, *, annotated_path: Path | None = Non
 
     finder = FinderLocator().locate(frame)
     compass = CompassLocator().locate(frame)
-    coordinate_read: CompassCoordinateRead | None = None
+    coordinate_payload: dict[str, object] | None = None
     if compass is not None:
-        text_engine = TesserocrFinderTextEngine()
-        try:
-            coordinate_read = CompassCoordinateReader(text_engine=text_engine).read(frame, compass)
-        finally:
-            text_engine.close()
+        coordinate_payload = _read_coordinates(frame, compass)
 
     payload = {
         "image": {
@@ -33,7 +29,7 @@ def run_calibration_debug(image_path: Path, *, annotated_path: Path | None = Non
             "height": int(frame.shape[0]),
         },
         "finder": _region_payload(finder),
-        "compass": _compass_payload(compass, coordinates=coordinate_read),
+        "compass": _compass_payload(compass, coordinates=coordinate_payload),
     }
     print(json.dumps(payload, indent=2, sort_keys=True))
 
@@ -57,6 +53,34 @@ def run_calibration_debug(image_path: Path, *, annotated_path: Path | None = Non
     return 0 if finder is not None or compass is not None else 2
 
 
+def _read_coordinates(frame, compass: LocatedCompass) -> dict[str, object]:
+    compass_roi = compass.rect.crop(frame)
+    if compass_roi is None:
+        return {"longitude": None, "latitude": None, "hasPosition": False}
+
+    variants = CompassCoordinateLayout().variants(compass)
+    pipeline = PositionPipeline(variants[0].roi_candidates[0])
+    try:
+        last = PositionReadResult(longitude=None, latitude=None, position=None)
+        for index, variant in enumerate(variants):
+            last = pipeline.read_candidates(compass_roi, 0, variant.roi_candidates)
+            if last.valid:
+                return {
+                    "longitude": last.longitude,
+                    "latitude": last.latitude,
+                    "hasPosition": True,
+                    "layoutIndex": index,
+                    "verticalOffsetRadius": variant.vertical_offset_radius,
+                }
+        return {
+            "longitude": last.longitude,
+            "latitude": last.latitude,
+            "hasPosition": False,
+        }
+    finally:
+        pipeline.close()
+
+
 def _region_payload(region: LocatedRegion | None) -> dict[str, object] | None:
     if region is None:
         return None
@@ -75,7 +99,7 @@ def _region_payload(region: LocatedRegion | None) -> dict[str, object] | None:
 def _compass_payload(
     compass: LocatedCompass | None,
     *,
-    coordinates: CompassCoordinateRead | None,
+    coordinates: dict[str, object] | None,
 ) -> dict[str, object] | None:
     payload = _region_payload(compass)
     if payload is None or compass is None:
@@ -85,21 +109,8 @@ def _compass_payload(
         "centerY": round(compass.center_y, 2),
         "radius": round(compass.radius, 2),
     }
-    payload["coordinates"] = _coordinate_payload(coordinates)
+    payload["coordinates"] = coordinates
     return payload
-
-
-def _coordinate_payload(read: CompassCoordinateRead | None) -> dict[str, object] | None:
-    if read is None:
-        return None
-    return {
-        "longitude": read.longitude,
-        "latitude": read.latitude,
-        "longitudeUnknown": read.longitude_unknown,
-        "latitudeUnknown": read.latitude_unknown,
-        "hasPosition": read.has_position,
-        "rawText": read.raw_text,
-    }
 
 
 def _draw_region(frame, region: LocatedRegion, *, label: str) -> None:
