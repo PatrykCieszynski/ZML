@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+from pathlib import Path
 
 from zml_ocr_worker import __version__
 
@@ -12,6 +13,18 @@ def build_parser() -> argparse.ArgumentParser:
     subcommands = parser.add_subparsers(dest="command", required=True)
     subcommands.add_parser("doctor", help="Validate the native OCR runtime and tessdata")
     subcommands.add_parser("stdio", help="Run the NDJSON process protocol on stdin/stdout")
+
+    locate_ui = subcommands.add_parser(
+        "locate-ui",
+        help="Locate Compass and Finder regions in a captured Entropia client frame",
+    )
+    locate_ui.add_argument("image", type=Path, help="Full Entropia client screenshot")
+    locate_ui.add_argument(
+        "--annotated",
+        type=Path,
+        default=None,
+        help="Optional output path for an annotated preview image",
+    )
     return parser
 
 
@@ -30,4 +43,8 @@ def main(argv: list[str] | None = None) -> int:
             from zml_ocr_worker.runtime.stdio import run_stdio
 
             return run_stdio()
+        case "locate-ui":
+            from zml_ocr_worker.calibration.debug import run_calibration_debug
+
+            return run_calibration_debug(args.image, annotated_path=args.annotated)
     raise RuntimeError(f"Unsupported command: {args.command}")
