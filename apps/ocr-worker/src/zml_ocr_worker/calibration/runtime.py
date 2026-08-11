@@ -141,10 +141,13 @@ class CompassCalibrationRuntime:
         index: int,
     ) -> PositionReadResult:
         variant = self._variants[index]
+        # A layout now has one fixed Lon line and one fixed Lat line. Numeric token
+        # extraction adapts their right-aligned values to the current digit count, so
+        # normal reads invoke Tesseract only once per coordinate.
         return self._position_pipeline.read_candidates(
             compass_roi,
             ts_ms,
-            variant.roi_candidates,
+            (variant.rois,),
         )
 
     def _read_is_healthy(self, read: PositionReadResult) -> bool:
