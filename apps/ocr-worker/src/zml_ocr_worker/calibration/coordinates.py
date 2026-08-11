@@ -14,10 +14,14 @@ class CompassCoordinateLayoutConfig:
     # can cover both the label and every supported coordinate length.
     line_left_radius: float = -1.02
     line_right_radius: float = -0.14
-    longitude_top_radius: float = 0.94
-    longitude_bottom_radius: float = 1.14
-    latitude_top_radius: float = 1.10
-    latitude_bottom_radius: float = 1.32
+    # These defaults map the old known-good 2560x1440 pixel lines (Lon 350..370,
+    # Lat 375..395 inside the Compass crop) onto radar-relative geometry. Keep the
+    # two lines separate: overlapping crops make the token extractor see fragments
+    # from the neighboring coordinate line.
+    longitude_top_radius: float = 0.97
+    longitude_bottom_radius: float = 1.12
+    latitude_top_radius: float = 1.15
+    latitude_bottom_radius: float = 1.30
     vertical_offset_candidates: tuple[float, ...] = (0.0, -0.03, 0.03, -0.06, 0.06)
 
 
