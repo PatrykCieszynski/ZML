@@ -20,6 +20,7 @@ from zml_ocr_worker.runtime.profiling import OcrProfiler
 class PositionPipelineConfig:
     sanity_min: int = 1000
     sanity_max: int = 10_000_000
+    candidate_min_confidence: float = 0.35
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,10 +28,16 @@ class PositionReadResult:
     longitude: int | None
     latitude: int | None
     position: OcrPosition | None
+    confidence: float | None = None
 
     @property
     def valid(self) -> bool:
         return self.longitude is not None and self.latitude is not None
+
+    def is_healthy(self, *, min_confidence: float) -> bool:
+        if not self.valid:
+            return False
+        return self.confidence is None or self.confidence >= min_confidence
 
 
 class PositionPipeline:
@@ -80,10 +87,16 @@ class PositionPipeline:
             if lon_img is None or lat_img is None:
                 return PositionReadResult(longitude=None, latitude=None, position=None)
 
-            lon = self._read_int(lon_img)
-            lat = self._read_int(lat_img)
+            lon, lon_confidence = self._read_int(lon_img)
+            lat, lat_confidence = self._read_int(lat_img)
+            confidence = _combined_confidence(lon_confidence, lat_confidence)
             if lon is None or lat is None:
-                return PositionReadResult(longitude=lon, latitude=lat, position=None)
+                return PositionReadResult(
+                    longitude=lon,
+                    latitude=lat,
+                    position=None,
+                    confidence=confidence,
+                )
 
             emitted: OcrPosition | None = None
             if (lon, lat) != self._last_emitted:
@@ -98,7 +111,12 @@ class PositionPipeline:
                     ),
                 )
 
-            return PositionReadResult(longitude=lon, latitude=lat, position=emitted)
+            return PositionReadResult(
+                longitude=lon,
+                latitude=lat,
+                position=emitted,
+                confidence=confidence,
+            )
 
     def read_candidates(
         self,
@@ -109,30 +127,31 @@ class PositionPipeline:
         last = PositionReadResult(longitude=None, latitude=None, position=None)
         for candidate in roi_candidates:
             last = self.read(compass_roi, ts_ms, rois=candidate)
-            if last.valid:
+            if last.is_healthy(min_confidence=self._cfg.candidate_min_confidence):
                 return last
         return last
 
-    def _read_int(self, img: np.ndarray) -> int | None:
+    def _read_int(self, img: np.ndarray) -> tuple[int | None, float | None]:
         with self._measure("position.preprocess"):
             pre = self._pre.process(img)
         with self._measure("position.ocr"):
             raw = self._engine.recognize_digits(pre)
+            confidence = _last_engine_confidence(self._engine)
 
         with self._measure("position.parse"):
             digits = digits_only(raw)
             if not digits:
-                return None
+                return None, confidence
 
             try:
                 val = int(digits)
             except ValueError:
-                return None
+                return None, confidence
 
             if not (self._cfg.sanity_min <= val <= self._cfg.sanity_max):
-                return None
+                return None, confidence
 
-            return val
+            return val, confidence
 
     def _measure(self, name: str):
         if self._profiler is None:
@@ -146,3 +165,15 @@ class _NullMeasure:
 
     def __exit__(self, *args: object) -> None:
         return None
+
+
+def _last_engine_confidence(engine: object) -> float | None:
+    value = getattr(engine, "last_confidence", None)
+    if isinstance(value, int | float):
+        return min(max(float(value), 0.0), 1.0)
+    return None
+
+
+def _combined_confidence(*values: float | None) -> float | None:
+    available = [value for value in values if value is not None]
+    return min(available) if available else None
