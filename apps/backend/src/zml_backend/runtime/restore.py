@@ -22,7 +22,9 @@ class MiningLifecycleRestorer:
             ensure_schema(conn)
         finally:
             conn.close()
+        self.restore_active_claims()
 
+    def restore_active_claims(self) -> None:
         conn = open_read_connection(self._db_path)
         try:
             rows = MiningClaimReader(conn).list_active()
