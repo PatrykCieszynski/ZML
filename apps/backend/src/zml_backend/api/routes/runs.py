@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Never
+
 from fastapi import APIRouter, HTTPException
 
 from zml_backend.api.dependencies import ReadConn, RuntimeDep
@@ -238,7 +240,7 @@ def _resolve_tool(
     return record.to_tool_profile()
 
 
-def _raise_segment_correction_http(exc: SegmentCorrectionError) -> None:
+def _raise_segment_correction_http(exc: SegmentCorrectionError) -> Never:
     if isinstance(exc, SegmentNotFoundError):
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     if isinstance(exc, InvalidSegmentCorrectionError):
