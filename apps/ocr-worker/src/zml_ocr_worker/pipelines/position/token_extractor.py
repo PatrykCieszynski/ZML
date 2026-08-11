@@ -21,6 +21,14 @@ class NumericTokenExtractorConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class NumericTokenAnalysis:
+    mask: np.ndarray
+    token: np.ndarray | None
+    x1: int | None
+    x2: int | None
+
+
+@dataclass(frozen=True, slots=True)
 class _TextCluster:
     x1: int
     x2: int
@@ -45,30 +53,43 @@ class NumericTokenExtractor:
         self._config = config or NumericTokenExtractorConfig()
 
     def extract(self, line_roi: np.ndarray) -> np.ndarray | None:
+        return self.analyze(line_roi).token
+
+    def analyze(self, line_roi: np.ndarray) -> NumericTokenAnalysis:
         if line_roi.size == 0:
-            return None
+            return _empty_analysis()
 
         gray = to_gray_u8(line_roi)
         height, width = gray.shape
         if height < 4 or width < 8:
-            return None
+            return NumericTokenAnalysis(
+                mask=np.zeros_like(gray),
+                token=None,
+                x1=None,
+                x2=None,
+            )
 
         mask = self._text_mask(gray)
         runs = _occupied_runs(np.any(mask > 0, axis=0))
         if len(runs) < 4:
-            return None
+            return NumericTokenAnalysis(mask=mask, token=None, x1=None, x2=None)
 
         clusters = self._clusters(runs, line_height=height)
         token = self._rightmost_token(clusters, line_height=height)
         if token is None:
-            return None
+            return NumericTokenAnalysis(mask=mask, token=None, x1=None, x2=None)
 
         padding = max(1, round(height * self._config.horizontal_padding_height_ratio))
         x1 = max(0, token.x1 - padding)
         x2 = min(width, token.x2 + padding)
         if x2 <= x1:
-            return None
-        return line_roi[:, x1:x2]
+            return NumericTokenAnalysis(mask=mask, token=None, x1=None, x2=None)
+        return NumericTokenAnalysis(
+            mask=mask,
+            token=line_roi[:, x1:x2],
+            x1=x1,
+            x2=x2,
+        )
 
     def _text_mask(self, gray: np.ndarray) -> np.ndarray:
         height = gray.shape[0]
@@ -141,6 +162,15 @@ class NumericTokenExtractor:
                 continue
             return candidate
         return None
+
+
+def _empty_analysis() -> NumericTokenAnalysis:
+    return NumericTokenAnalysis(
+        mask=np.zeros((1, 1), dtype=np.uint8),
+        token=None,
+        x1=None,
+        x2=None,
+    )
 
 
 def _occupied_runs(occupied: np.ndarray) -> tuple[tuple[int, int], ...]:
