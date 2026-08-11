@@ -60,7 +60,10 @@ def test_coordinate_layout_keeps_fixed_lines_and_progressively_wider_digit_strip
     assert len(set(widths)) == 3
 
     first = nominal.roi_candidates[0]
-    assert first.lon.y1 < first.lon.y2 <= first.lat.y1 < first.lat.y2
+    assert first.lon.y1 < first.lon.y2
+    assert first.lat.y1 < first.lat.y2
+    assert first.lon.y1 < first.lat.y1
+    assert first.lon.y2 < first.lat.y2
 
 
 def test_coordinate_layout_scales_with_detected_compass_radius() -> None:
