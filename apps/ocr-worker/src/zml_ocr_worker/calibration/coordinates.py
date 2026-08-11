@@ -14,66 +14,42 @@ class CompassCoordinateLayoutConfig:
     # can cover both the label and every supported coordinate length.
     line_left_radius: float = -1.02
     line_right_radius: float = -0.14
-    # These defaults map the old known-good 2560x1440 pixel lines (Lon 350..370,
-    # Lat 375..395 inside the Compass crop) onto radar-relative geometry. Keep the
-    # two lines separate: overlapping crops make the token extractor see fragments
-    # from the neighboring coordinate line.
-    longitude_top_radius: float = 0.97
-    longitude_bottom_radius: float = 1.12
-    latitude_top_radius: float = 1.15
-    latitude_bottom_radius: float = 1.30
-    vertical_offset_candidates: tuple[float, ...] = (0.0, -0.03, 0.03, -0.06, 0.06)
-
-
-@dataclass(frozen=True, slots=True)
-class CompassCoordinateLayoutVariant:
-    vertical_offset_radius: float
-    rois: CoordinateRois
+    # Live calibration showed that the earlier nominal lines were about 0.06r too
+    # high. The UI keeps the coordinate rows at a fixed radar-relative position, so
+    # bake the observed offset into the deterministic geometry instead of probing
+    # several vertical OCR layouts at runtime.
+    longitude_top_radius: float = 1.03
+    longitude_bottom_radius: float = 1.18
+    latitude_top_radius: float = 1.21
+    latitude_bottom_radius: float = 1.36
 
 
 class CompassCoordinateLayout:
     """Derive scale-aware fixed Lon/Lat line ROIs from a located Compass.
 
-    This class deliberately does no OCR. Each ROI contains the complete right-aligned
-    coordinate line. The PositionPipeline cheaply extracts the rightmost numeric token
-    before invoking its existing digits-only Tesseract engine.
+    This class deliberately does no OCR. The detected radar center/radius is the
+    calibration anchor, so moving or resizing the Compass automatically moves and
+    scales these lines without trying alternative OCR positions.
     """
 
     def __init__(self, *, config: CompassCoordinateLayoutConfig | None = None) -> None:
         self._config = config or CompassCoordinateLayoutConfig()
 
-    def variants(self, compass: LocatedCompass) -> tuple[CompassCoordinateLayoutVariant, ...]:
-        return tuple(
-            CompassCoordinateLayoutVariant(
-                vertical_offset_radius=vertical_offset,
-                rois=self._coordinate_rois(
-                    compass,
-                    vertical_offset=vertical_offset,
-                ),
-            )
-            for vertical_offset in self._config.vertical_offset_candidates
-        )
-
-    def _coordinate_rois(
-        self,
-        compass: LocatedCompass,
-        *,
-        vertical_offset: float,
-    ) -> CoordinateRois:
+    def rois(self, compass: LocatedCompass) -> CoordinateRois:
         return CoordinateRois(
             lon=_local_rect_from_radar(
                 compass,
                 left_radius=self._config.line_left_radius,
                 right_radius=self._config.line_right_radius,
-                top_radius=self._config.longitude_top_radius + vertical_offset,
-                bottom_radius=self._config.longitude_bottom_radius + vertical_offset,
+                top_radius=self._config.longitude_top_radius,
+                bottom_radius=self._config.longitude_bottom_radius,
             ),
             lat=_local_rect_from_radar(
                 compass,
                 left_radius=self._config.line_left_radius,
                 right_radius=self._config.line_right_radius,
-                top_radius=self._config.latitude_top_radius + vertical_offset,
-                bottom_radius=self._config.latitude_bottom_radius + vertical_offset,
+                top_radius=self._config.latitude_top_radius,
+                bottom_radius=self._config.latitude_bottom_radius,
             ),
             extract_numeric_tokens=True,
         )
