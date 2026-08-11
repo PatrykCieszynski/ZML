@@ -18,6 +18,7 @@ class CompassLocatorConfig:
     hough_param1: float = 120.0
     hough_param2: float = 30.0
     min_ring_contrast: float = 0.65
+    min_locked_ring_contrast: float = 0.40
     baseline_radius: float = 142.0
     left_radius_factor: float = 1.22
     top_radius_factor: float = 1.49
@@ -87,6 +88,30 @@ class CompassLocator:
             center_y=center_y,
             radius=radius,
         )
+
+    def validate_locked(self, frame: np.ndarray, compass: LocatedCompass) -> float:
+        """Cheaply validate an already-located Compass without running Hough again.
+
+        The locked center/radius are projected into the existing Compass crop and only
+        the known concentric-ring geometry is scored. A moved/resized/closed Compass
+        should lose this score, while transient Lon/Lat OCR failures must not force an
+        expensive full-frame relocation when the radar itself is still in place.
+        """
+        crop = compass.rect.crop(frame)
+        if crop is None or crop.size == 0:
+            return 0.0
+
+        gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+        edges = cv2.Canny(gray, 50, 140) > 0
+        local_circle = (
+            compass.center_x - compass.rect.x1,
+            compass.center_y - compass.rect.y1,
+            compass.radius,
+        )
+        return _ring_contrast(edges, local_circle)
+
+    def locked_is_valid(self, frame: np.ndarray, compass: LocatedCompass) -> bool:
+        return self.validate_locked(frame, compass) >= self._config.min_locked_ring_contrast
 
     def _search_frame(self, frame: np.ndarray) -> tuple[np.ndarray, float]:
         frame_width = int(frame.shape[1])
