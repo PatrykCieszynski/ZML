@@ -14,7 +14,10 @@ class NumericTokenExtractorConfig:
     min_component_height_ratio: float = 0.25
     max_component_height_ratio: float = 0.9
     max_component_width_height_ratio: float = 1.5
-    separator_gap_height_ratio: float = 0.18
+    # Real Entropia text can leave ~5 px gaps between narrow glyphs such as "1"
+    # at a 21 px line height. Keep those inside one numeric token; the label/value
+    # gap is materially larger (12 px in the live sample that exposed this bug).
+    separator_gap_height_ratio: float = 0.30
     min_token_width_height_ratio: float = 1.0
     min_label_width_height_ratio: float = 0.75
     horizontal_padding_height_ratio: float = 0.06
