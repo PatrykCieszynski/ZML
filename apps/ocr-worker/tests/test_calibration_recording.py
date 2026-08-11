@@ -59,6 +59,7 @@ def test_calibration_snapshot_records_visual_pipeline_crops(tmp_path: Path) -> N
         ts_ms=123456,
     )
 
+    assert sample_dir is not None
     assert sample_dir == tmp_path / "sample-123456"
     assert (sample_dir / "overview.png").exists()
     assert (sample_dir / "lon-line.png").exists()
