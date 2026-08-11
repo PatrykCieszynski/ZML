@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 import numpy as np
 
 from zml_ocr_worker.pipelines.model import WorldPosition
 from zml_ocr_worker.pipelines.position.engine import TesserDigitsEngine
-from zml_ocr_worker.pipelines.position.model import OcrPosition, PositionRois
+from zml_ocr_worker.pipelines.position.model import CoordinateRois, OcrPosition, PositionRois
 from zml_ocr_worker.pipelines.position.preprocess import (
     DigitsPreprocessConfig,
     DigitsPreprocessor,
@@ -21,17 +22,28 @@ class PositionPipelineConfig:
     sanity_max: int = 10_000_000
 
 
+@dataclass(frozen=True, slots=True)
+class PositionReadResult:
+    longitude: int | None
+    latitude: int | None
+    position: OcrPosition | None
+
+    @property
+    def valid(self) -> bool:
+        return self.longitude is not None and self.latitude is not None
+
+
 class PositionPipeline:
     def __init__(
         self,
-        rois: PositionRois,
+        rois: PositionRois | CoordinateRois,
         *,
         engine: TesserDigitsEngine | None = None,
         pre_cfg: DigitsPreprocessConfig | None = None,
         cfg: PositionPipelineConfig | None = None,
         profiler: OcrProfiler | None = None,
     ) -> None:
-        self._rois = rois
+        self._rois = rois.coordinates() if isinstance(rois, PositionRois) else rois
         self._engine = engine or TesserDigitsEngine()
         self._pre_cfg = pre_cfg or DigitsPreprocessConfig()
         self._pre = DigitsPreprocessor(pre_cfg)
@@ -43,34 +55,63 @@ class PositionPipeline:
     def close(self) -> None:
         self._engine.close()
 
-    def step(self, compass_roi: np.ndarray, ts_ms: int) -> OcrPosition | None:
+    def step(
+        self,
+        compass_roi: np.ndarray,
+        ts_ms: int,
+        *,
+        rois: CoordinateRois | None = None,
+    ) -> OcrPosition | None:
+        return self.read(compass_roi, ts_ms, rois=rois).position
+
+    def read(
+        self,
+        compass_roi: np.ndarray,
+        ts_ms: int,
+        *,
+        rois: CoordinateRois | None = None,
+    ) -> PositionReadResult:
+        active_rois = rois or self._rois
         with self._measure("position.step"):
             with self._measure("position.crop"):
-                lon_img = self._rois.lon.crop(compass_roi)
-                lat_img = self._rois.lat.crop(compass_roi)
+                lon_img = active_rois.lon.crop(compass_roi)
+                lat_img = active_rois.lat.crop(compass_roi)
 
             if lon_img is None or lat_img is None:
-                return None
+                return PositionReadResult(longitude=None, latitude=None, position=None)
+
             lon = self._read_int(lon_img)
             lat = self._read_int(lat_img)
-            # TODO range check lat/lon?
-
             if lon is None or lat is None:
-                return None
-            if (lon, lat) == self._last_emitted:
-                return None
+                return PositionReadResult(longitude=lon, latitude=lat, position=None)
 
-            self._last_emitted = (lon, lat)
+            emitted: OcrPosition | None = None
+            if (lon, lat) != self._last_emitted:
+                self._last_emitted = (lon, lat)
+                emitted = OcrPosition(
+                    ts_ms=ts_ms,
+                    position=WorldPosition(
+                        planet_name="",  # fill later when planet OCR returns
+                        x=lon,
+                        y=lat,
+                        z=None,
+                    ),
+                )
 
-            return OcrPosition(
-                ts_ms=ts_ms,
-                position=WorldPosition(
-                    planet_name="",  # fill later when planet OCR returns
-                    x=lon,
-                    y=lat,
-                    z=None,
-                ),
-            )
+            return PositionReadResult(longitude=lon, latitude=lat, position=emitted)
+
+    def read_candidates(
+        self,
+        compass_roi: np.ndarray,
+        ts_ms: int,
+        roi_candidates: Sequence[CoordinateRois],
+    ) -> PositionReadResult:
+        last = PositionReadResult(longitude=None, latitude=None, position=None)
+        for candidate in roi_candidates:
+            last = self.read(compass_roi, ts_ms, rois=candidate)
+            if last.valid:
+                return last
+        return last
 
     def _read_int(self, img: np.ndarray) -> int | None:
         with self._measure("position.preprocess"):
