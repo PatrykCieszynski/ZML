@@ -12,6 +12,7 @@ from zml_ocr_worker.calibration.coordinates import (
 )
 from zml_ocr_worker.calibration.model import LocatedCompass
 from zml_ocr_worker.calibration.recovery import CompassRecoveryPolicy
+from zml_ocr_worker.pipelines.position.model import CoordinateRois
 from zml_ocr_worker.pipelines.position.pipeline import PositionPipeline, PositionReadResult
 
 logger = logging.getLogger(__name__)
@@ -62,6 +63,15 @@ class CompassCalibrationRuntime:
     @property
     def layout_index(self) -> int:
         return 0 if self._recovery is None else self._recovery.layout_index
+
+    @property
+    def active_rois(self) -> CoordinateRois | None:
+        if self._recovery is None or not self._variants:
+            return None
+        index = self._recovery.layout_index
+        if index < 0 or index >= len(self._variants):
+            return None
+        return self._variants[index].rois
 
     def invalidate(self, *, next_search_ts_ms: int = 0) -> None:
         self._compass = None
