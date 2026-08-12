@@ -119,7 +119,7 @@ def test_coordinate_layout_uses_one_wide_deterministic_strip_pair() -> None:
     assert len(variants) == 1
     assert variants[0].vertical_offset_radius == 0.0
     rois = variants[0].rois
-    assert rois.extract_numeric_tokens
+    assert not rois.extract_numeric_tokens
     assert rois.lon.x1 == rois.lat.x1
     assert rois.lon.x2 == rois.lat.x2
     assert rois.lon.x1 <= 1
