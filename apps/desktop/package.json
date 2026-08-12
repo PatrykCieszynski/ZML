@@ -19,7 +19,7 @@
     "@deck.gl/core": "^9.3.2",
     "@deck.gl/geo-layers": "^9.3.2",
     "@deck.gl/layers": "^9.3.2",
-    "@deck.gl/react": "^18.2.0",
+    "@deck.gl/react": "^9.3.2",
     "@types/ws": "^8.18.1",
     "@zml/api-contract": "workspace:*",
     "react": "^18.2.0",
