@@ -331,12 +331,7 @@ def _fast_score_grid(
         0.0,
         1.0,
     )
-    return (
-        panel_dark_score * 0.45
-        + grid_score * 0.35
-        + blue_score * 0.15
-        + green_score * 0.05
-    )
+    return panel_dark_score * 0.45 + grid_score * 0.35 + blue_score * 0.15 + green_score * 0.05
 
 
 def _fast_score(
