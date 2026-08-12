@@ -48,6 +48,7 @@ def test_finder_crop_recorder_writes_interval_sample(tmp_path: Path) -> None:
     metadata = json.loads(json_files[0].read_text(encoding="utf-8"))
     assert metadata["roi_name"] == "finder_test"
     assert metadata["reasons"] == ["interval"]
+    assert metadata["phase"] == "after_ocr"
     assert metadata["features"]["status_kind"] == "idle"
     assert metadata["image_shape"] == [8, 12, 4]
 
@@ -73,7 +74,7 @@ def test_finder_crop_recorder_writes_manual_sample_and_consumes_trigger(tmp_path
     assert metadata["reasons"] == ["manual"]
 
 
-def test_finder_crop_recorder_records_every_accepted_crop(tmp_path: Path) -> None:
+def test_finder_crop_recorder_records_every_accepted_crop_before_ocr(tmp_path: Path) -> None:
     recorder = FinderCropRecorder(
         config=FinderRecordingConfig(
             modes=frozenset({"accepted"}),
@@ -84,18 +85,8 @@ def test_finder_crop_recorder_records_every_accepted_crop(tmp_path: Path) -> Non
     )
     crop = np.zeros((8, 12, 4), dtype=np.uint8)
 
-    recorder.record_frame(
-        crop,
-        ts_ms=1_000,
-        features=FinderFeatures(status_kind="idle"),
-        signals=[],
-    )
-    recorder.record_frame(
-        crop,
-        ts_ms=1_500,
-        features=FinderFeatures(status_kind="idle"),
-        signals=[],
-    )
+    recorder.record_accepted_frame(crop, ts_ms=1_000)
+    recorder.record_accepted_frame(crop, ts_ms=1_500)
 
     metadata_files = sorted(tmp_path.glob("*.json"))
     assert len(list(tmp_path.glob("*.png"))) == 2
@@ -103,6 +94,31 @@ def test_finder_crop_recorder_records_every_accepted_crop(tmp_path: Path) -> Non
     for path in metadata_files:
         metadata = json.loads(path.read_text(encoding="utf-8"))
         assert metadata["reasons"] == ["accepted"]
+        assert metadata["phase"] == "accepted_before_ocr"
+        assert metadata["features"] is None
+
+
+def test_accepted_mode_does_not_duplicate_crop_after_ocr(tmp_path: Path) -> None:
+    recorder = FinderCropRecorder(
+        config=FinderRecordingConfig(
+            modes=frozenset({"accepted"}),
+            root_dir=tmp_path,
+            max_samples=10,
+        ),
+        roi_name="finder_auto",
+    )
+    crop = np.zeros((8, 12, 4), dtype=np.uint8)
+
+    recorder.record_accepted_frame(crop, ts_ms=1_000)
+    recorder.record_frame(
+        crop,
+        ts_ms=1_000,
+        features=FinderFeatures(status_kind="idle"),
+        signals=[],
+    )
+
+    assert len(list(tmp_path.glob("*.png"))) == 1
+    assert len(list(tmp_path.glob("*.json"))) == 1
 
 
 def test_finder_crop_recorder_respects_max_samples(tmp_path: Path) -> None:
@@ -143,6 +159,16 @@ def test_finder_recording_config_from_env_parses_modes(
     assert config.root_dir == tmp_path
     assert config.interval_ms == 2_500
     assert config.max_samples == 4
+
+
+def test_finder_recording_config_falls_back_to_env_when_synced_modes_are_empty(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("ZML_FINDER_RECORDING", "accepted")
+
+    config = finder_recording_config_from_env(modes="")
+
+    assert config.modes == frozenset({"accepted"})
 
 
 def test_finder_recording_config_uses_large_default_for_accepted_mode(monkeypatch) -> None:
