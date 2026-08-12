@@ -77,11 +77,12 @@ def run_live_calibration_snapshot(
             result["capturedTsMs"] = ts_ms
             calibrated = compass_runtime.step(frame, ts_ms=ts_ms)
 
-        if calibrated.compass is not None:
+        active_rois = compass_runtime.active_rois
+        if calibrated.compass is not None and active_rois is not None:
             recorder.record_compass(
                 frame,
                 compass=calibrated.compass,
-                rois=compass_runtime.active_rois,
+                rois=active_rois,
                 ts_ms=ts_ms,
             )
             result["compass"] = {"available": True}
