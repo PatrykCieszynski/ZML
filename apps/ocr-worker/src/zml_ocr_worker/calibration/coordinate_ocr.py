@@ -199,9 +199,7 @@ def _read_iterator_word(iterator: Any, level: Any, *, upscale: int) -> OcrWord |
     except RuntimeError:
         confidence_raw = None
     confidence = (
-        min(max(float(confidence_raw) / 100.0, 0.0), 1.0)
-        if confidence_raw is not None
-        else None
+        min(max(float(confidence_raw) / 100.0, 0.0), 1.0) if confidence_raw is not None else None
     )
     return OcrWord(text=text, rect=rect, confidence=confidence)
 
