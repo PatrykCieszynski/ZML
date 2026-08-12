@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,6 +17,8 @@ from zml_ocr_worker.pipelines.position.token_extractor import (
 )
 from zml_ocr_worker.runtime.paths import get_app_data_dir
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass(frozen=True, slots=True)
 class CalibrationSnapshotConfig:
@@ -23,18 +26,25 @@ class CalibrationSnapshotConfig:
     root_dir: Path
     interval_ms: int = 2_000
     max_samples: int = 20
+    text_log_enabled: bool = False
+    text_log_path: Path | None = None
 
     @property
     def should_record(self) -> bool:
         return self.enabled and self.max_samples > 0
 
+    @property
+    def resolved_text_log_path(self) -> Path:
+        return self.text_log_path or (self.root_dir / "position-readings.tsv")
+
 
 class CalibrationSnapshotRecorder:
-    """Write local visual diagnostics for auto-calibrated coordinate OCR.
+    """Write local diagnostics for auto-calibrated coordinate OCR.
 
-    Only the detected Compass crop is stored, not the full game frame. Each sample
-    contains an annotated overview plus the exact line/token crops used by the
-    coordinate pipeline so live geometry can be inspected without guessing from logs.
+    Visual snapshots store only the detected Compass crop, not the full game frame.
+    Optional text logging records every calibrated position read, including invalid
+    or non-emitted reads, so transient OCR hallucinations can be correlated with the
+    visual samples without adding another runtime pipeline.
     """
 
     def __init__(
@@ -49,6 +59,11 @@ class CalibrationSnapshotRecorder:
         self._recorded_count = 0
         if config.should_record:
             config.root_dir.mkdir(parents=True, exist_ok=True)
+        if config.text_log_enabled:
+            log_path = config.resolved_text_log_path
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            _ensure_position_log_header(log_path)
+            logger.info("position_text_log_enabled path=%s", log_path)
 
     @property
     def root_dir(self) -> Path:
@@ -64,6 +79,19 @@ class CalibrationSnapshotRecorder:
         layout_index: int,
         ts_ms: int,
     ) -> Path | None:
+        if self._config.text_log_enabled:
+            try:
+                _append_position_log(
+                    self._config.resolved_text_log_path,
+                    compass=compass,
+                    rois=rois,
+                    read=read,
+                    layout_index=layout_index,
+                    ts_ms=ts_ms,
+                )
+            except Exception:
+                logger.warning("position_text_log_write_failed ts_ms=%s", ts_ms, exc_info=True)
+
         if not self._config.should_record:
             return None
         if self._recorded_count >= self._config.max_samples:
@@ -169,6 +197,8 @@ def calibration_snapshot_config_from_env() -> CalibrationSnapshotConfig:
             _env_float("ZML_OCR_AUTO_CALIBRATION_SNAPSHOT_INTERVAL_S", default=2.0)
         ),
         max_samples=_env_int("ZML_OCR_AUTO_CALIBRATION_SNAPSHOT_MAX_SAMPLES", default=20),
+        text_log_enabled=_env_bool("ZML_POSITION_TEXT_LOG", default=False),
+        text_log_path=_env_path("ZML_POSITION_TEXT_LOG_PATH"),
     )
 
 
@@ -270,6 +300,45 @@ def _metadata_text(
             "",
         ]
     )
+
+
+def _ensure_position_log_header(path: Path) -> None:
+    if path.exists() and path.stat().st_size > 0:
+        return
+    path.write_text(
+        "ts_ms\tlon\tlat\tconfidence\tvalid\temitted\tlayout\tcompass_confidence"
+        "\tcompass_radius\tlon_roi\tlat_roi\n",
+        encoding="utf-8",
+    )
+
+
+def _append_position_log(
+    path: Path,
+    *,
+    compass: LocatedCompass,
+    rois: CoordinateRois,
+    read: PositionReadResult,
+    layout_index: int,
+    ts_ms: int,
+) -> None:
+    _ensure_position_log_header(path)
+    lon_roi = f"{rois.lon.x1},{rois.lon.y1},{rois.lon.x2},{rois.lon.y2}"
+    lat_roi = f"{rois.lat.x1},{rois.lat.y1},{rois.lat.x2},{rois.lat.y2}"
+    fields = (
+        str(ts_ms),
+        "" if read.longitude is None else str(read.longitude),
+        "" if read.latitude is None else str(read.latitude),
+        "" if read.confidence is None else f"{read.confidence:.3f}",
+        "1" if read.valid else "0",
+        "1" if read.position is not None else "0",
+        str(layout_index),
+        f"{compass.confidence:.3f}",
+        f"{compass.radius:.1f}",
+        lon_roi,
+        lat_roi,
+    )
+    with path.open("a", encoding="utf-8", newline="") as handle:
+        handle.write("\t".join(fields) + "\n")
 
 
 def _write_png(path: Path, image: np.ndarray) -> None:
