@@ -95,12 +95,8 @@ def _digit_rois() -> CoordinateRois:
     )
 
 
-def _calibration(lon_digits: int = 5, lat_digits: int = 5) -> CoordinateCalibration:
-    return CoordinateCalibration(
-        rois=_digit_rois(),
-        longitude_digits=lon_digits,
-        latitude_digits=lat_digits,
-    )
+def _calibration() -> CoordinateCalibration:
+    return CoordinateCalibration(rois=_digit_rois())
 
 
 def _invalid_read() -> PositionReadResult:
@@ -136,11 +132,9 @@ def test_coordinate_ocr_failures_do_not_reacquire_valid_compass() -> None:
 
 def test_digit_count_change_is_held_until_text_recalibration() -> None:
     locator = _FakeLocator(_compass())
-    calibrator = _FakeCalibrator(
-        _calibration(lon_digits=5, lat_digits=5),
-        _calibration(lon_digits=4, lat_digits=5),
-    )
+    calibrator = _FakeCalibrator(_calibration(), _calibration())
     pipeline = _FakePositionPipeline(
+        PositionReadResult(longitude=10000, latitude=30125, position=None),
         PositionReadResult(longitude=9999, latitude=30125, position=None),
         PositionReadResult(longitude=9999, latitude=30125, position=None),
     )
@@ -155,11 +149,13 @@ def test_digit_count_change_is_held_until_text_recalibration() -> None:
     )
     frame = np.zeros((500, 500, 3), dtype=np.uint8)
 
-    step = runtime.step(frame, ts_ms=100)
+    first = runtime.step(frame, ts_ms=100)
+    second = runtime.step(frame, ts_ms=110)
 
-    assert not step.reacquire_requested
+    assert not first.reacquire_requested
+    assert not second.reacquire_requested
     assert calibrator.calls == 2
-    assert pipeline.read_calls == 2
-    assert pipeline.emit_calls == 1
-    assert step.read.longitude == 9999
-    assert step.read.latitude == 30125
+    assert pipeline.read_calls == 3
+    assert pipeline.emit_calls == 2
+    assert second.read.longitude == 9999
+    assert second.read.latitude == 30125
