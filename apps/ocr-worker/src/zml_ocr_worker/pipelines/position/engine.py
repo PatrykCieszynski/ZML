@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 
 from zml_ocr_worker.runtime.paths import get_tessdata_dir
@@ -7,8 +9,13 @@ from zml_ocr_worker.runtime.tesserocr import preload_tesserocr
 
 
 class TesserDigitsEngine:
-    def __init__(self, *, tessdata_dir: str | None = None) -> None:
-        tesserocr = preload_tesserocr()
+    def __init__(
+        self,
+        *,
+        tessdata_dir: str | None = None,
+        tesserocr_module: Any | None = None,
+    ) -> None:
+        tesserocr = tesserocr_module or preload_tesserocr()
 
         resolved_tessdata_dir = get_tessdata_dir(tessdata_dir)
 
@@ -16,12 +23,13 @@ class TesserDigitsEngine:
         self._api = tesserocr.PyTessBaseAPI(
             path=str(resolved_tessdata_dir),
             lang="eng",
-            psm=tesserocr.PSM.SINGLE_LINE,
+            psm=tesserocr.PSM.SINGLE_WORD,
             oem=tesserocr.OEM.LSTM_ONLY,
         )
         self._last_confidence: float | None = None
 
-        # Digits-only configuration.
+        # Coordinate ROIs contain exactly one numeric token. SINGLE_WORD prevents
+        # Tesseract from over-segmenting a connected glyph into multiple digits.
         self._api.SetVariable("tessedit_char_whitelist", "0123456789")
         self._api.SetVariable("classify_bln_numeric_mode", "1")
         self._api.SetVariable("user_defined_dpi", "300")
