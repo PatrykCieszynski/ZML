@@ -154,16 +154,17 @@ class CoordinateTextCalibrator:
         _, value_word = match
 
         line_height = max(1, line_roi.y2 - line_roi.y1)
-        horizontal_padding = max(2, round(line_height * 0.08))
+        left_padding = max(2, round(line_height * 0.08))
+        right_padding = max(4, round(line_height * 0.18))
         vertical_padding = max(1, round(line_height * 0.08))
         rect = RoiRect(
             x1=max(
                 line_roi.x1,
-                line_roi.x1 + value_word.rect.x1 - horizontal_padding,
+                line_roi.x1 + value_word.rect.x1 - left_padding,
             ),
             x2=min(
                 line_roi.x2,
-                line_roi.x1 + value_word.rect.x2 + horizontal_padding,
+                line_roi.x1 + value_word.rect.x2 + right_padding,
             ),
             y1=max(line_roi.y1, line_roi.y1 + value_word.rect.y1 - vertical_padding),
             y2=min(line_roi.y2, line_roi.y1 + value_word.rect.y2 + vertical_padding),
