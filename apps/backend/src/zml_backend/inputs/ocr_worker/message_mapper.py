@@ -47,6 +47,7 @@ class OcrWorkerMessageMapper:
                     z=position.z,
                 ),
                 source="ocr",
+                confidence=message.payload.confidence,
             )
         )
 
