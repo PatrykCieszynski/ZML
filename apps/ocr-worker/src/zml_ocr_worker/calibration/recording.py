@@ -34,8 +34,7 @@ class CalibrationSnapshotRecorder:
 
     Only the detected Compass crop is stored, not the full game frame. Each sample
     contains an annotated overview plus the exact line/token crops used by the
-    coordinate pipeline so live geometry and token extraction can be inspected
-    without guessing from logs.
+    coordinate pipeline so live geometry can be inspected without guessing from logs.
     """
 
     def __init__(
@@ -80,17 +79,19 @@ class CalibrationSnapshotRecorder:
         if lon_line is None or lat_line is None:
             return None
 
-        lon_analysis = self._token_extractor.analyze(lon_line)
-        lat_analysis = self._token_extractor.analyze(lat_line)
+        lon_analysis = self._analysis_for_active_roi(lon_line, rois=rois)
+        lat_analysis = self._analysis_for_active_roi(lat_line, rois=rois)
 
         sample_dir = self._config.root_dir / f"sample-{ts_ms}"
         sample_dir.mkdir(parents=True, exist_ok=True)
 
         overview = np.ascontiguousarray(compass_roi.copy())
-        _draw_roi(overview, rois.lon, label="Lon line", line_index=0)
-        _draw_roi(overview, rois.lat, label="Lat line", line_index=1)
-        _draw_token(overview, rois.lon, lon_analysis, label="Lon token", line_index=2)
-        _draw_token(overview, rois.lat, lat_analysis, label="Lat token", line_index=3)
+        line_label = "line" if rois.extract_numeric_tokens else "digits"
+        _draw_roi(overview, rois.lon, label=f"Lon {line_label}", line_index=0)
+        _draw_roi(overview, rois.lat, label=f"Lat {line_label}", line_index=1)
+        if rois.extract_numeric_tokens:
+            _draw_token(overview, rois.lon, lon_analysis, label="Lon token", line_index=2)
+            _draw_token(overview, rois.lat, lat_analysis, label="Lat token", line_index=3)
         _draw_status(
             overview,
             layout_index=layout_index,
@@ -138,6 +139,25 @@ class CalibrationSnapshotRecorder:
         self._last_recorded_ts_ms = ts_ms
         self._recorded_count += 1
         return sample_dir
+
+    def _analysis_for_active_roi(
+        self,
+        line: np.ndarray,
+        *,
+        rois: CoordinateRois,
+    ) -> NumericTokenAnalysis:
+        analysis = self._token_extractor.analyze(line)
+        if rois.extract_numeric_tokens:
+            return analysis
+        # After strong text calibration the ROI itself is already the exact numeric
+        # box. Preserve the extractor mask for visual diagnostics, but snapshot the
+        # whole cached box as the token instead of trying to rediscover a label gap.
+        return NumericTokenAnalysis(
+            mask=analysis.mask,
+            token=line,
+            x1=0,
+            x2=int(line.shape[1]),
+        )
 
 
 def calibration_snapshot_config_from_env() -> CalibrationSnapshotConfig:
