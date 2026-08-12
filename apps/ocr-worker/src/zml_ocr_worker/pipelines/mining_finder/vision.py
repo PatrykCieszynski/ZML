@@ -43,7 +43,7 @@ class FinderFeatureDetector(Protocol):
 class FinderPanelLayout:
     radar: RelativeRect = (0.02, 0.03, 0.48, 0.70)
     modes: RelativeRect = (0.02, 0.72, 0.48, 0.98)
-    details: RelativeRect = (0.50, 0.03, 0.98, 0.35)
+    details: RelativeRect = (0.50, 0.03, 1.00, 0.35)
     units: RelativeRect = (0.50, 0.72, 0.98, 0.98)
     status: RelativeRect = (0.50, 0.36, 0.98, 0.70)
 
