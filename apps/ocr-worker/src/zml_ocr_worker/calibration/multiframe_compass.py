@@ -55,7 +55,9 @@ class MultiFrameCompassLocator(CompassLocator):
 
         # CompassLocator intentionally tolerates one failed locked validation.
         # Require two checks before accepting a newly aggregated calibration.
-        if not self.locked_is_valid(frame, consensus) or not self.locked_is_valid(frame, consensus):
+        if not self.locked_is_valid(frame, consensus) or not self.locked_is_valid(
+            frame, consensus
+        ):
             return None
         return consensus
 
