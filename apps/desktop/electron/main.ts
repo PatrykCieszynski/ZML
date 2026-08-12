@@ -1,4 +1,4 @@
-export * from "./mainBase.ts";
+import "./mainBase.ts";
 
 import { registerCalibrationIpc } from "./ipc/registerCalibrationIpc.ts";
 
