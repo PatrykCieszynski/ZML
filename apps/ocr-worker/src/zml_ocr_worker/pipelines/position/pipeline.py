@@ -22,6 +22,7 @@ class PositionPipelineConfig:
     sanity_min: int = 1000
     sanity_max: int = 10_000_000
     candidate_min_confidence: float = 0.35
+    health_low_confidence_threshold: float = 0.4
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,6 +83,7 @@ class PositionPipeline:
         rois: CoordinateRois | None = None,
         emit: bool = True,
     ) -> PositionReadResult:
+        self._increment("position.reads")
         active_rois = rois or self._rois
         with self._measure("position.step"):
             with self._measure("position.crop"):
@@ -89,6 +91,7 @@ class PositionPipeline:
                 lat_img = active_rois.lat.crop(compass_roi)
 
             if lon_img is None or lat_img is None:
+                self._increment("position.invalid")
                 return PositionReadResult(longitude=None, latitude=None, position=None)
 
             if active_rois.extract_numeric_tokens:
@@ -96,6 +99,7 @@ class PositionPipeline:
                     lon_img = self._token_extractor.extract(lon_img)
                     lat_img = self._token_extractor.extract(lat_img)
                 if lon_img is None or lat_img is None:
+                    self._increment("position.invalid")
                     return PositionReadResult(longitude=None, latitude=None, position=None)
 
             lon, lon_confidence = self._read_int(lon_img)
@@ -107,6 +111,16 @@ class PositionPipeline:
                 position=None,
                 confidence=confidence,
             )
+            if result.valid:
+                self._increment("position.valid")
+                if (
+                    confidence is not None
+                    and confidence < self._cfg.health_low_confidence_threshold
+                ):
+                    self._increment("position.low_confidence")
+            else:
+                self._increment("position.invalid")
+
             if not result.valid or not emit:
                 return result
             return self._emit_position(result, ts_ms=ts_ms)
@@ -136,9 +150,11 @@ class PositionPipeline:
         if lon is None or lat is None:
             return read
         if (lon, lat) == self._last_emitted:
+            self._increment("position.unchanged")
             return read
 
         self._last_emitted = (lon, lat)
+        self._increment("position.emitted")
         return PositionReadResult(
             longitude=lon,
             latitude=lat,
@@ -180,6 +196,10 @@ class PositionPipeline:
         if self._profiler is None:
             return _NullMeasure()
         return self._profiler.measure(name)
+
+    def _increment(self, name: str) -> None:
+        if self._profiler is not None:
+            self._profiler.increment(name)
 
 
 class _NullMeasure:
