@@ -146,6 +146,16 @@ class CompassCalibrationRuntime:
 
         read = self._read_fast(compass_roi, ts_ms=ts_ms)
         if read.valid:
+            if self._expected_digit_counts is None:
+                self._remember_digit_counts(read)
+                self._coordinate_failure_streak = 0
+                read = self._position_pipeline.emit_read(read, ts_ms=ts_ms)
+                return CalibratedPositionStep(
+                    compass=compass,
+                    compass_roi=compass_roi,
+                    read=read,
+                )
+
             if self._digit_count_changed(read):
                 logger.info(
                     "coordinate_digit_count_changed lon=%s lat=%s expected=%s; holding read",
@@ -162,7 +172,8 @@ class CompassCalibrationRuntime:
                     )
                 ):
                     read = self._read_fast(compass_roi, ts_ms=ts_ms)
-                    if read.valid and not self._digit_count_changed(read):
+                    if read.valid:
+                        self._remember_digit_counts(read)
                         read = self._position_pipeline.emit_read(read, ts_ms=ts_ms)
                 return CalibratedPositionStep(
                     compass=compass,
@@ -190,7 +201,8 @@ class CompassCalibrationRuntime:
             )
         ):
             read = self._read_fast(compass_roi, ts_ms=ts_ms)
-            if read.valid and not self._digit_count_changed(read):
+            if read.valid:
+                self._remember_digit_counts(read)
                 read = self._position_pipeline.emit_read(read, ts_ms=ts_ms)
 
         return CalibratedPositionStep(
@@ -256,19 +268,15 @@ class CompassCalibrationRuntime:
         reason: str,
     ) -> None:
         self._coordinate_rois = calibration.rois
-        self._expected_digit_counts = (
-            calibration.longitude_digits,
-            calibration.latitude_digits,
-        )
+        self._expected_digit_counts = None
         self._coordinate_failure_streak = 0
         lon = calibration.rois.lon
         lat = calibration.rois.lat
         logger.info(
-            "coordinate_text_calibrated reason=%s lon_roi=%s lat_roi=%s digits=%s",
+            "coordinate_text_calibrated reason=%s lon_roi=%s lat_roi=%s",
             reason,
             (lon.x1, lon.y1, lon.x2, lon.y2),
             (lat.x1, lat.y1, lat.x2, lat.y2),
-            self._expected_digit_counts,
         )
 
     def _read_fast(self, compass_roi: np.ndarray, *, ts_ms: int) -> PositionReadResult:
@@ -281,6 +289,15 @@ class CompassCalibrationRuntime:
             rois=rois,
             emit=False,
         )
+
+    def _remember_digit_counts(self, read: PositionReadResult) -> None:
+        if not read.valid or read.longitude is None or read.latitude is None:
+            return
+        self._expected_digit_counts = (
+            len(str(abs(read.longitude))),
+            len(str(abs(read.latitude))),
+        )
+        logger.info("coordinate_digit_rois_verified digits=%s", self._expected_digit_counts)
 
     def _digit_count_changed(self, read: PositionReadResult) -> bool:
         expected = self._expected_digit_counts
