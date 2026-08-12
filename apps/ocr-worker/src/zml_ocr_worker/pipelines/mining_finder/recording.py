@@ -81,7 +81,9 @@ class FinderCropRecorder:
                 phase="accepted_before_ocr",
             )
         except Exception:
-            logger.warning("finder_crop_record_failed ts_ms=%s phase=accepted", ts_ms, exc_info=True)
+            logger.warning(
+                "finder_crop_record_failed ts_ms=%s phase=accepted", ts_ms, exc_info=True
+            )
 
     def record_frame(
         self,
@@ -112,7 +114,9 @@ class FinderCropRecorder:
                 phase="after_ocr",
             )
         except Exception:
-            logger.warning("finder_crop_record_failed ts_ms=%s phase=after_ocr", ts_ms, exc_info=True)
+            logger.warning(
+                "finder_crop_record_failed ts_ms=%s phase=after_ocr", ts_ms, exc_info=True
+            )
 
     def _post_ocr_recording_reasons(
         self,
@@ -185,7 +189,12 @@ class FinderCropRecorder:
             + "\n",
             encoding="utf-8",
         )
-        logger.debug("finder_crop_recorded path=%s reasons=%s phase=%s", png_path, ",".join(reasons), phase)
+        logger.debug(
+            "finder_crop_recorded path=%s reasons=%s phase=%s",
+            png_path,
+            ",".join(reasons),
+            phase,
+        )
 
 
 def finder_recording_config_from_env(
