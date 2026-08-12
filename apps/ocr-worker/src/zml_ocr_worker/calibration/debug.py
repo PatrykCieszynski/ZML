@@ -80,15 +80,18 @@ def _read_coordinates(frame, compass: LocatedCompass) -> dict[str, object]:
 
         pipeline = PositionPipeline(calibration.rois)
         read = pipeline.read(compass_roi, 0)
+        digit_counts = None
+        if read.longitude is not None and read.latitude is not None:
+            digit_counts = [
+                len(str(abs(read.longitude))),
+                len(str(abs(read.latitude))),
+            ]
         return {
             "longitude": read.longitude,
             "latitude": read.latitude,
             "hasPosition": read.valid,
             "textCalibrated": True,
-            "digitCounts": [
-                calibration.longitude_digits,
-                calibration.latitude_digits,
-            ],
+            "digitCounts": digit_counts,
         }
     finally:
         if pipeline is not None:
