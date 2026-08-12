@@ -24,7 +24,7 @@ _SCOPED_LOGGERS = {
 @dataclass(frozen=True, slots=True)
 class OcrProfilingConfig:
     enabled: bool = True
-    interval_s: float = 10.0
+    interval_s: float = 60.0
     health_path: Path | None = None
 
     @property
@@ -140,14 +140,17 @@ def ocr_profiling_config_from_env(
     if enabled is True:
         resolved_enabled = True
 
+    env_interval = _env_optional_float("ZML_OCR_PROFILING_INTERVAL_S")
+    if env_interval is not None:
+        resolved_interval = env_interval
+    elif enabled is True or env_enabled is True:
+        resolved_interval = interval_s if interval_s is not None else 10.0
+    else:
+        resolved_interval = 60.0
+
     return OcrProfilingConfig(
         enabled=resolved_enabled,
-        interval_s=max(
-            0.1,
-            interval_s
-            if interval_s is not None
-            else _env_float("ZML_OCR_PROFILING_INTERVAL_S", default=10.0),
-        ),
+        interval_s=max(0.1, resolved_interval),
         health_path=_env_path("ZML_OCR_HEALTH_PATH"),
     )
 
@@ -223,9 +226,7 @@ def _write_health_snapshot(
         "uptime_seconds": round(uptime_s, 3),
         "counters": dict(sorted(counters.items())),
         "lifetime_counters": dict(sorted(lifetime_counters.items())),
-        "timings_ms": {
-            name: _metric_summary(values) for name, values in sorted(metrics.items())
-        },
+        "timings_ms": {name: _metric_summary(values) for name, values in sorted(metrics.items())},
     }
     temp_path = path.with_suffix(path.suffix + ".tmp")
     temp_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
@@ -247,14 +248,14 @@ def _env_optional_bool(name: str) -> bool | None:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _env_float(name: str, *, default: float) -> float:
+def _env_optional_float(name: str) -> float | None:
     value = os.getenv(name)
     if value is None or value.strip() == "":
-        return default
+        return None
     try:
         return float(value)
     except ValueError:
-        return default
+        return None
 
 
 def _env_path(name: str) -> Path | None:
