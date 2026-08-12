@@ -19,10 +19,11 @@ from zml_ocr_worker.runtime.paths import get_app_data_dir
 
 logger = logging.getLogger(__name__)
 
-FinderRecordingMode = Literal["manual", "interval"]
+FinderRecordingMode = Literal["manual", "interval", "accepted"]
 _VALID_MODES: set[FinderRecordingMode] = {
     "manual",
     "interval",
+    "accepted",
 }
 
 
@@ -61,6 +62,13 @@ class FinderCropRecorder:
         features: FinderFeatures,
         signals: list[MiningFinderSignal],
     ) -> None:
+        """Record Finder crops after locator/presence acceptance.
+
+        The ``accepted`` mode records every crop that actually reaches the Finder OCR
+        pipeline. This is intentionally downstream of the visual presence guard, so
+        the resulting dataset shows exactly what the runtime believed was a Finder.
+        """
+
         if not self._config.enabled:
             return
         if self._sequence >= self._config.max_samples:
@@ -83,6 +91,9 @@ class FinderCropRecorder:
         ts_ms: int,
     ) -> list[str]:
         reasons: list[str] = []
+
+        if "accepted" in self._config.modes:
+            reasons.append("accepted")
 
         if "manual" in self._config.modes and self._consume_manual_trigger():
             reasons.append("manual")
@@ -156,8 +167,10 @@ def finder_recording_config_from_env(
     interval_s: float | None = None,
     max_samples: int | None = None,
 ) -> FinderRecordingConfig:
+    parsed_modes = _parse_modes(modes if modes is not None else os.getenv("ZML_FINDER_RECORDING"))
+    default_max_samples = 500 if "accepted" in parsed_modes else 1
     return FinderRecordingConfig(
-        modes=_parse_modes(modes if modes is not None else os.getenv("ZML_FINDER_RECORDING")),
+        modes=parsed_modes,
         root_dir=root_dir
         or _env_path("ZML_FINDER_RECORDING_DIR")
         or default_finder_recording_dir(),
@@ -168,7 +181,7 @@ def finder_recording_config_from_env(
         ),
         max_samples=max_samples
         if max_samples is not None
-        else _env_int("ZML_FINDER_RECORDING_MAX_SAMPLES", default=1),
+        else _env_int("ZML_FINDER_RECORDING_MAX_SAMPLES", default=default_max_samples),
     )
 
 
@@ -186,10 +199,14 @@ def _parse_modes(raw: str | None) -> frozenset[FinderRecordingMode]:
             continue
         if normalized in {"every", "timer", "every-n-seconds"}:
             normalized = "interval"
+        if normalized in {"found", "detected", "located", "present"}:
+            normalized = "accepted"
         if normalized == "manual":
             modes.add("manual")
         elif normalized == "interval":
             modes.add("interval")
+        elif normalized == "accepted":
+            modes.add("accepted")
         else:
             logger.warning("finder_recording_mode_ignored mode=%r", item)
 
