@@ -6,12 +6,12 @@ from dataclasses import dataclass
 import numpy as np
 
 from zml_ocr_worker.calibration.compass import CompassLocator
-from zml_ocr_worker.calibration.coordinates import (
-    CompassCoordinateLayout,
-    CompassCoordinateLayoutVariant,
+from zml_ocr_worker.calibration.coordinate_ocr import (
+    CoordinateCalibration,
+    CoordinateTextCalibrator,
 )
+from zml_ocr_worker.calibration.coordinates import CompassCoordinateLayout
 from zml_ocr_worker.calibration.model import LocatedCompass
-from zml_ocr_worker.calibration.recovery import CompassRecoveryPolicy
 from zml_ocr_worker.pipelines.position.model import CoordinateRois
 from zml_ocr_worker.pipelines.position.pipeline import PositionPipeline, PositionReadResult
 
@@ -22,6 +22,9 @@ logger = logging.getLogger(__name__)
 class CompassCalibrationRuntimeConfig:
     search_interval_ms: int = 1000
     reacquire_delay_ms: int = 250
+    locked_validation_interval_ms: int = 1000
+    coordinate_recalibration_cooldown_ms: int = 2000
+    consecutive_failures_before_recalibrate: int = 5
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,10 +36,12 @@ class CalibratedPositionStep:
 
 
 class CompassCalibrationRuntime:
-    """Coordinate Compass location, line-layout recovery, and the existing position OCR.
+    """Keep Compass geometry and coordinate OCR calibration as separate states.
 
-    Calibration owns only geometry and recovery state. PositionPipeline remains the
-    single owner of image preprocessing, OCR, parsing, sanity checks, and emission.
+    The expensive Compass locator owns only radar geometry. A separate occasional
+    text OCR finds the current Lon:/Lat: value boxes. Normal runtime then reuses
+    those boxes for two small digits-only OCR calls. Coordinate OCR failures never
+    invalidate a still-valid Compass.
     """
 
     def __init__(
@@ -45,16 +50,24 @@ class CompassCalibrationRuntime:
         position_pipeline: PositionPipeline,
         locator: CompassLocator | None = None,
         layout: CompassCoordinateLayout | None = None,
+        coordinate_calibrator: CoordinateTextCalibrator | None = None,
         config: CompassCalibrationRuntimeConfig | None = None,
     ) -> None:
         self._position_pipeline = position_pipeline
         self._locator = locator or CompassLocator()
         self._layout = layout or CompassCoordinateLayout()
+        self._coordinate_calibrator = coordinate_calibrator or CoordinateTextCalibrator()
         self._config = config or CompassCalibrationRuntimeConfig()
+
         self._compass: LocatedCompass | None = None
-        self._variants: tuple[CompassCoordinateLayoutVariant, ...] = ()
-        self._recovery: CompassRecoveryPolicy | None = None
+        self._search_rois: CoordinateRois | None = None
+        self._coordinate_rois: CoordinateRois | None = None
+        self._expected_digit_counts: tuple[int, int] | None = None
+        self._coordinate_failure_streak = 0
+
         self._next_search_ts_ms = 0
+        self._next_locked_validation_ts_ms = 0
+        self._next_coordinate_calibration_ts_ms = 0
 
     @property
     def compass(self) -> LocatedCompass | None:
@@ -62,22 +75,24 @@ class CompassCalibrationRuntime:
 
     @property
     def layout_index(self) -> int:
-        return 0 if self._recovery is None else self._recovery.layout_index
+        return 0
 
     @property
     def active_rois(self) -> CoordinateRois | None:
-        if self._recovery is None or not self._variants:
-            return None
-        index = self._recovery.layout_index
-        if index < 0 or index >= len(self._variants):
-            return None
-        return self._variants[index].rois
+        return self._coordinate_rois
+
+    def close(self) -> None:
+        self._coordinate_calibrator.close()
 
     def invalidate(self, *, next_search_ts_ms: int = 0) -> None:
         self._compass = None
-        self._variants = ()
-        self._recovery = None
+        self._search_rois = None
+        self._coordinate_rois = None
+        self._expected_digit_counts = None
+        self._coordinate_failure_streak = 0
         self._next_search_ts_ms = max(0, next_search_ts_ms)
+        self._next_locked_validation_ts_ms = 0
+        self._next_coordinate_calibration_ts_ms = 0
 
     def step(self, frame: np.ndarray, *, ts_ms: int) -> CalibratedPositionStep:
         if self._compass is None:
@@ -101,60 +116,80 @@ class CompassCalibrationRuntime:
                 reacquire_requested=True,
             )
 
-        recovery = self._recovery
-        if recovery is None or not self._variants:
-            self.invalidate(next_search_ts_ms=ts_ms + self._config.reacquire_delay_ms)
-            return _empty_step(reacquire_requested=True)
-
-        read = self._read_variant(compass_roi, ts_ms=ts_ms, index=recovery.layout_index)
-        decision = recovery.observe(read_healthy=self._read_is_healthy(read))
-
-        if decision.action == "use_layout":
-            logger.info(
-                "compass_coordinate_layout_shift layout=%s lon=%s lat=%s confidence=%s",
-                decision.layout_index,
-                read.longitude,
-                read.latitude,
-                _format_confidence(read.confidence),
+        if ts_ms >= self._next_locked_validation_ts_ms:
+            self._next_locked_validation_ts_ms = (
+                ts_ms + max(1, self._config.locked_validation_interval_ms)
             )
-            # Once the hysteresis threshold is reached, retry the shifted line layout
-            # on the same frame instead of waiting for another capture tick.
-            read = self._read_variant(compass_roi, ts_ms=ts_ms, index=decision.layout_index)
-            if self._read_is_healthy(read):
-                recovery.observe(read_healthy=True)
-
-        if decision.action == "relocate_compass":
-            # Exhausting coordinate-line variants does not prove that the Compass moved.
-            # First validate the already locked radar at its known center/radius. This is
-            # much cheaper than another full-frame Hough search and prevents a bad OCR
-            # crop streak from causing an endless locate -> fail -> locate loop.
-            locked_score = self._locator.validate_locked(frame, compass)
-            if self._locator.locked_is_valid(frame, compass):
+            if not self._locator.locked_is_valid(frame, compass):
+                score = self._locator.validate_locked(frame, compass)
                 logger.info(
-                    "compass_coordinate_recovery_kept_locked score=%.3f lon=%s lat=%s confidence=%s",
-                    locked_score,
+                    "compass_locked_geometry_invalid score=%.3f; requesting full reacquire",
+                    score,
+                )
+                self.invalidate(next_search_ts_ms=ts_ms + self._config.reacquire_delay_ms)
+                return CalibratedPositionStep(
+                    compass=compass,
+                    compass_roi=compass_roi,
+                    read=_empty_read(),
+                    reacquire_requested=True,
+                )
+
+        if self._coordinate_rois is None:
+            if ts_ms >= self._next_coordinate_calibration_ts_ms:
+                self._try_coordinate_calibration(compass_roi, ts_ms=ts_ms, reason="initial")
+            if self._coordinate_rois is None:
+                return CalibratedPositionStep(
+                    compass=compass,
+                    compass_roi=compass_roi,
+                    read=_empty_read(),
+                )
+
+        read = self._read_fast(compass_roi, ts_ms=ts_ms)
+        if read.valid:
+            if self._digit_count_changed(read):
+                logger.info(
+                    "coordinate_digit_count_changed lon=%s lat=%s expected=%s; holding read",
                     read.longitude,
                     read.latitude,
-                    _format_confidence(read.confidence),
+                    self._expected_digit_counts,
                 )
-                recovery.reset_after_relocation()
+                if ts_ms >= self._next_coordinate_calibration_ts_ms:
+                    if self._try_coordinate_calibration(
+                        compass_roi,
+                        ts_ms=ts_ms,
+                        reason="digit_count_changed",
+                    ):
+                        read = self._read_fast(compass_roi, ts_ms=ts_ms)
+                        if read.valid and not self._digit_count_changed(read):
+                            read = self._position_pipeline.emit_read(read, ts_ms=ts_ms)
                 return CalibratedPositionStep(
                     compass=compass,
                     compass_roi=compass_roi,
                     read=read,
                 )
 
-            logger.info(
-                "compass_locked_geometry_invalid score=%.3f; requesting full reacquire",
-                locked_score,
-            )
-            self.invalidate(next_search_ts_ms=ts_ms + self._config.reacquire_delay_ms)
+            self._coordinate_failure_streak = 0
+            read = self._position_pipeline.emit_read(read, ts_ms=ts_ms)
             return CalibratedPositionStep(
                 compass=compass,
                 compass_roi=compass_roi,
                 read=read,
-                reacquire_requested=True,
             )
+
+        self._coordinate_failure_streak += 1
+        threshold = max(1, self._config.consecutive_failures_before_recalibrate)
+        if (
+            self._coordinate_failure_streak >= threshold
+            and ts_ms >= self._next_coordinate_calibration_ts_ms
+        ):
+            if self._try_coordinate_calibration(
+                compass_roi,
+                ts_ms=ts_ms,
+                reason="fast_ocr_failures",
+            ):
+                read = self._read_fast(compass_roi, ts_ms=ts_ms)
+                if read.valid and not self._digit_count_changed(read):
+                    read = self._position_pipeline.emit_read(read, ts_ms=ts_ms)
 
         return CalibratedPositionStep(
             compass=compass,
@@ -171,32 +206,89 @@ class CompassCalibrationRuntime:
             return False
 
         self._compass = compass
-        self._variants = variants
-        self._recovery = CompassRecoveryPolicy(layout_count=len(variants))
+        self._search_rois = variants[0].rois
+        self._coordinate_rois = None
+        self._expected_digit_counts = None
+        self._coordinate_failure_streak = 0
         self._next_search_ts_ms = 0
+        self._next_locked_validation_ts_ms = 0
+        self._next_coordinate_calibration_ts_ms = 0
         return True
 
-    def _read_variant(
+    def _try_coordinate_calibration(
         self,
         compass_roi: np.ndarray,
         *,
         ts_ms: int,
-        index: int,
-    ) -> PositionReadResult:
-        variant = self._variants[index]
-        # There is exactly one Lon line and one Lat line per layout. MeanTextConf is
-        # useful diagnostic data, but live testing shows it can be zero for correctly
-        # parsed numeric-only reads, so it must not suppress emission or drive geometry
-        # recovery by itself.
+        reason: str,
+    ) -> bool:
+        search_rois = self._search_rois
+        if search_rois is None:
+            return False
+        self._next_coordinate_calibration_ts_ms = (
+            ts_ms + max(1, self._config.coordinate_recalibration_cooldown_ms)
+        )
+        try:
+            calibration = self._coordinate_calibrator.calibrate(
+                compass_roi,
+                search_rois=search_rois,
+            )
+        except Exception:
+            logger.warning(
+                "coordinate_text_calibration_failed reason=%s error=exception",
+                reason,
+                exc_info=True,
+            )
+            return False
+        if calibration is None:
+            logger.info("coordinate_text_calibration_failed reason=%s", reason)
+            return False
+
+        self._apply_coordinate_calibration(calibration, reason=reason)
+        return True
+
+    def _apply_coordinate_calibration(
+        self,
+        calibration: CoordinateCalibration,
+        *,
+        reason: str,
+    ) -> None:
+        self._coordinate_rois = calibration.rois
+        self._expected_digit_counts = (
+            calibration.longitude_digits,
+            calibration.latitude_digits,
+        )
+        self._coordinate_failure_streak = 0
+        lon = calibration.rois.lon
+        lat = calibration.rois.lat
+        logger.info(
+            "coordinate_text_calibrated reason=%s lon_roi=%s lat_roi=%s digits=%s",
+            reason,
+            (lon.x1, lon.y1, lon.x2, lon.y2),
+            (lat.x1, lat.y1, lat.x2, lat.y2),
+            self._expected_digit_counts,
+        )
+
+    def _read_fast(self, compass_roi: np.ndarray, *, ts_ms: int) -> PositionReadResult:
+        rois = self._coordinate_rois
+        if rois is None:
+            return _empty_read()
         return self._position_pipeline.read(
             compass_roi,
             ts_ms,
-            rois=variant.rois,
+            rois=rois,
+            emit=False,
         )
 
-    @staticmethod
-    def _read_is_healthy(read: PositionReadResult) -> bool:
-        return read.valid
+    def _digit_count_changed(self, read: PositionReadResult) -> bool:
+        expected = self._expected_digit_counts
+        if expected is None or not read.valid:
+            return False
+        lon = read.longitude
+        lat = read.latitude
+        if lon is None or lat is None:
+            return False
+        return (len(str(abs(lon))), len(str(abs(lat)))) != expected
 
 
 def _empty_step(*, reacquire_requested: bool = False) -> CalibratedPositionStep:
@@ -210,7 +302,3 @@ def _empty_step(*, reacquire_requested: bool = False) -> CalibratedPositionStep:
 
 def _empty_read() -> PositionReadResult:
     return PositionReadResult(longitude=None, latitude=None, position=None)
-
-
-def _format_confidence(value: float | None) -> str:
-    return "none" if value is None else f"{value:.3f}"
