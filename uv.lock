@@ -5,8 +5,8 @@ requires-python = "==3.13.*"
 [manifest]
 members = [
     "zml-backend",
-    "zml-ocr-worker",
     "zml-ocr-protocol",
+    "zml-ocr-worker",
     "zml-workspace",
 ]
 
@@ -505,10 +505,10 @@ wheels = [
 
 [[package]]
 name = "tesserocr"
-version = "2.10.0"
-source = { url = "https://github.com/simonflueckiger/tesserocr-windows_build/releases/download/tesserocr-v2.10.0-tesseract-5.5.2/tesserocr-2.10.0-cp313-cp313-win_amd64.whl" }
+version = "2.8.0"
+source = { url = "https://github.com/simonflueckiger/tesserocr-windows_build/releases/download/tesserocr-v2.8.0-tesseract-5.5.0/tesserocr-2.8.0-cp313-cp313-win_amd64.whl" }
 wheels = [
-    { url = "https://github.com/simonflueckiger/tesserocr-windows_build/releases/download/tesserocr-v2.10.0-tesseract-5.5.2/tesserocr-2.10.0-cp313-cp313-win_amd64.whl", hash = "sha256:a7f1a56f2c70095d108304e2e76fd6aebd06a42712cb87b8976d52d1e7faf6d8" },
+    { url = "https://github.com/simonflueckiger/tesserocr-windows_build/releases/download/tesserocr-v2.8.0-tesseract-5.5.0/tesserocr-2.8.0-cp313-cp313-win_amd64.whl", hash = "sha256:ebe91f2937c8c5c690a0050628f10daa910e87cc97266bf9770662b1f8bcd77e" },
 ]
 
 [[package]]
@@ -702,6 +702,31 @@ dev = [
 ]
 
 [[package]]
+name = "zml-ocr-protocol"
+version = "0.1.0"
+source = { editable = "packages/ocr-protocol" }
+dependencies = [
+    { name = "pydantic" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pyright" },
+    { name = "pytest" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pydantic", specifier = ">=2.12.5,<3" }]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pyright", specifier = ">=1.1.408" },
+    { name = "pytest", specifier = ">=9.0.2" },
+    { name = "ruff", specifier = ">=0.14.11" },
+]
+
+[[package]]
 name = "zml-ocr-worker"
 version = "0.1.0"
 source = { editable = "apps/ocr-worker" }
@@ -730,7 +755,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.4.0" },
     { name = "opencv-python-headless", specifier = ">=4.13.0.92" },
     { name = "pywin32", marker = "sys_platform == 'win32'", specifier = "==311" },
-    { name = "tesserocr", marker = "platform_machine == 'AMD64' and sys_platform == 'win32'", url = "https://github.com/simonflueckiger/tesserocr-windows_build/releases/download/tesserocr-v2.10.0-tesseract-5.5.2/tesserocr-2.10.0-cp313-cp313-win_amd64.whl" },
+    { name = "tesserocr", marker = "platform_machine == 'AMD64' and sys_platform == 'win32'", url = "https://github.com/simonflueckiger/tesserocr-windows_build/releases/download/tesserocr-v2.8.0-tesseract-5.5.0/tesserocr-2.8.0-cp313-cp313-win_amd64.whl" },
     { name = "zml-ocr-protocol", editable = "packages/ocr-protocol" },
 ]
 
@@ -742,31 +767,6 @@ dev = [
     { name = "pytest-timeout", specifier = ">=2.4.0" },
     { name = "ruff", specifier = ">=0.14.11" },
     { name = "types-pywin32", specifier = ">=311.0.0.20260521" },
-]
-
-[[package]]
-name = "zml-ocr-protocol"
-version = "0.1.0"
-source = { editable = "packages/ocr-protocol" }
-dependencies = [
-    { name = "pydantic" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pyright" },
-    { name = "pytest" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "pydantic", specifier = ">=2.12.5,<3" }]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pyright", specifier = ">=1.1.408" },
-    { name = "pytest", specifier = ">=9.0.2" },
-    { name = "ruff", specifier = ">=0.14.11" },
 ]
 
 [[package]]

@@ -72,6 +72,64 @@ def test_profile_loader_merges_legacy_partial_profile_with_defaults(tmp_path: Pa
         "x2": 0.7,
         "y2": 0.8,
     }
+    assert profile.finder_panel.details.model_dump() == {
+        "x1": 0.484,
+        "y1": 0.03,
+        "x2": 1.0,
+        "y2": 0.35,
+    }
+
+
+def test_profile_loader_migrates_legacy_finder_panel_defaults(tmp_path: Path) -> None:
+    path = tmp_path / "legacy-profile.json"
+    path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "finder_panel": {
+                    "radar": [0.02, 0.03, 0.48, 0.70],
+                    "modes": [0.02, 0.72, 0.48, 0.98],
+                    "details": [0.50, 0.03, 0.98, 0.35],
+                    "units": [0.50, 0.72, 0.98, 0.98],
+                    "status": [0.50, 0.36, 0.98, 0.70],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    profile = load_ocr_roi_profile_payload(path)
+
+    assert profile.finder_panel.radar.model_dump() == {
+        "x1": 0.02,
+        "y1": 0.03,
+        "x2": 0.464,
+        "y2": 0.70,
+    }
+    assert profile.finder_panel.modes.model_dump() == {
+        "x1": 0.02,
+        "y1": 0.72,
+        "x2": 0.464,
+        "y2": 0.98,
+    }
+    assert profile.finder_panel.details.model_dump() == {
+        "x1": 0.484,
+        "y1": 0.03,
+        "x2": 1.0,
+        "y2": 0.35,
+    }
+    assert profile.finder_panel.units.model_dump() == {
+        "x1": 0.484,
+        "y1": 0.72,
+        "x2": 1.0,
+        "y2": 0.98,
+    }
+    assert profile.finder_panel.status.model_dump() == {
+        "x1": 0.484,
+        "y1": 0.36,
+        "x2": 1.0,
+        "y2": 0.70,
+    }
 
 
 def test_invalid_profile_falls_back_to_complete_default(tmp_path: Path) -> None:

@@ -25,6 +25,23 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional output path for an annotated preview image",
     )
+
+    calibration_snapshot = subcommands.add_parser(
+        "calibration-snapshot",
+        help="Capture the live Entropia client and write annotated calibration previews",
+    )
+    calibration_snapshot.add_argument(
+        "--output-dir",
+        type=Path,
+        required=True,
+        help="Directory for annotated Finder and Compass calibration previews",
+    )
+    calibration_snapshot.add_argument(
+        "--profile",
+        type=Path,
+        default=None,
+        help="Optional OCR ROI profile path",
+    )
     return parser
 
 
@@ -47,4 +64,11 @@ def main(argv: list[str] | None = None) -> int:
             from zml_ocr_worker.calibration.debug import run_calibration_debug
 
             return run_calibration_debug(args.image, annotated_path=args.annotated)
+        case "calibration-snapshot":
+            from zml_ocr_worker.calibration.live_snapshot import run_live_calibration_snapshot
+
+            return run_live_calibration_snapshot(
+                output_dir=args.output_dir,
+                profile_path=args.profile,
+            )
     raise RuntimeError(f"Unsupported command: {args.command}")

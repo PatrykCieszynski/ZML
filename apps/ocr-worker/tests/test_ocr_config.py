@@ -86,3 +86,30 @@ def test_load_ocr_roi_profile_uses_json_overrides(tmp_path: Path) -> None:
     assert profile.screen_rois.finder.x == 10
     assert profile.position_rois.lon.x1 == 1
     assert profile.finder_panel.status == (0.1, 0.2, 0.3, 0.4)
+
+
+def test_load_ocr_roi_profile_migrates_legacy_finder_panel_defaults(tmp_path: Path) -> None:
+    path = tmp_path / "ocr_profile.json"
+    path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "finder_panel": {
+                    "radar": [0.02, 0.03, 0.48, 0.70],
+                    "modes": [0.02, 0.72, 0.48, 0.98],
+                    "details": [0.50, 0.03, 0.98, 0.35],
+                    "units": [0.50, 0.72, 0.98, 0.98],
+                    "status": [0.50, 0.36, 0.98, 0.70],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    profile = load_ocr_roi_profile(path)
+
+    assert profile.finder_panel.radar == (0.02, 0.03, 0.464, 0.70)
+    assert profile.finder_panel.modes == (0.02, 0.72, 0.464, 0.98)
+    assert profile.finder_panel.details == (0.484, 0.03, 1.0, 0.35)
+    assert profile.finder_panel.units == (0.484, 0.72, 1.0, 0.98)
+    assert profile.finder_panel.status == (0.484, 0.36, 1.0, 0.70)

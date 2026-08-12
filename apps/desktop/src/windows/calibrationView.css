@@ -1,0 +1,194 @@
+.zml-calibration-view {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 100%;
+  padding: 2px;
+}
+
+.zml-calibration-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.zml-calibration-header h2,
+.zml-calibration-card h3 {
+  margin: 0;
+}
+
+.zml-calibration-header p,
+.zml-calibration-card p {
+  margin: 5px 0 0;
+  color: #93a4b8;
+  line-height: 1.45;
+}
+
+.zml-calibration-actions {
+  display: flex;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.zml-calibration-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  color: #a8b6c7;
+  font-size: 12px;
+}
+
+.zml-calibration-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.zml-calibration-legend i {
+  width: 10px;
+  height: 10px;
+  border: 2px solid currentColor;
+  border-radius: 2px;
+}
+
+.zml-calibration-legend .is-outer {
+  color: #ff4141;
+}
+
+.zml-calibration-legend .is-details {
+  color: #28dc28;
+}
+
+.zml-calibration-legend .is-status {
+  color: #ffb428;
+}
+
+.zml-calibration-legend .is-radar {
+  color: #28b4ff;
+}
+
+.zml-calibration-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  min-height: 0;
+}
+
+.zml-calibration-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #243143;
+  border-radius: 7px;
+  background: #0b1119;
+}
+
+.zml-calibration-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.zml-calibration-confidence {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border: 1px solid #2b4059;
+  border-radius: 999px;
+  color: #a9c9ef;
+  background: #111c2a;
+  font-size: 11px;
+}
+
+.zml-calibration-preview {
+  display: flex;
+  min-height: 230px;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  border: 1px solid #1d2938;
+  border-radius: 5px;
+  background:
+    linear-gradient(45deg, #101720 25%, transparent 25%),
+    linear-gradient(-45deg, #101720 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #101720 75%),
+    linear-gradient(-45deg, transparent 75%, #101720 75%),
+    #0a0f16;
+  background-position: 0 0, 0 6px, 6px -6px, -6px 0;
+  background-size: 12px 12px;
+}
+
+.zml-calibration-preview img {
+  display: block;
+  max-width: 100%;
+  max-height: 430px;
+  image-rendering: auto;
+}
+
+.zml-calibration-placeholder {
+  padding: 24px;
+  color: #718198;
+  text-align: center;
+}
+
+.zml-calibration-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  color: #8797aa;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+
+.zml-calibration-note,
+.zml-calibration-error,
+.zml-calibration-message {
+  padding: 9px 11px;
+  border-radius: 5px;
+  line-height: 1.45;
+}
+
+.zml-calibration-note {
+  border: 1px solid #243143;
+  color: #9bacc0;
+  background: #0d141e;
+}
+
+.zml-calibration-error {
+  border: 1px solid #6b3037;
+  color: #ffb1b9;
+  background: #261116;
+}
+
+.zml-calibration-message {
+  border: 1px solid #2d5a48;
+  color: #a7e5ca;
+  background: #102219;
+}
+
+.zml-calibration-host {
+  min-height: 100%;
+}
+
+.zml-workspace.zml-calibration-active > :not(.zml-calibration-host) {
+  display: none !important;
+}
+
+.zml-nav.zml-calibration-active > .zml-nav-item:not(.zml-calibration-nav-item).is-active {
+  color: inherit;
+  border-color: transparent;
+  background: transparent;
+}
+
+@media (max-width: 1050px) {
+  .zml-calibration-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .zml-calibration-header {
+    flex-direction: column;
+  }
+}

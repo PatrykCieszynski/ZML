@@ -18,7 +18,9 @@ def test_finder_locator_finds_movable_panel_at_resolution_derived_size() -> None
     assert located is not None
     assert abs(located.rect.x1 - x) <= 4
     assert abs(located.rect.y1 - y) <= 4
-    assert abs((located.rect.x2 - located.rect.x1) - panel.shape[1]) <= 4
+    expected_width = round(354 * located.scale) + round(5 * located.scale)
+    assert located.rect.x2 - located.rect.x1 == expected_width
+    assert located.rect.x2 >= x + panel.shape[1]
     assert abs((located.rect.y2 - located.rect.y1) - panel.shape[0]) <= 4
     assert located.confidence >= 0.68
 

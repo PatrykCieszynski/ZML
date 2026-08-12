@@ -73,6 +73,7 @@ def load_ocr_roi_profile_payload(path: Path) -> OcrRoiProfilePayload:
     try:
         raw: object = json.loads(path.read_text(encoding="utf-8"))
         normalized = _normalize_profile_json(raw)
+        normalized = _migrate_legacy_finder_panel_defaults(normalized)
         fallback_payload = cast(dict[str, object], fallback.model_dump(mode="python"))
         merged = _deep_merge(fallback_payload, normalized)
         return OcrRoiProfilePayload.model_validate(merged)
@@ -121,11 +122,11 @@ def default_ocr_roi_profile_payload() -> OcrRoiProfilePayload:
             lat=PixelRectPayload(x1=90, x2=145, y1=375, y2=395),
         ),
         finder_panel=FinderPanelPayload(
-            radar=RelativeRectPayload(x1=0.02, y1=0.03, x2=0.48, y2=0.70),
-            modes=RelativeRectPayload(x1=0.02, y1=0.72, x2=0.48, y2=0.98),
-            details=RelativeRectPayload(x1=0.50, y1=0.03, x2=0.98, y2=0.35),
-            units=RelativeRectPayload(x1=0.50, y1=0.72, x2=0.98, y2=0.98),
-            status=RelativeRectPayload(x1=0.50, y1=0.36, x2=0.98, y2=0.70),
+            radar=RelativeRectPayload(x1=0.02, y1=0.03, x2=0.464, y2=0.70),
+            modes=RelativeRectPayload(x1=0.02, y1=0.72, x2=0.464, y2=0.98),
+            details=RelativeRectPayload(x1=0.484, y1=0.03, x2=1.0, y2=0.35),
+            units=RelativeRectPayload(x1=0.484, y1=0.72, x2=1.0, y2=0.98),
+            status=RelativeRectPayload(x1=0.484, y1=0.36, x2=1.0, y2=0.70),
         ),
     )
 
@@ -150,6 +151,48 @@ def _normalize_profile_json(value: object) -> dict[str, object]:
             normalized_panel[key] = _normalize_relative_rect(item)
         normalized["finder_panel"] = normalized_panel
     return normalized
+
+
+def _migrate_legacy_finder_panel_defaults(profile: dict[str, object]) -> dict[str, object]:
+    raw_panel = profile.get("finder_panel")
+    if not isinstance(raw_panel, Mapping):
+        return profile
+
+    panel = cast(Mapping[str, object], raw_panel)
+    replacements: dict[str, tuple[dict[str, float], dict[str, float]]] = {
+        "radar": (
+            {"x1": 0.02, "y1": 0.03, "x2": 0.48, "y2": 0.70},
+            {"x1": 0.02, "y1": 0.03, "x2": 0.464, "y2": 0.70},
+        ),
+        "modes": (
+            {"x1": 0.02, "y1": 0.72, "x2": 0.48, "y2": 0.98},
+            {"x1": 0.02, "y1": 0.72, "x2": 0.464, "y2": 0.98},
+        ),
+        "details": (
+            {"x1": 0.50, "y1": 0.03, "x2": 0.98, "y2": 0.35},
+            {"x1": 0.484, "y1": 0.03, "x2": 1.0, "y2": 0.35},
+        ),
+        "units": (
+            {"x1": 0.50, "y1": 0.72, "x2": 0.98, "y2": 0.98},
+            {"x1": 0.484, "y1": 0.72, "x2": 1.0, "y2": 0.98},
+        ),
+        "status": (
+            {"x1": 0.50, "y1": 0.36, "x2": 0.98, "y2": 0.70},
+            {"x1": 0.484, "y1": 0.36, "x2": 1.0, "y2": 0.70},
+        ),
+    }
+    migrated_panel = dict(panel)
+    changed = False
+    for key, (legacy, replacement) in replacements.items():
+        if migrated_panel.get(key) == legacy:
+            migrated_panel[key] = replacement
+            changed = True
+    if not changed:
+        return profile
+
+    migrated = dict(profile)
+    migrated["finder_panel"] = migrated_panel
+    return migrated
 
 
 def _normalize_relative_rect(value: object) -> object:
