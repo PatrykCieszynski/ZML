@@ -7,7 +7,9 @@ import type {
   MiningClaimDto,
   MiningToolProfileDto,
   MoveRunSegmentRequest,
+  OcrCalibrationSnapshotDto,
   OcrPositionEvent,
+  OcrRecalibrationResultDto,
   RuntimeStatePatch,
   RunDto,
   RunSegmentDto,
@@ -25,6 +27,8 @@ declare global {
     zml: {
       getBootstrapState: (windowType: WindowType) => Promise<BootstrapState>;
       getBackendHealth: () => Promise<BackendHealthDto>;
+      getOcrCalibration: () => Promise<OcrCalibrationSnapshotDto>;
+      recalibrateOcr: () => Promise<OcrRecalibrationResultDto>;
       copyText: (text: string) => Promise<void>;
       getActiveRun: () => Promise<RunDto | null>;
       listRuns: () => Promise<RunDto[]>;
