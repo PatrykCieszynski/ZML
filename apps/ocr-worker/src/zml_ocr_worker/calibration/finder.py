@@ -16,7 +16,7 @@ RelativeRect = tuple[float, float, float, float]
 class FinderLocatorConfig:
     baseline_client_width: int = 2560
     baseline_client_height: int = 1440
-    baseline_finder_width: int = 347
+    baseline_finder_width: int = 354
     baseline_finder_height: int = 239
     scale_tolerance: tuple[float, ...] = (0.98, 1.0, 1.02)
     coarse_stride_fraction: float = 0.09
