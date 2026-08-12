@@ -69,25 +69,14 @@ class TesserocrCoordinateTextEngine:
         level = self._tesserocr.RIL.WORD
         words: list[OcrWord] = []
         while True:
-            text = (iterator.GetUTF8Text(level) or "").strip()
-            bbox = iterator.BoundingBox(level)
-            if text and bbox is not None:
-                x1, y1, x2, y2 = (int(value) for value in bbox)
-                scale = self._upscale
-                rect = RoiRect(
-                    x1=max(0, round(x1 / scale)),
-                    x2=max(1, round(x2 / scale)),
-                    y1=max(0, round(y1 / scale)),
-                    y2=max(1, round(y2 / scale)),
-                )
-                confidence_raw = iterator.Confidence(level)
-                confidence = (
-                    min(max(float(confidence_raw) / 100.0, 0.0), 1.0)
-                    if confidence_raw is not None
-                    else None
-                )
-                words.append(OcrWord(text=text, rect=rect, confidence=confidence))
-            if not iterator.Next(level):
+            word = _read_iterator_word(iterator, level, upscale=self._upscale)
+            if word is not None:
+                words.append(word)
+            try:
+                has_next = iterator.Next(level)
+            except RuntimeError:
+                break
+            if not has_next:
                 break
         return tuple(words)
 
@@ -172,6 +161,49 @@ class CoordinateTextCalibrator:
         if rect.x2 <= rect.x1 or rect.y2 <= rect.y1:
             return None
         return rect
+
+
+def _read_iterator_word(iterator: Any, level: Any, *, upscale: int) -> OcrWord | None:
+    """Read one Tesseract iterator word without letting empty results abort calibration."""
+
+    try:
+        raw_text = iterator.GetUTF8Text(level)
+    except RuntimeError:
+        # tesserocr can expose a WORD iterator entry whose text accessor raises
+        # ``RuntimeError: No text returned``. Treat it like an empty OCR result and
+        # continue to the next iterator item instead of aborting coordinate recovery.
+        return None
+
+    text = (raw_text or "").strip()
+    if not text:
+        return None
+
+    try:
+        bbox = iterator.BoundingBox(level)
+    except RuntimeError:
+        return None
+    if bbox is None:
+        return None
+
+    x1, y1, x2, y2 = (int(value) for value in bbox)
+    scale = max(1, int(upscale))
+    rect = RoiRect(
+        x1=max(0, round(x1 / scale)),
+        x2=max(1, round(x2 / scale)),
+        y1=max(0, round(y1 / scale)),
+        y2=max(1, round(y2 / scale)),
+    )
+
+    try:
+        confidence_raw = iterator.Confidence(level)
+    except RuntimeError:
+        confidence_raw = None
+    confidence = (
+        min(max(float(confidence_raw) / 100.0, 0.0), 1.0)
+        if confidence_raw is not None
+        else None
+    )
+    return OcrWord(text=text, rect=rect, confidence=confidence)
 
 
 def _find_label_value_words(
