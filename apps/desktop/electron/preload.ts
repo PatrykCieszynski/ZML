@@ -9,7 +9,9 @@ import type {
   MiningClaimDto,
   MiningToolProfileDto,
   MoveRunSegmentRequest,
+  OcrCalibrationSnapshotDto,
   OcrPositionEvent,
+  OcrRecalibrationResultDto,
   PushPosition,
   PushStatePatch,
   RuntimeStatePatch,
@@ -30,6 +32,8 @@ type Unsubscribe = () => void;
 type ZmlApi = {
   getBootstrapState: (windowType: WindowType) => Promise<BootstrapState>;
   getBackendHealth: () => Promise<BackendHealthDto>;
+  getOcrCalibration: () => Promise<OcrCalibrationSnapshotDto>;
+  recalibrateOcr: () => Promise<OcrRecalibrationResultDto>;
   copyText: (text: string) => Promise<void>;
   getActiveRun: () => Promise<RunDto | null>;
   listRuns: () => Promise<RunDto[]>;
@@ -78,6 +82,14 @@ const api: ZmlApi = {
 
   async getBackendHealth() {
     return ipcRenderer.invoke(IPC_CMD.GET_AGENT_HEALTH) as Promise<BackendHealthDto>;
+  },
+
+  async getOcrCalibration() {
+    return ipcRenderer.invoke(IPC_CMD.GET_OCR_CALIBRATION) as Promise<OcrCalibrationSnapshotDto>;
+  },
+
+  async recalibrateOcr() {
+    return ipcRenderer.invoke(IPC_CMD.RECALIBRATE_OCR) as Promise<OcrRecalibrationResultDto>;
   },
 
   async copyText(text) {
