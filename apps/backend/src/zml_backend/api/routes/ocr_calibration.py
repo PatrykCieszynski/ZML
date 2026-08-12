@@ -23,12 +23,14 @@ def get_ocr_calibration(request: Request) -> dict[str, object]:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     command = _snapshot_command(settings, output_dir=output_dir)
+    environment = os.environ.copy()
+    environment["ZML_COMPASS_CALIBRATION_PATH"] = str(_compass_calibration_path(settings))
     creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     try:
         completed = subprocess.run(
             command,
             cwd=None,
-            env=os.environ.copy(),
+            env=environment,
             capture_output=True,
             text=True,
             timeout=12.0,
