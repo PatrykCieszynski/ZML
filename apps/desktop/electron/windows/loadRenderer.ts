@@ -1,7 +1,7 @@
 import type { BrowserWindow } from "electron";
 import type { WindowType } from "@desktop/shared";
 import { getIndexHtml } from "./paths.ts";
-import { RENDERER_DIST, VITE_DEV_SERVER_URL } from "../main.ts";
+import { RENDERER_DIST, VITE_DEV_SERVER_URL } from "../mainBase.ts";
 
 export async function loadRenderer(win: BrowserWindow, windowType: WindowType): Promise<void> {
     const params = new URLSearchParams({ windowType });
