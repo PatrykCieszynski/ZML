@@ -99,6 +99,10 @@ def _calibration() -> CoordinateCalibration:
     return CoordinateCalibration(rois=_digit_rois())
 
 
+def _read(lon: int, lat: int) -> PositionReadResult:
+    return PositionReadResult(longitude=lon, latitude=lat, position=None)
+
+
 def _invalid_read() -> PositionReadResult:
     return PositionReadResult(longitude=None, latitude=None, position=None)
 
@@ -130,13 +134,13 @@ def test_coordinate_ocr_failures_do_not_reacquire_valid_compass() -> None:
     assert calibrator.calls == 2
 
 
-def test_digit_count_change_is_held_until_text_recalibration() -> None:
+def test_single_extra_digit_is_held_without_text_recalibration() -> None:
     locator = _FakeLocator(_compass())
-    calibrator = _FakeCalibrator(_calibration(), _calibration())
+    calibrator = _FakeCalibrator(_calibration())
     pipeline = _FakePositionPipeline(
-        PositionReadResult(longitude=10000, latitude=30125, position=None),
-        PositionReadResult(longitude=9999, latitude=30125, position=None),
-        PositionReadResult(longitude=9999, latitude=30125, position=None),
+        _read(31156, 9515),
+        _read(631156, 9515),
+        _read(31156, 9515),
     )
     runtime = CompassCalibrationRuntime(
         position_pipeline=pipeline,  # type: ignore[arg-type]
@@ -145,17 +149,54 @@ def test_digit_count_change_is_held_until_text_recalibration() -> None:
         config=CompassCalibrationRuntimeConfig(
             locked_validation_interval_ms=10_000,
             coordinate_recalibration_cooldown_ms=1,
+            consecutive_failures_before_recalibrate=3,
+        ),
+    )
+    frame = np.zeros((500, 500, 3), dtype=np.uint8)
+
+    first = runtime.step(frame, ts_ms=100)
+    noisy = runtime.step(frame, ts_ms=110)
+    recovered = runtime.step(frame, ts_ms=120)
+
+    assert first.read.longitude == 31156
+    assert noisy.read.longitude == 631156
+    assert noisy.read.position is None
+    assert recovered.read.longitude == 31156
+    assert calibrator.calls == 1
+    assert pipeline.emit_calls == 2
+
+
+def test_persistent_digit_count_change_is_confirmed_after_text_recalibration() -> None:
+    locator = _FakeLocator(_compass())
+    calibrator = _FakeCalibrator(_calibration(), _calibration())
+    pipeline = _FakePositionPipeline(
+        _read(10000, 30125),
+        _read(9999, 30125),
+        _read(9999, 30125),
+        _read(9999, 30125),
+        _read(9999, 30125),
+    )
+    runtime = CompassCalibrationRuntime(
+        position_pipeline=pipeline,  # type: ignore[arg-type]
+        locator=locator,  # type: ignore[arg-type]
+        coordinate_calibrator=calibrator,  # type: ignore[arg-type]
+        config=CompassCalibrationRuntimeConfig(
+            locked_validation_interval_ms=10_000,
+            coordinate_recalibration_cooldown_ms=1,
+            consecutive_failures_before_recalibrate=3,
         ),
     )
     frame = np.zeros((500, 500, 3), dtype=np.uint8)
 
     first = runtime.step(frame, ts_ms=100)
     second = runtime.step(frame, ts_ms=110)
+    third = runtime.step(frame, ts_ms=120)
+    fourth = runtime.step(frame, ts_ms=130)
 
-    assert not first.reacquire_requested
-    assert not second.reacquire_requested
+    assert first.read.longitude == 10000
+    assert second.read.position is None
+    assert third.read.position is None
+    assert fourth.read.longitude == 9999
     assert calibrator.calls == 2
-    assert pipeline.read_calls == 3
+    assert pipeline.read_calls == 5
     assert pipeline.emit_calls == 2
-    assert second.read.longitude == 9999
-    assert second.read.latitude == 30125
