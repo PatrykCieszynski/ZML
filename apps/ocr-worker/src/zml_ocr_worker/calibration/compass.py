@@ -27,6 +27,7 @@ class CompassLocatorConfig:
     # offsets are never clipped by the discovered outer rectangle.
     height_radius_factor: float = 3.14
     locked_validation_min_score: float = 0.55
+    locked_validation_failures_before_invalid: int = 2
 
 
 class CompassLocator:
@@ -34,6 +35,7 @@ class CompassLocator:
 
     def __init__(self, *, config: CompassLocatorConfig | None = None) -> None:
         self._config = config or CompassLocatorConfig()
+        self._locked_validation_failure_streak = 0
 
     def locate(self, frame: np.ndarray) -> LocatedCompass | None:
         if frame.size == 0 or frame.ndim != 3:
@@ -83,6 +85,7 @@ class CompassLocator:
             center_y=center_y,
             radius=radius,
         )
+        self._locked_validation_failure_streak = 0
         return LocatedCompass(
             rect=rect,
             confidence=min(max(best_score, 0.0), 1.0),
@@ -105,7 +108,14 @@ class CompassLocator:
         return float(min(max(score, 0.0), 1.0))
 
     def locked_is_valid(self, frame: np.ndarray, compass: LocatedCompass) -> bool:
-        return self.validate_locked(frame, compass) >= self._config.locked_validation_min_score
+        score = self.validate_locked(frame, compass)
+        if score >= self._config.locked_validation_min_score:
+            self._locked_validation_failure_streak = 0
+            return True
+
+        self._locked_validation_failure_streak += 1
+        required_failures = max(1, self._config.locked_validation_failures_before_invalid)
+        return self._locked_validation_failure_streak < required_failures
 
     def _search_frame(self, frame: np.ndarray) -> tuple[np.ndarray, float]:
         frame_width = int(frame.shape[1])
