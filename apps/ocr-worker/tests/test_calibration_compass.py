@@ -68,13 +68,11 @@ def test_locked_compass_ignores_local_colored_radar_blips() -> None:
     center = (900, 480)
     radius = 90
     clean = _radar_frame(center=center, radius=radius)
-
-    locator = CompassLocator(
-        config=CompassLocatorConfig(
-            hough_param2=20.0,
-            min_ring_contrast=0.55,
-        )
+    config = CompassLocatorConfig(
+        hough_param2=20.0,
+        min_ring_contrast=0.55,
     )
+    locator = CompassLocator(config=config)
     located = locator.locate(clean)
     assert located is not None
 
@@ -89,7 +87,7 @@ def test_locked_compass_ignores_local_colored_radar_blips() -> None:
             y = round(center[1] + radius * 0.5 * np.sin(angle))
             cv2.circle(noisy, (x, y), 7, color, -1, cv2.LINE_AA)
         score = locator.validate_locked(noisy, located)
-        assert score >= locator._config.locked_validation_min_score  # noqa: SLF001
+        assert score >= config.locked_validation_min_score
         assert locator.locked_is_valid(noisy, located)
 
 
