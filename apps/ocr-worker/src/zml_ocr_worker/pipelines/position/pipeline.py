@@ -111,6 +111,10 @@ class PositionPipeline:
                 return result
             return self._emit_position(result, ts_ms=ts_ms)
 
+    def emit_read(self, read: PositionReadResult, *, ts_ms: int) -> PositionReadResult:
+        """Commit a read after a caller has applied additional calibration guards."""
+        return self._emit_position(read, ts_ms=ts_ms)
+
     def read_candidates(
         self,
         compass_roi: np.ndarray,
