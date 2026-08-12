@@ -8,6 +8,7 @@ from zml_ocr_worker.calibration.coordinate_ocr import (
     CoordinateTextCalibrator,
     OcrWord,
     _find_value_word,
+    _read_iterator_word,
 )
 from zml_ocr_worker.capture.model import RoiRect
 from zml_ocr_worker.pipelines.position.model import CoordinateRois
@@ -28,6 +29,30 @@ class _FakeTextEngine:
 
     def close(self) -> None:
         self.closed = True
+
+
+class _IteratorWithEmptyWord:
+    def __init__(self) -> None:
+        self.index = 0
+
+    def GetUTF8Text(self, level: object) -> str:
+        del level
+        if self.index == 0:
+            raise RuntimeError("No text returned")
+        return "31167"
+
+    def BoundingBox(self, level: object) -> tuple[int, int, int, int]:
+        del level
+        return (20, 2, 70, 18)
+
+    def Confidence(self, level: object) -> float:
+        del level
+        return 92.0
+
+    def Next(self, level: object) -> bool:
+        del level
+        self.index += 1
+        return self.index < 2
 
 
 def _word(text: str, x1: int, x2: int, *, y1: int = 2, y2: int = 16) -> OcrWord:
@@ -96,3 +121,18 @@ def test_coordinate_text_calibrator_returns_tight_digit_rois_clear_of_labels() -
 
     calibrator.close()
     assert engine.closed
+
+
+def test_iterator_no_text_runtime_error_is_skipped_and_next_word_survives() -> None:
+    iterator = _IteratorWithEmptyWord()
+    level = object()
+
+    first = _read_iterator_word(iterator, level, upscale=2)
+    assert first is None
+    assert iterator.Next(level)
+
+    second = _read_iterator_word(iterator, level, upscale=2)
+    assert second is not None
+    assert second.text == "31167"
+    assert second.rect == RoiRect(x1=10, x2=35, y1=1, y2=9)
+    assert second.confidence == 0.92
