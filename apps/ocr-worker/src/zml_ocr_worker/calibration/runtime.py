@@ -153,15 +153,17 @@ class CompassCalibrationRuntime:
                     read.latitude,
                     self._expected_digit_counts,
                 )
-                if ts_ms >= self._next_coordinate_calibration_ts_ms:
-                    if self._try_coordinate_calibration(
+                if (
+                    ts_ms >= self._next_coordinate_calibration_ts_ms
+                    and self._try_coordinate_calibration(
                         compass_roi,
                         ts_ms=ts_ms,
                         reason="digit_count_changed",
-                    ):
-                        read = self._read_fast(compass_roi, ts_ms=ts_ms)
-                        if read.valid and not self._digit_count_changed(read):
-                            read = self._position_pipeline.emit_read(read, ts_ms=ts_ms)
+                    )
+                ):
+                    read = self._read_fast(compass_roi, ts_ms=ts_ms)
+                    if read.valid and not self._digit_count_changed(read):
+                        read = self._position_pipeline.emit_read(read, ts_ms=ts_ms)
                 return CalibratedPositionStep(
                     compass=compass,
                     compass_roi=compass_roi,
@@ -181,15 +183,15 @@ class CompassCalibrationRuntime:
         if (
             self._coordinate_failure_streak >= threshold
             and ts_ms >= self._next_coordinate_calibration_ts_ms
-        ):
-            if self._try_coordinate_calibration(
+            and self._try_coordinate_calibration(
                 compass_roi,
                 ts_ms=ts_ms,
                 reason="fast_ocr_failures",
-            ):
-                read = self._read_fast(compass_roi, ts_ms=ts_ms)
-                if read.valid and not self._digit_count_changed(read):
-                    read = self._position_pipeline.emit_read(read, ts_ms=ts_ms)
+            )
+        ):
+            read = self._read_fast(compass_roi, ts_ms=ts_ms)
+            if read.valid and not self._digit_count_changed(read):
+                read = self._position_pipeline.emit_read(read, ts_ms=ts_ms)
 
         return CalibratedPositionStep(
             compass=compass,
