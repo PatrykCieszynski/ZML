@@ -19,7 +19,7 @@ class FinderLocatorConfig:
     baseline_finder_width: int = 354
     baseline_finder_height: int = 239
     baseline_finder_x_offset: int = 7
-    baseline_finder_right_padding: int = 12
+    baseline_finder_right_padding: int = 5
     scale_tolerance: tuple[float, ...] = (0.98, 1.0, 1.02)
     coarse_stride_fraction: float = 0.09
     coarse_candidate_count: int = 8
