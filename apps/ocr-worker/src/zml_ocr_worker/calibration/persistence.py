@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -58,10 +59,8 @@ class CompassCalibrationStore:
                 self.path,
                 exc_info=True,
             )
-            try:
+            with suppress(OSError):
                 temp_path.unlink(missing_ok=True)
-            except OSError:
-                pass
             return False
         logger.info("compass_calibration_state_saved path=%s", self.path)
         return True
