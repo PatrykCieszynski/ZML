@@ -164,9 +164,7 @@ def calibration_snapshot_config_from_env() -> CalibrationSnapshotConfig:
     return CalibrationSnapshotConfig(
         enabled=_env_bool("ZML_OCR_SUSPECT_CAPTURE", default=True),
         root_dir=_env_path("ZML_OCR_SUSPECT_CAPTURE_DIR") or default_calibration_snapshot_dir(),
-        interval_ms=_seconds_to_ms(
-            _env_float("ZML_OCR_SUSPECT_CAPTURE_COOLDOWN_S", default=5.0)
-        ),
+        interval_ms=_seconds_to_ms(_env_float("ZML_OCR_SUSPECT_CAPTURE_COOLDOWN_S", default=5.0)),
         max_samples=_env_int("ZML_OCR_SUSPECT_CAPTURE_MAX_SAMPLES", default=20),
     )
 
