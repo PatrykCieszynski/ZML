@@ -106,10 +106,7 @@ class VisionFinderFeatureDetector:
                 self._increment("finder.status_unknown")
             else:
                 self._increment("finder.status_recognized")
-            if (
-                text_features.probes_per_drop is not None
-                or text_features.ammo_per_drop is not None
-            ):
+            if text_features.probes_per_drop is not None or text_features.ammo_per_drop is not None:
                 self._increment("finder.units_recognized")
             if (
                 text_features.status_kind == "found"
