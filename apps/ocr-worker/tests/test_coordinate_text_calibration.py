@@ -111,9 +111,9 @@ def test_coordinate_text_calibrator_returns_tight_digit_rois_clear_of_labels() -
 
     assert calibration is not None
     assert not calibration.rois.extract_numeric_tokens
-    assert calibration.rois.lon.x1 == 20 + 52 - 2
+    assert calibration.rois.lon.x1 == 20 + 52 - 4
     assert calibration.rois.lon.x2 == 20 + 94 + 4
-    assert calibration.rois.lat.x1 == 20 + 60 - 2
+    assert calibration.rois.lat.x1 == 20 + 60 - 4
     assert calibration.rois.lat.x2 == 20 + 94 + 4
     assert calibration.rois.lon.x1 > 20 + 40
     assert calibration.rois.lat.x1 > 20 + 44

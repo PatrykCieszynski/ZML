@@ -12,6 +12,7 @@ import numpy as np
 from zml_ocr_worker.calibration.model import LocatedCompass
 from zml_ocr_worker.pipelines.position.model import CoordinateRois
 from zml_ocr_worker.pipelines.position.pipeline import PositionReadResult
+from zml_ocr_worker.pipelines.position.preprocess import DigitsPreprocessor
 from zml_ocr_worker.runtime.paths import get_app_data_dir
 
 logger = logging.getLogger(__name__)
@@ -40,12 +41,14 @@ class CalibrationSnapshotRecorder:
     Normal production reads do not touch disk. A bounded sample is written only when
     the numeric digit count unexpectedly changes, a run of invalid reads reaches the
     recovery threshold, or confidence first enters a very-low-confidence state.
-    Samples contain the Compass crop plus the active Lon/Lat lines needed to improve
-    OCR later; chat and the rest of the game frame are never recorded.
+    Samples contain the Compass crop plus the raw and preprocessed Lon/Lat lines
+    needed to reproduce OCR later; chat and the rest of the game frame are never
+    recorded.
     """
 
     def __init__(self, *, config: CalibrationSnapshotConfig) -> None:
         self._config = config
+        self._preprocessor = DigitsPreprocessor()
         self._last_recorded_ts_ms: int | None = None
         self._expected_digit_counts: tuple[int, int] | None = None
         self._pending_digit_counts: tuple[int, int] | None = None
@@ -84,6 +87,9 @@ class CalibrationSnapshotRecorder:
         if lon_line is None or lat_line is None:
             return None
 
+        lon_preprocessed = self._preprocessor.process(lon_line)
+        lat_preprocessed = self._preprocessor.process(lat_line)
+
         sample_dir = self._config.root_dir / f"sample-{ts_ms}-{reason}"
         sample_dir.mkdir(parents=True, exist_ok=True)
 
@@ -101,6 +107,8 @@ class CalibrationSnapshotRecorder:
         _write_png(sample_dir / "overview.png", overview)
         _write_png(sample_dir / "lon-line.png", lon_line)
         _write_png(sample_dir / "lat-line.png", lat_line)
+        _write_png(sample_dir / "lon-line-pre.png", lon_preprocessed)
+        _write_png(sample_dir / "lat-line-pre.png", lat_preprocessed)
         (sample_dir / "meta.txt").write_text(
             _metadata_text(
                 reason=reason,
