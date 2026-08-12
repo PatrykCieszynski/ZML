@@ -79,6 +79,7 @@ class CompassCalibrationRuntime:
         self._frame_size: tuple[int, int] | None = None
         self._persisted_restore_attempted = False
         self._calibration_persisted = False
+        self._calibration_verified = state_store is None
         self._verified_read_streak = 0
 
         self._next_search_ts_ms = 0
@@ -107,6 +108,7 @@ class CompassCalibrationRuntime:
         self._expected_digit_counts = None
         self._frame_size = None
         self._calibration_persisted = False
+        self._calibration_verified = self._state_store is None
         self._verified_read_streak = 0
         self._reset_coordinate_health()
         self._next_search_ts_ms = max(0, next_search_ts_ms)
@@ -178,8 +180,7 @@ class CompassCalibrationRuntime:
             if self._expected_digit_counts is None:
                 self._remember_digit_counts(read)
                 self._reset_coordinate_health()
-                read = self._position_pipeline.emit_read(read, ts_ms=ts_ms)
-                self._record_verified_read()
+                read = self._emit_verified_read(read, ts_ms=ts_ms)
                 return CalibratedPositionStep(
                     compass=compass,
                     compass_roi=compass_roi,
@@ -207,8 +208,7 @@ class CompassCalibrationRuntime:
                 )
 
             self._reset_coordinate_health()
-            read = self._position_pipeline.emit_read(read, ts_ms=ts_ms)
-            self._record_verified_read()
+            read = self._emit_verified_read(read, ts_ms=ts_ms)
             return CalibratedPositionStep(
                 compass=compass,
                 compass_roi=compass_roi,
@@ -265,19 +265,16 @@ class CompassCalibrationRuntime:
                         )
                         self._remember_digit_counts(fresh)
                         self._reset_coordinate_health()
-                        fresh = self._position_pipeline.emit_read(fresh, ts_ms=ts_ms)
-                        self._record_verified_read()
+                        fresh = self._emit_verified_read(fresh, ts_ms=ts_ms)
                         read = fresh
                     elif fresh_counts == expected:
                         self._reset_coordinate_health()
-                        fresh = self._position_pipeline.emit_read(fresh, ts_ms=ts_ms)
-                        self._record_verified_read()
+                        fresh = self._emit_verified_read(fresh, ts_ms=ts_ms)
                         read = fresh
                 else:
                     self._remember_digit_counts(fresh)
                     self._reset_coordinate_health()
-                    fresh = self._position_pipeline.emit_read(fresh, ts_ms=ts_ms)
-                    self._record_verified_read()
+                    fresh = self._emit_verified_read(fresh, ts_ms=ts_ms)
                     read = fresh
 
         return CalibratedPositionStep(
@@ -335,6 +332,7 @@ class CompassCalibrationRuntime:
         self._expected_digit_counts = None
         self._frame_size = (frame_width, frame_height)
         self._calibration_persisted = True
+        self._calibration_verified = True
         self._verified_read_streak = 0
         self._reset_coordinate_health()
         self._next_search_ts_ms = 0
@@ -362,6 +360,7 @@ class CompassCalibrationRuntime:
         self._expected_digit_counts = None
         self._frame_size = (int(frame.shape[1]), int(frame.shape[0]))
         self._calibration_persisted = False
+        self._calibration_verified = self._state_store is None
         self._verified_read_streak = 0
         self._reset_coordinate_health()
         self._next_search_ts_ms = 0
@@ -410,6 +409,7 @@ class CompassCalibrationRuntime:
         self._coordinate_rois = calibration.rois
         self._coordinate_failure_streak = 0
         self._calibration_persisted = False
+        self._calibration_verified = self._state_store is None
         self._verified_read_streak = 0
         lon = calibration.rois.lon
         lat = calibration.rois.lat
@@ -420,14 +420,26 @@ class CompassCalibrationRuntime:
             (lat.x1, lat.y1, lat.x2, lat.y2),
         )
 
+    def _emit_verified_read(
+        self,
+        read: PositionReadResult,
+        *,
+        ts_ms: int,
+    ) -> PositionReadResult:
+        self._record_verified_read()
+        if not self._calibration_verified:
+            return read
+        return self._position_pipeline.emit_read(read, ts_ms=ts_ms)
+
     def _record_verified_read(self) -> None:
-        if self._calibration_persisted:
+        if self._calibration_verified:
             return
         store = self._state_store
         compass = self._compass
         rois = self._coordinate_rois
         frame_size = self._frame_size
         if store is None or compass is None or rois is None or frame_size is None:
+            self._calibration_verified = True
             return
 
         self._verified_read_streak += 1
@@ -435,6 +447,7 @@ class CompassCalibrationRuntime:
         if self._verified_read_streak < threshold:
             return
 
+        self._calibration_verified = True
         frame_width, frame_height = frame_size
         state = PersistedCompassCalibration(
             frame_width=frame_width,
@@ -444,11 +457,12 @@ class CompassCalibrationRuntime:
         )
         if store.save(state):
             self._calibration_persisted = True
-            logger.info(
-                "compass_calibration_verified reads=%s rect=%s",
-                self._verified_read_streak,
-                _rect_tuple(compass.rect),
-            )
+        logger.info(
+            "compass_calibration_verified reads=%s rect=%s persisted=%s",
+            self._verified_read_streak,
+            _rect_tuple(compass.rect),
+            self._calibration_persisted,
+        )
 
     def _read_fast(self, compass_roi: np.ndarray, *, ts_ms: int) -> PositionReadResult:
         rois = self._coordinate_rois
