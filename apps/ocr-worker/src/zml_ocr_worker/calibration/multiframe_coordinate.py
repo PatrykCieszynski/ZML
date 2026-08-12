@@ -96,7 +96,7 @@ def _consensus_coordinate_calibration(
 
     lon = _median_rect([sample.rois.lon for sample in inliers])
     lat = _median_rect([sample.rois.lat for sample in inliers])
-    if lon.x2 <= lon.x1 or lon.y2 <= lon.y1 or lat.x2 <= lat.x1 or lat.y2 <= lat.y1:
+    if not _valid_rect(lon) or not _valid_rect(lat):
         return None
 
     extract_numeric_tokens = inliers[0].rois.extract_numeric_tokens
@@ -131,3 +131,7 @@ def _rect_is_close(rect: RoiRect, expected: RoiRect, *, tolerance: int) -> bool:
             (rect.y2, expected.y2),
         )
     )
+
+
+def _valid_rect(rect: RoiRect) -> bool:
+    return rect.x2 > rect.x1 and rect.y2 > rect.y1
