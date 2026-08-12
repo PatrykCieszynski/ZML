@@ -117,8 +117,8 @@ class CompassCalibrationRuntime:
             )
 
         if ts_ms >= self._next_locked_validation_ts_ms:
-            self._next_locked_validation_ts_ms = (
-                ts_ms + max(1, self._config.locked_validation_interval_ms)
+            self._next_locked_validation_ts_ms = ts_ms + max(
+                1, self._config.locked_validation_interval_ms
             )
             if not self._locator.locked_is_valid(frame, compass):
                 score = self._locator.validate_locked(frame, compass)
@@ -239,8 +239,8 @@ class CompassCalibrationRuntime:
         search_rois = self._search_rois
         if search_rois is None:
             return False
-        self._next_coordinate_calibration_ts_ms = (
-            ts_ms + max(1, self._config.coordinate_recalibration_cooldown_ms)
+        self._next_coordinate_calibration_ts_ms = ts_ms + max(
+            1, self._config.coordinate_recalibration_cooldown_ms
         )
         try:
             calibration = self._coordinate_calibrator.calibrate(
