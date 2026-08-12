@@ -9,7 +9,7 @@ dependencies = [
     "numpy>=2.4.0",
     "opencv-python-headless>=4.13.0.92",
     "pywin32==311; sys_platform == 'win32'",
-    "tesserocr @ https://github.com/simonflueckiger/tesserocr-windows_build/releases/download/tesserocr-v2.10.0-tesseract-5.5.2/tesserocr-2.10.0-cp313-cp313-win_amd64.whl ; sys_platform == 'win32' and platform_machine == 'AMD64'",
+    "tesserocr @ https://github.com/simonflueckiger/tesserocr-windows_build/releases/download/tesserocr-v2.8.0-tesseract-5.5.0/tesserocr-2.8.0-cp313-cp313-win_amd64.whl ; sys_platform == 'win32' and platform_machine == 'AMD64'",
     "zml-ocr-protocol==0.1.0",
 ]
 
