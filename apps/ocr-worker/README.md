@@ -96,28 +96,21 @@ uv run --package zml-ocr-worker zml-ocr-worker locate-ui .\entropia.png
 uv run --package zml-ocr-worker zml-ocr-worker locate-ui .\entropia.png --annotated .\located.png
 ```
 
-It prints the detected Finder/Compass rectangles, confidence, Compass radar radius/scale, and a coordinate read produced by the normal `PositionPipeline` using scale-aware Lon/Lat layouts.
+It prints the detected Finder/Compass rectangles, confidence, Compass radar radius/scale, and a coordinate read produced by the normal `PositionPipeline` using the same calibration components as the live runtime.
 
-### Live auto-calibration test
+### Live calibration runtime
 
-The integration branch can run the same locators in the normal capture loop. It is intentionally opt-in while live validation is in progress:
+Movable UI calibration is the only production runtime path:
 
-```powershell
-$env:ZML_OCR_AUTO_CALIBRATION = "1"
-```
+- Finder is discovered from the full client frame and its locked crop is reused while the panel remains present;
+- Compass is located by radar geometry and its detected center/radius derive broad Lon/Lat search strips;
+- occasional strong text OCR locates the numeric value boxes, while the digits-only `PositionPipeline` owns the actual coordinate values;
+- coordinate OCR recovery is independent from Compass geometry reacquisition;
+- transient invalid coordinate reads are tolerated and repeated failures can recalibrate the numeric boxes;
+- locked Compass validation uses consecutive-failure hysteresis before a full reacquire;
+- full-frame Finder discovery runs off the capture thread and reuses the located panel between searches.
 
-With the flag enabled:
-
-- Finder is located from the full client frame and its locked crop is reused while the panel remains present;
-- Compass is located by radar geometry and its detected center/radius derive dynamic Lon/Lat digit strips;
-- the existing `PositionPipeline` still owns preprocessing, OCR, parsing, and coordinate sanity checks;
-- transient invalid position reads are tolerated;
-- after several consecutive invalid reads, nearby Lon/Lat vertical offsets are tried;
-- after all line-layout variants fail, the whole Compass is reacquired;
-- a successful unchanged position is healthy OCR and does not trigger recalibration;
-- full-frame Compass searches are throttled while the panel cannot be found.
-
-The flag defaults to off until the locator has been validated live across enough UI layouts. The legacy fixed ROI path remains unchanged when the flag is disabled.
+There is no environment flag or fixed-screen-ROI fallback for Finder/Compass in the live worker. Static ROI configuration remains only for other pipeline areas that have not moved to dynamic location yet.
 
 ## Health behavior
 
@@ -125,7 +118,7 @@ Loss/absence of the Entropia window is not a fatal worker error. Capture reports
 
 ## Diagnostics
 
-The worker contains finder crop recording, position ROI snapshots, profiling, and finder debug tooling. Backend owns the desired configuration snapshot and sends the relevant settings through the protocol.
+The production worker keeps bounded suspect coordinate captures and a lightweight local OCR health snapshot. Optional Finder recording and profiling/debug logging can still be enabled for targeted investigation. Backend owns the desired configuration snapshot and sends the relevant settings through the protocol.
 
 Do not move these native/debug implementations back into Backend just to simplify a call path; the process boundary exists partly to isolate native capture/OCR behavior from the API/runtime process.
 

@@ -36,10 +36,6 @@ from zml_ocr_worker.pipelines.mining_finder.recording import (
 )
 from zml_ocr_worker.pipelines.mining_finder.vision import VisionFinderFeatureDetector
 from zml_ocr_worker.pipelines.position.pipeline import PositionPipeline
-from zml_ocr_worker.pipelines.position.recording import (
-    PositionRoiSnapshotRecorder,
-    position_roi_snapshot_config_from_env,
-)
 from zml_ocr_worker.runtime.message_factory import AgentMessageFactory
 from zml_ocr_worker.runtime.profiling import (
     OcrProfiler,
@@ -65,31 +61,21 @@ def start_ocr_input(
     finder_recording_interval_s: float | None = None,
     finder_recording_max_samples: int | None = None,
     finder_presence_check_enabled: bool | None = None,
-    position_roi_snapshot_enabled: bool | None = None,
-    position_roi_snapshot_dir: Path | None = None,
-    position_roi_snapshot_interval_s: float | None = None,
-    position_roi_snapshot_max_samples: int | None = None,
     ocr_profiling_enabled: bool | None = None,
     ocr_profiling_interval_s: float | None = None,
-    auto_calibration_enabled: bool | None = None,
     roi_profile_path: Path | None = None,
     roi_profile: OcrRoiProfile | None = None,
 ) -> None:
     message_factory = message_factory or AgentMessageFactory()
     windll.user32.SetProcessDPIAware()  # do once per process
-    logger.info("ocr_worker_started target_hz=%s", target_hz)
+    logger.info("ocr_worker_started target_hz=%s calibration=auto", target_hz)
     roi_profile = roi_profile or load_ocr_roi_profile(roi_profile_path)
     logger.info(
-        "ocr_roi_profile_loaded name=%s finder_roi=%s compass_roi=%s deeds_roi=%s loot_roi=%s",
+        "ocr_roi_profile_loaded name=%s deeds_roi=%s loot_roi=%s",
         roi_profile.name,
-        roi_profile.screen_rois.finder.name,
-        roi_profile.screen_rois.compass.name,
         roi_profile.screen_rois.deeds.name,
         roi_profile.screen_rois.loot.name if roi_profile.screen_rois.loot is not None else None,
     )
-    if auto_calibration_enabled is None:
-        auto_calibration_enabled = _env_bool("ZML_OCR_AUTO_CALIBRATION", default=False)
-    logger.info("ocr_auto_calibration_enabled enabled=%s", auto_calibration_enabled)
 
     cap = WindowCapturer(title_contains="Entropia Universe Client")
     period = 1.0 / target_hz
@@ -104,47 +90,25 @@ def start_ocr_input(
         logger.info("ocr_profiling_enabled interval_s=%s", ocr_profiling_config.interval_s)
 
     position_rois = roi_profile.position_rois.to_position_rois()
-    logger.debug("position_rois_loaded rois=%s", position_rois)
     position_pipeline = PositionPipeline(
         position_rois,
         profiler=profiler,
     )
-    compass_calibration = (
-        CompassCalibrationRuntime(position_pipeline=position_pipeline)
-        if auto_calibration_enabled
-        else None
-    )
+    compass_calibration = CompassCalibrationRuntime(position_pipeline=position_pipeline)
     last_compass_rect: tuple[int, int, int, int] | None = None
 
     calibration_snapshot_config = calibration_snapshot_config_from_env()
     calibration_snapshot_recorder = CalibrationSnapshotRecorder(
         config=calibration_snapshot_config,
     )
-    if auto_calibration_enabled and calibration_snapshot_config.enabled:
+    if calibration_snapshot_config.enabled:
         logger.info(
-            "ocr_auto_calibration_snapshots_enabled dir=%s interval_ms=%s max_samples=%s",
+            "ocr_suspect_capture_enabled dir=%s interval_ms=%s max_samples=%s",
             calibration_snapshot_config.root_dir,
             calibration_snapshot_config.interval_ms,
             calibration_snapshot_config.max_samples,
         )
 
-    position_snapshot_config = position_roi_snapshot_config_from_env(
-        enabled=position_roi_snapshot_enabled,
-        root_dir=position_roi_snapshot_dir,
-        interval_s=position_roi_snapshot_interval_s,
-        max_samples=position_roi_snapshot_max_samples,
-    )
-    position_snapshot_recorder = PositionRoiSnapshotRecorder(
-        config=position_snapshot_config,
-        rois=position_rois,
-    )
-    if position_snapshot_config.enabled:
-        logger.info(
-            "position_roi_snapshots_enabled dir=%s interval_ms=%s max_samples=%s",
-            position_snapshot_config.root_dir,
-            position_snapshot_config.interval_ms,
-            position_snapshot_config.max_samples,
-        )
     if finder_debug_logging is None:
         finder_debug_logging = _env_bool("ZML_FINDER_DEBUG", default=False)
     if finder_debug_logging:
@@ -153,11 +117,7 @@ def start_ocr_input(
     if finder_presence_check_enabled is None:
         finder_presence_check_enabled = _env_bool("ZML_FINDER_PRESENCE_CHECK", default=True)
     finder_presence_detector = FinderPresenceDetector()
-    finder_locator = (
-        FinderLocator(presence_detector=finder_presence_detector)
-        if auto_calibration_enabled
-        else None
-    )
+    finder_locator = FinderLocator(presence_detector=finder_presence_detector)
     located_finder: LocatedRegion | None = None
     next_finder_search_at = 0.0
     last_finder_present: bool | None = None
@@ -172,7 +132,7 @@ def start_ocr_input(
     finder_recorder = (
         FinderCropRecorder(
             config=finder_recording_config,
-            roi_name=roi_profile.screen_rois.finder.name,
+            roi_name="finder_auto",
         )
         if finder_recording_config.enabled
         else None
@@ -251,74 +211,58 @@ def start_ocr_input(
 
             ts_ms = time.time_ns() // 1_000_000
 
-            if compass_calibration is not None:
-                with profiler.measure("position.auto_calibration"):
-                    calibrated_step = compass_calibration.step(frame, ts_ms=ts_ms)
-                compass = calibrated_step.compass_roi
-                located_compass = calibrated_step.compass
-                if located_compass is not None:
-                    rect = located_compass.rect
-                    rect_key = (rect.x1, rect.y1, rect.x2, rect.y2)
-                    if rect_key != last_compass_rect:
-                        logger.info(
-                            "compass_auto_calibrated rect=%s confidence=%.3f scale=%.3f layout=%s",
-                            rect_key,
-                            located_compass.confidence,
-                            located_compass.scale,
-                            compass_calibration.layout_index,
-                        )
-                        last_compass_rect = rect_key
-                if calibrated_step.reacquire_requested:
-                    logger.info("compass_auto_reacquire_requested")
-                    last_compass_rect = None
+            with profiler.measure("position.auto_calibration"):
+                calibrated_step = compass_calibration.step(frame, ts_ms=ts_ms)
+            compass = calibrated_step.compass_roi
+            located_compass = calibrated_step.compass
+            if located_compass is not None:
+                rect = located_compass.rect
+                rect_key = (rect.x1, rect.y1, rect.x2, rect.y2)
+                if rect_key != last_compass_rect:
+                    logger.info(
+                        "compass_auto_calibrated rect=%s confidence=%.3f scale=%.3f layout=%s",
+                        rect_key,
+                        located_compass.confidence,
+                        located_compass.scale,
+                        compass_calibration.layout_index,
+                    )
+                    last_compass_rect = rect_key
+            if calibrated_step.reacquire_requested:
+                logger.info("compass_auto_reacquire_requested")
+                last_compass_rect = None
 
-                if compass is not None and located_compass is not None:
-                    active_rois = compass_calibration.active_rois
-                    if active_rois is not None:
-                        try:
-                            sample_dir = calibration_snapshot_recorder.record(
-                                compass,
-                                compass=located_compass,
-                                rois=active_rois,
-                                read=calibrated_step.read,
-                                layout_index=compass_calibration.layout_index,
-                                ts_ms=ts_ms,
+            if compass is not None and located_compass is not None:
+                active_rois = compass_calibration.active_rois
+                if active_rois is not None:
+                    try:
+                        sample_dir = calibration_snapshot_recorder.record(
+                            compass,
+                            compass=located_compass,
+                            rois=active_rois,
+                            read=calibrated_step.read,
+                            layout_index=compass_calibration.layout_index,
+                            ts_ms=ts_ms,
+                        )
+                        if sample_dir is not None:
+                            logger.info(
+                                "ocr_suspect_capture_recorded dir=%s",
+                                sample_dir,
                             )
-                            if sample_dir is not None:
-                                logger.info(
-                                    "ocr_auto_calibration_snapshot_recorded dir=%s",
-                                    sample_dir,
-                                )
-                        except Exception:
-                            logger.warning(
-                                "ocr_auto_calibration_snapshot_failed ts_ms=%s",
-                                ts_ms,
-                                exc_info=True,
-                            )
+                    except Exception:
+                        logger.warning(
+                            "ocr_suspect_capture_failed ts_ms=%s",
+                            ts_ms,
+                            exc_info=True,
+                        )
 
-                    # The legacy snapshot recorder still describes fixed sub-ROIs, so
-                    # do not write misleading lon/lat snapshots in auto-calibration mode.
-                    pos = calibrated_step.read.position
-                    if pos is not None:
-                        message_sink(
-                            message_factory.position(
-                                pos,
-                                roi_name="compass_auto",
-                            )
+                pos = calibrated_step.read.position
+                if pos is not None:
+                    message_sink(
+                        message_factory.position(
+                            pos,
+                            roi_name="compass_auto",
                         )
-            else:
-                with profiler.measure("position.screen_crop"):
-                    compass = roi_profile.screen_rois.compass.crop(frame)
-                if compass is not None:
-                    position_snapshot_recorder.record(compass, ts_ms=ts_ms)
-                    pos = position_pipeline.step(compass, ts_ms)
-                    if pos is not None:
-                        message_sink(
-                            message_factory.position(
-                                pos,
-                                roi_name=roi_profile.screen_rois.compass.name,
-                            )
-                        )
+                    )
 
             if finder_future is not None and finder_future.done():
                 try:
@@ -339,11 +283,7 @@ def start_ocr_input(
                             message_sink(
                                 message_factory.finder(
                                     signal,
-                                    roi_name=(
-                                        "finder_auto"
-                                        if auto_calibration_enabled
-                                        else roi_profile.screen_rois.finder.name
-                                    ),
+                                    roi_name="finder_auto",
                                 )
                             )
                     finally:
@@ -372,24 +312,20 @@ def start_ocr_input(
 
             if tick % finder_every_n == 0 and finder_future is None:
                 finder: np.ndarray | None = None
-                if finder_locator is not None:
-                    if located_finder is not None:
-                        finder = located_finder.rect.crop(frame)
-                    if (
-                        finder is None
-                        and finder_locator_future is None
-                        and time.perf_counter() >= next_finder_search_at
-                    ):
-                        # Full-frame Finder discovery is much more expensive than the
-                        # locked presence guard. Run it off the capture thread so an
-                        # absent/moved Finder cannot stall position OCR for seconds.
-                        finder_locator_future = finder_locator_executor.submit(
-                            finder_locator.locate,
-                            frame,
-                        )
-                else:
-                    with profiler.measure("finder.screen_crop"):
-                        finder = roi_profile.screen_rois.finder.crop(frame)
+                if located_finder is not None:
+                    finder = located_finder.rect.crop(frame)
+                if (
+                    finder is None
+                    and finder_locator_future is None
+                    and time.perf_counter() >= next_finder_search_at
+                ):
+                    # Full-frame Finder discovery is much more expensive than the
+                    # locked presence guard. Run it off the capture thread so an
+                    # absent/moved Finder cannot stall position OCR for seconds.
+                    finder_locator_future = finder_locator_executor.submit(
+                        finder_locator.locate,
+                        frame,
+                    )
 
                 if finder is not None:
                     should_run_finder = True
@@ -410,7 +346,7 @@ def start_ocr_input(
                         last_finder_present = presence.present
                         if not presence.present:
                             should_run_finder = False
-                            if finder_locator is not None and located_finder is not None:
+                            if located_finder is not None:
                                 logger.info("finder_auto_reacquire_requested")
                                 located_finder = None
                                 next_finder_search_at = time.perf_counter() + 0.5
@@ -441,6 +377,7 @@ def start_ocr_input(
         finder_executor.shutdown(wait=True, cancel_futures=True)
         finder_locator_executor.shutdown(wait=True, cancel_futures=True)
         cap.close()
+        compass_calibration.close()
         position_pipeline.close()
         finder_pipeline.close()
 
