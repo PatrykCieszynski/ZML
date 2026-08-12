@@ -63,6 +63,8 @@ class CompassCalibrationRuntime:
         self._search_rois: CoordinateRois | None = None
         self._coordinate_rois: CoordinateRois | None = None
         self._expected_digit_counts: tuple[int, int] | None = None
+        self._pending_digit_counts: tuple[int, int] | None = None
+        self._pending_digit_count_streak = 0
         self._coordinate_failure_streak = 0
 
         self._next_search_ts_ms = 0
@@ -89,7 +91,7 @@ class CompassCalibrationRuntime:
         self._search_rois = None
         self._coordinate_rois = None
         self._expected_digit_counts = None
-        self._coordinate_failure_streak = 0
+        self._reset_coordinate_health()
         self._next_search_ts_ms = max(0, next_search_ts_ms)
         self._next_locked_validation_ts_ms = 0
         self._next_coordinate_calibration_ts_ms = 0
@@ -148,7 +150,7 @@ class CompassCalibrationRuntime:
         if read.valid:
             if self._expected_digit_counts is None:
                 self._remember_digit_counts(read)
-                self._coordinate_failure_streak = 0
+                self._reset_coordinate_health()
                 read = self._position_pipeline.emit_read(read, ts_ms=ts_ms)
                 return CalibratedPositionStep(
                     compass=compass,
@@ -157,31 +159,25 @@ class CompassCalibrationRuntime:
                 )
 
             if self._digit_count_changed(read):
-                logger.info(
-                    "coordinate_digit_count_changed lon=%s lat=%s expected=%s; holding read",
-                    read.longitude,
-                    read.latitude,
-                    self._expected_digit_counts,
-                )
-                if (
-                    ts_ms >= self._next_coordinate_calibration_ts_ms
-                    and self._try_coordinate_calibration(
-                        compass_roi,
-                        ts_ms=ts_ms,
-                        reason="digit_count_changed",
+                changed_counts = _digit_counts(read)
+                self._record_digit_count_mismatch(changed_counts)
+                if self._pending_digit_count_streak == 1:
+                    logger.info(
+                        "coordinate_digit_count_suspect lon=%s lat=%s expected=%s observed=%s; holding read",
+                        read.longitude,
+                        read.latitude,
+                        self._expected_digit_counts,
+                        changed_counts,
                     )
-                ):
-                    read = self._read_fast(compass_roi, ts_ms=ts_ms)
-                    if read.valid:
-                        self._remember_digit_counts(read)
-                        read = self._position_pipeline.emit_read(read, ts_ms=ts_ms)
-                return CalibratedPositionStep(
+                return self._recover_unhealthy_read(
                     compass=compass,
                     compass_roi=compass_roi,
                     read=read,
+                    ts_ms=ts_ms,
+                    reason="digit_count_changed",
                 )
 
-            self._coordinate_failure_streak = 0
+            self._reset_coordinate_health()
             read = self._position_pipeline.emit_read(read, ts_ms=ts_ms)
             return CalibratedPositionStep(
                 compass=compass,
@@ -189,6 +185,25 @@ class CompassCalibrationRuntime:
                 read=read,
             )
 
+        self._pending_digit_counts = None
+        self._pending_digit_count_streak = 0
+        return self._recover_unhealthy_read(
+            compass=compass,
+            compass_roi=compass_roi,
+            read=read,
+            ts_ms=ts_ms,
+            reason="fast_ocr_failures",
+        )
+
+    def _recover_unhealthy_read(
+        self,
+        *,
+        compass: LocatedCompass,
+        compass_roi: np.ndarray,
+        read: PositionReadResult,
+        ts_ms: int,
+        reason: str,
+    ) -> CalibratedPositionStep:
         self._coordinate_failure_streak += 1
         threshold = max(1, self._config.consecutive_failures_before_recalibrate)
         if (
@@ -197,13 +212,38 @@ class CompassCalibrationRuntime:
             and self._try_coordinate_calibration(
                 compass_roi,
                 ts_ms=ts_ms,
-                reason="fast_ocr_failures",
+                reason=reason,
             )
         ):
-            read = self._read_fast(compass_roi, ts_ms=ts_ms)
-            if read.valid:
-                self._remember_digit_counts(read)
-                read = self._position_pipeline.emit_read(read, ts_ms=ts_ms)
+            fresh = self._read_fast(compass_roi, ts_ms=ts_ms)
+            if fresh.valid:
+                fresh_counts = _digit_counts(fresh)
+                expected = self._expected_digit_counts
+                if reason == "digit_count_changed" and expected is not None:
+                    pending = self._pending_digit_counts
+                    if (
+                        pending is not None
+                        and self._pending_digit_count_streak >= threshold
+                        and fresh_counts == pending
+                    ):
+                        logger.info(
+                            "coordinate_digit_count_change_confirmed expected=%s observed=%s",
+                            expected,
+                            fresh_counts,
+                        )
+                        self._remember_digit_counts(fresh)
+                        self._reset_coordinate_health()
+                        fresh = self._position_pipeline.emit_read(fresh, ts_ms=ts_ms)
+                        read = fresh
+                    elif fresh_counts == expected:
+                        self._reset_coordinate_health()
+                        fresh = self._position_pipeline.emit_read(fresh, ts_ms=ts_ms)
+                        read = fresh
+                else:
+                    self._remember_digit_counts(fresh)
+                    self._reset_coordinate_health()
+                    fresh = self._position_pipeline.emit_read(fresh, ts_ms=ts_ms)
+                    read = fresh
 
         return CalibratedPositionStep(
             compass=compass,
@@ -223,7 +263,7 @@ class CompassCalibrationRuntime:
         self._search_rois = variants[0].rois
         self._coordinate_rois = None
         self._expected_digit_counts = None
-        self._coordinate_failure_streak = 0
+        self._reset_coordinate_health()
         self._next_search_ts_ms = 0
         self._next_locked_validation_ts_ms = 0
         self._next_coordinate_calibration_ts_ms = 0
@@ -268,7 +308,6 @@ class CompassCalibrationRuntime:
         reason: str,
     ) -> None:
         self._coordinate_rois = calibration.rois
-        self._expected_digit_counts = None
         self._coordinate_failure_streak = 0
         lon = calibration.rois.lon
         lat = calibration.rois.lat
@@ -291,23 +330,41 @@ class CompassCalibrationRuntime:
         )
 
     def _remember_digit_counts(self, read: PositionReadResult) -> None:
-        if not read.valid or read.longitude is None or read.latitude is None:
+        counts = _digit_counts(read)
+        if counts is None:
             return
-        self._expected_digit_counts = (
-            len(str(abs(read.longitude))),
-            len(str(abs(read.latitude))),
-        )
-        logger.info("coordinate_digit_rois_verified digits=%s", self._expected_digit_counts)
+        self._expected_digit_counts = counts
+        logger.info("coordinate_digit_rois_verified digits=%s", counts)
 
     def _digit_count_changed(self, read: PositionReadResult) -> bool:
         expected = self._expected_digit_counts
-        if expected is None or not read.valid:
-            return False
-        lon = read.longitude
-        lat = read.latitude
-        if lon is None or lat is None:
-            return False
-        return (len(str(abs(lon))), len(str(abs(lat)))) != expected
+        counts = _digit_counts(read)
+        return expected is not None and counts is not None and counts != expected
+
+    def _record_digit_count_mismatch(self, counts: tuple[int, int] | None) -> None:
+        if counts is None:
+            self._pending_digit_counts = None
+            self._pending_digit_count_streak = 0
+            return
+        if counts == self._pending_digit_counts:
+            self._pending_digit_count_streak += 1
+            return
+        self._pending_digit_counts = counts
+        self._pending_digit_count_streak = 1
+
+    def _reset_coordinate_health(self) -> None:
+        self._coordinate_failure_streak = 0
+        self._pending_digit_counts = None
+        self._pending_digit_count_streak = 0
+
+
+def _digit_counts(read: PositionReadResult) -> tuple[int, int] | None:
+    if not read.valid or read.longitude is None or read.latitude is None:
+        return None
+    return (
+        len(str(abs(read.longitude))),
+        len(str(abs(read.latitude))),
+    )
 
 
 def _empty_step(*, reacquire_requested: bool = False) -> CalibratedPositionStep:
