@@ -6,10 +6,11 @@ from pathlib import Path
 import cv2
 
 from zml_ocr_worker.calibration.compass import CompassLocator
+from zml_ocr_worker.calibration.coordinate_ocr import CoordinateTextCalibrator
 from zml_ocr_worker.calibration.coordinates import CompassCoordinateLayout
 from zml_ocr_worker.calibration.finder import FinderLocator
 from zml_ocr_worker.calibration.model import LocatedCompass, LocatedRegion
-from zml_ocr_worker.pipelines.position.pipeline import PositionPipeline, PositionReadResult
+from zml_ocr_worker.pipelines.position.pipeline import PositionPipeline
 
 
 def run_calibration_debug(image_path: Path, *, annotated_path: Path | None = None) -> int:
@@ -59,26 +60,40 @@ def _read_coordinates(frame, compass: LocatedCompass) -> dict[str, object]:
         return {"longitude": None, "latitude": None, "hasPosition": False}
 
     variants = CompassCoordinateLayout().variants(compass)
-    pipeline = PositionPipeline(variants[0].rois)
+    if not variants:
+        return {"longitude": None, "latitude": None, "hasPosition": False}
+
+    calibrator = CoordinateTextCalibrator()
+    pipeline: PositionPipeline | None = None
     try:
-        last = PositionReadResult(longitude=None, latitude=None, position=None)
-        for index, variant in enumerate(variants):
-            last = pipeline.read_candidates(compass_roi, 0, (variant.rois,))
-            if last.valid:
-                return {
-                    "longitude": last.longitude,
-                    "latitude": last.latitude,
-                    "hasPosition": True,
-                    "layoutIndex": index,
-                    "verticalOffsetRadius": variant.vertical_offset_radius,
-                }
+        calibration = calibrator.calibrate(
+            compass_roi,
+            search_rois=variants[0].rois,
+        )
+        if calibration is None:
+            return {
+                "longitude": None,
+                "latitude": None,
+                "hasPosition": False,
+                "textCalibrated": False,
+            }
+
+        pipeline = PositionPipeline(calibration.rois)
+        read = pipeline.read(compass_roi, 0)
         return {
-            "longitude": last.longitude,
-            "latitude": last.latitude,
-            "hasPosition": False,
+            "longitude": read.longitude,
+            "latitude": read.latitude,
+            "hasPosition": read.valid,
+            "textCalibrated": True,
+            "digitCounts": [
+                calibration.longitude_digits,
+                calibration.latitude_digits,
+            ],
         }
     finally:
-        pipeline.close()
+        if pipeline is not None:
+            pipeline.close()
+        calibrator.close()
 
 
 def _region_payload(region: LocatedRegion | None) -> dict[str, object] | None:
