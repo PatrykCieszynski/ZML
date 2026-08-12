@@ -233,7 +233,7 @@ class OcrRoiProfilePayload(WireModel):
     finder_panel: FinderPanelPayload
 
 
-FinderRecordingMode = Literal["manual", "interval"]
+FinderRecordingMode = Literal["manual", "interval", "accepted"]
 
 
 class FinderRecordingConfigPayload(WireModel):
