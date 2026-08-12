@@ -113,7 +113,7 @@ def test_coordinate_ocr_failures_do_not_reacquire_valid_compass() -> None:
         coordinate_calibrator=calibrator,  # type: ignore[arg-type]
         config=CompassCalibrationRuntimeConfig(
             locked_validation_interval_ms=10_000,
-            coordinate_recalibration_cooldown_ms=1,
+            coordinate_recalibration_cooldown_ms=15,
             consecutive_failures_before_recalibrate=2,
         ),
     )
