@@ -171,10 +171,12 @@ def test_runtime_persists_new_calibration_after_ten_consecutive_valid_reads() ->
     for index in range(9):
         runtime.step(frame, ts_ms=100 + index * 10)
         assert not store.saved
+        assert pipeline.emit_calls == 0
 
     runtime.step(frame, ts_ms=190)
 
     assert len(store.saved) == 1
+    assert pipeline.emit_calls == 1
     saved = store.saved[0]
     assert saved.frame_width == 500
     assert saved.frame_height == 500
