@@ -79,6 +79,61 @@ def test_calibration_snapshot_records_visual_pipeline_crops(tmp_path: Path) -> N
     assert "ocr_confidence=0.000" in metadata
 
 
+def test_position_text_log_records_every_read_without_visual_snapshots(tmp_path: Path) -> None:
+    log_path = tmp_path / "position.tsv"
+    recorder = CalibrationSnapshotRecorder(
+        config=CalibrationSnapshotConfig(
+            enabled=False,
+            root_dir=tmp_path / "unused-visuals",
+            text_log_enabled=True,
+            text_log_path=log_path,
+        )
+    )
+    compass = LocatedCompass(
+        rect=RoiRect(x1=100, x2=360, y1=80, y2=400),
+        confidence=0.95,
+        scale=1.0,
+        center_x=230.0,
+        center_y=230.0,
+        radius=100.0,
+    )
+    rois = CoordinateRois(
+        lon=RoiRect(x1=40, x2=100, y1=250, y2=275),
+        lat=RoiRect(x1=40, x2=100, y1=280, y2=305),
+        extract_numeric_tokens=False,
+    )
+    frame = np.zeros((320, 260, 3), dtype=np.uint8)
+
+    recorder.record(
+        frame,
+        compass=compass,
+        rois=rois,
+        read=PositionReadResult(
+            longitude=31156,
+            latitude=9515,
+            position=None,
+            confidence=0.24,
+        ),
+        layout_index=0,
+        ts_ms=1000,
+    )
+    recorder.record(
+        frame,
+        compass=compass,
+        rois=rois,
+        read=PositionReadResult(longitude=None, latitude=None, position=None),
+        layout_index=0,
+        ts_ms=1100,
+    )
+
+    lines = log_path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 3
+    assert lines[0].startswith("ts_ms\tlon\tlat\tconfidence\tvalid\temitted")
+    assert "1000\t31156\t9515\t0.240\t1\t0" in lines[1]
+    assert "1100\t\t\t\t0\t0" in lines[2]
+    assert not (tmp_path / "unused-visuals").exists()
+
+
 def _draw_right_aligned_line(image: np.ndarray, roi: RoiRect, text: str) -> None:
     crop = np.ascontiguousarray(image[roi.y1 : roi.y2, roi.x1 : roi.x2].copy())
     font = cv2.FONT_HERSHEY_SIMPLEX
