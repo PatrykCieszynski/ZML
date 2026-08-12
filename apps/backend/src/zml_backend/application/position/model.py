@@ -31,6 +31,8 @@ class PositionTrackingConfig:
     outlier_filter_enabled: bool = True
     max_jump_m: float = 150.0
     max_speed_mps: float = 120.0
+    low_confidence_threshold: float = 0.4
+    low_confidence_max_distance_m: float = 20.0
     relocation_confirm_s: float = 5.0
     relocation_min_samples: int = 10
     relocation_cluster_radius_m: float = 100.0
