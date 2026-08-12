@@ -127,32 +127,28 @@ class FinderLocator:
         height: int,
         scale: float,
     ) -> list[_Candidate]:
-        # The old POC scanned ~8 px apart and then refined every pixel around every
-        # seed. That works, but at 2560x1440 it spends seconds in Python while the
-        # capture loop is waiting. Use a wider coarse grid, then two bounded refinement
-        # passes around only the strongest structural candidates.
+        # The full-frame coarse grid used to call _fast_score from nested Python loops.
+        # Even on a ThreadPoolExecutor that work still competes for the GIL with the
+        # capture/position loop. Score the whole coarse grid through NumPy/integral
+        # image indexing instead, then keep the small bounded refinement passes in
+        # Python where their candidate count is tiny.
         stride = max(8, round(min(width, height) * self._config.coarse_stride_fraction))
         max_y = frame_height - height
         max_x = frame_width - width
-        coarse: list[_Candidate] = []
+        coarse = _coarse_candidates(
+            features,
+            max_x=max_x,
+            max_y=max_y,
+            stride=stride,
+            width=width,
+            height=height,
+            scale=scale,
+            count=self._config.coarse_candidate_count,
+        )
 
-        for y in _scan_positions(max_y, stride):
-            for x in _scan_positions(max_x, stride):
-                coarse.append(
-                    _Candidate(
-                        x=x,
-                        y=y,
-                        width=width,
-                        height=height,
-                        scale=scale,
-                        fast_score=_fast_score(features, x=x, y=y, width=width, height=height),
-                    )
-                )
-
-        coarse.sort(key=lambda item: item.fast_score, reverse=True)
         medium_step = max(2, stride // 4)
         medium: dict[tuple[int, int], _Candidate] = {}
-        for seed in coarse[: self._config.coarse_candidate_count]:
+        for seed in coarse:
             for y in _bounded_positions(seed.y, stride, medium_step, max_y):
                 for x in _bounded_positions(seed.x, stride, medium_step, max_x):
                     candidate = _Candidate(
@@ -205,6 +201,141 @@ def _frame_features(frame: np.ndarray) -> _FrameFeatures:
         edges=cv2.integral(edges.astype(np.uint8), sdepth=cv2.CV_64F),
         blue=cv2.integral(blue.astype(np.uint8), sdepth=cv2.CV_64F),
         green=cv2.integral(green.astype(np.uint8), sdepth=cv2.CV_64F),
+    )
+
+
+def _coarse_candidates(
+    features: _FrameFeatures,
+    *,
+    max_x: int,
+    max_y: int,
+    stride: int,
+    width: int,
+    height: int,
+    scale: float,
+    count: int,
+) -> list[_Candidate]:
+    xs = np.asarray(_scan_positions(max_x, stride), dtype=np.int32)
+    ys = np.asarray(_scan_positions(max_y, stride), dtype=np.int32)
+    if xs.size == 0 or ys.size == 0 or count <= 0:
+        return []
+
+    scores = _fast_score_grid(features, xs=xs, ys=ys, width=width, height=height)
+    flat = scores.reshape(-1)
+    keep = min(int(count), int(flat.size))
+    if keep <= 0:
+        return []
+
+    if keep == flat.size:
+        indices = np.argsort(flat)[::-1]
+    else:
+        indices = np.argpartition(flat, -keep)[-keep:]
+        indices = indices[np.argsort(flat[indices])[::-1]]
+
+    nx = int(xs.size)
+    return [
+        _Candidate(
+            x=int(xs[int(index) % nx]),
+            y=int(ys[int(index) // nx]),
+            width=width,
+            height=height,
+            scale=scale,
+            fast_score=float(flat[int(index)]),
+        )
+        for index in indices
+    ]
+
+
+def _fast_score_grid(
+    features: _FrameFeatures,
+    *,
+    xs: np.ndarray,
+    ys: np.ndarray,
+    width: int,
+    height: int,
+) -> np.ndarray:
+    panel_rects: tuple[RelativeRect, ...] = (
+        (0.05, 0.05, 0.45, 0.68),
+        (0.52, 0.05, 0.96, 0.32),
+        (0.52, 0.39, 0.96, 0.68),
+        (0.52, 0.74, 0.96, 0.96),
+    )
+    panel_dark_score = sum(
+        _rect_ratio_grid(features.dark, xs=xs, ys=ys, width=width, height=height, rect=rect)
+        for rect in panel_rects
+    ) / float(len(panel_rects))
+
+    line_specs: tuple[tuple[RelativeRect, RelativeRect, RelativeRect], ...] = (
+        (
+            (0.485, 0.02, 0.505, 0.98),
+            (0.455, 0.02, 0.475, 0.98),
+            (0.515, 0.02, 0.535, 0.98),
+        ),
+        (
+            (0.01, 0.685, 0.49, 0.705),
+            (0.01, 0.645, 0.49, 0.665),
+            (0.01, 0.725, 0.49, 0.745),
+        ),
+        (
+            (0.50, 0.325, 0.99, 0.345),
+            (0.50, 0.285, 0.99, 0.305),
+            (0.50, 0.365, 0.99, 0.385),
+        ),
+        (
+            (0.50, 0.695, 0.99, 0.715),
+            (0.50, 0.655, 0.99, 0.675),
+            (0.50, 0.735, 0.99, 0.755),
+        ),
+    )
+    grid_score = np.zeros_like(panel_dark_score, dtype=np.float64)
+    for line_rect, before_rect, after_rect in line_specs:
+        line_density = _rect_ratio_grid(
+            features.edges,
+            xs=xs,
+            ys=ys,
+            width=width,
+            height=height,
+            rect=line_rect,
+        )
+        neighbor_density = (
+            _rect_ratio_grid(
+                features.edges,
+                xs=xs,
+                ys=ys,
+                width=width,
+                height=height,
+                rect=before_rect,
+            )
+            + _rect_ratio_grid(
+                features.edges,
+                xs=xs,
+                ys=ys,
+                width=width,
+                height=height,
+                rect=after_rect,
+            )
+        ) / 2.0
+        grid_score += np.clip((line_density - neighbor_density) / 0.08, 0.0, 1.0)
+    grid_score /= float(len(line_specs))
+
+    whole = (0.0, 0.0, 1.0, 1.0)
+    blue_score = np.clip(
+        _rect_ratio_grid(features.blue, xs=xs, ys=ys, width=width, height=height, rect=whole)
+        / 0.025,
+        0.0,
+        1.0,
+    )
+    green_score = np.clip(
+        _rect_ratio_grid(features.green, xs=xs, ys=ys, width=width, height=height, rect=whole)
+        / 0.035,
+        0.0,
+        1.0,
+    )
+    return (
+        panel_dark_score * 0.45
+        + grid_score * 0.35
+        + blue_score * 0.15
+        + green_score * 0.05
     )
 
 
@@ -292,6 +423,32 @@ def _fast_score(
     return float(
         panel_dark_score * 0.45 + grid_score * 0.35 + blue_score * 0.15 + green_score * 0.05
     )
+
+
+def _rect_ratio_grid(
+    integral: np.ndarray,
+    *,
+    xs: np.ndarray,
+    ys: np.ndarray,
+    width: int,
+    height: int,
+    rect: RelativeRect,
+) -> np.ndarray:
+    left = xs + int(width * rect[0])
+    top = ys + int(height * rect[1])
+    right = xs + int(width * rect[2])
+    bottom = ys + int(height * rect[3])
+    area = max(1, (int(width * rect[2]) - int(width * rect[0]))) * max(
+        1,
+        int(height * rect[3]) - int(height * rect[1]),
+    )
+    total = (
+        integral[np.ix_(bottom, right)]
+        - integral[np.ix_(top, right)]
+        - integral[np.ix_(bottom, left)]
+        + integral[np.ix_(top, left)]
+    )
+    return total / float(area)
 
 
 def _rect_ratio(
