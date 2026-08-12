@@ -56,6 +56,7 @@ def get_ocr_calibration(request: Request) -> dict[str, object]:
 @router.post("/recalibrate")
 def recalibrate_ocr(request: Request) -> dict[str, object]:
     runtime = _runtime(request)
+    settings = _settings(request)
     workers = _object_dict(runtime.health().get("workers"))
     if workers is None:
         raise HTTPException(status_code=409, detail="OCR worker health is unavailable")
@@ -70,6 +71,15 @@ def recalibrate_ocr(request: Request) -> dict[str, object]:
     if not isinstance(raw_pid, int) or isinstance(raw_pid, bool) or raw_pid <= 0:
         raise HTTPException(status_code=409, detail="OCR worker process is not running")
 
+    calibration_path = _compass_calibration_path(settings)
+    try:
+        calibration_path.unlink(missing_ok=True)
+    except OSError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Failed to clear persisted Compass calibration: {exc}",
+        ) from exc
+
     try:
         os.kill(raw_pid, signal.SIGTERM)
     except OSError as exc:
@@ -78,7 +88,7 @@ def recalibrate_ocr(request: Request) -> dict[str, object]:
     return {
         "ok": True,
         "workerPid": raw_pid,
-        "message": "OCR worker restart requested; automatic calibration will run after restart",
+        "message": "OCR worker restart requested; Compass calibration will be rebuilt",
     }
 
 
@@ -94,6 +104,10 @@ def _snapshot_command(settings: Settings, *, output_dir: Path) -> list[str]:
         "--profile",
         str(settings.ocr_profile_path),
     ]
+
+
+def _compass_calibration_path(settings: Settings) -> Path:
+    return settings.ocr_profile_path.with_name("compass_calibration.json")
 
 
 def _read_region(output_dir: Path, region: str) -> dict[str, object]:
