@@ -161,29 +161,26 @@ class FinderPresenceDetector:
         band = max(1.0, self._config.radar_band_fraction * scale)
         sector_count = max(12, int(self._config.radar_sector_count))
         angles = np.linspace(0.0, 2.0 * np.pi, sector_count, endpoint=False)
+        cos_angles = np.cos(angles)
+        sin_angles = np.sin(angles)
+
+        # Expand each blue pixel by one pixel once, instead of running hundreds of
+        # tiny np.any slices from Python. Sampling the three radial bands then becomes
+        # pure vectorized indexing and keeps the locked-presence hot path cheap.
+        expanded = cv2.dilate(blue.astype(np.uint8), np.ones((3, 3), dtype=np.uint8)) > 0
+        radial_offsets = np.asarray((-band, 0.0, band), dtype=np.float64)[:, None]
 
         ring_scores: list[float] = []
         for radius_fraction in self._config.radar_radii:
             radius = max(1.0, radius_fraction * scale)
-            hits = 0
-            for angle in angles:
-                found = False
-                for radial_offset in (-band, 0.0, band):
-                    sample_radius = radius + radial_offset
-                    x = round(center_x + np.cos(angle) * sample_radius)
-                    y = round(center_y + np.sin(angle) * sample_radius)
-                    if x < 0 or x >= width or y < 0 or y >= height:
-                        continue
-                    x1 = max(0, x - 1)
-                    x2 = min(width, x + 2)
-                    y1 = max(0, y - 1)
-                    y2 = min(height, y + 2)
-                    if np.any(blue[y1:y2, x1:x2]):
-                        found = True
-                        break
-                if found:
-                    hits += 1
-            ring_scores.append(float(hits) / float(sector_count))
+            sample_radii = radius + radial_offsets
+            xs = np.rint(center_x + sample_radii * cos_angles[None, :]).astype(np.int32)
+            ys = np.rint(center_y + sample_radii * sin_angles[None, :]).astype(np.int32)
+            valid = (xs >= 0) & (xs < width) & (ys >= 0) & (ys < height)
+            sampled = np.zeros_like(valid, dtype=bool)
+            sampled[valid] = expanded[ys[valid], xs[valid]]
+            sector_hits = np.any(sampled, axis=0)
+            ring_scores.append(float(np.count_nonzero(sector_hits)) / float(sector_count))
 
         if not ring_scores:
             return 0.0
