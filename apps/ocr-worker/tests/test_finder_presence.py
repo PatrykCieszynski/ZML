@@ -14,6 +14,7 @@ def test_finder_presence_detector_accepts_finder_like_panel() -> None:
     assert result.present is True
     assert result.panel_dark_score >= 0.55
     assert result.grid_score >= 0.20
+    assert result.radar_ring_score >= 0.45
 
 
 def test_finder_presence_detector_rejects_plain_dark_crop() -> None:
@@ -44,6 +45,26 @@ def test_finder_presence_detector_rejects_bright_diagonal_edges() -> None:
 
     result = detector.detect(crop)
 
+    assert result.present is False
+
+
+def test_finder_presence_detector_rejects_dark_progress_like_panel_without_radar() -> None:
+    detector = FinderPresenceDetector()
+    crop = np.full((240, 340, 3), (20, 24, 31), dtype=np.uint8)
+
+    # Generic Entropia-style progress window: dark body, framed icon, progress bar,
+    # and a small blue accent. These features used to resemble Finder enough to be
+    # a plausible false positive, but there are no concentric radar rings.
+    cv2.rectangle(crop, (8, 8), (332, 232), (90, 100, 112), thickness=1)
+    cv2.rectangle(crop, (20, 165), (68, 213), (20, 90, 160), thickness=2)
+    cv2.rectangle(crop, (75, 206), (305, 216), (125, 125, 125), thickness=-1)
+    cv2.rectangle(crop, (75, 206), (92, 216), (170, 100, 35), thickness=-1)
+    cv2.line(crop, (14, 168), (326, 168), (95, 105, 118), thickness=1)
+    cv2.line(crop, (170, 10), (170, 230), (95, 105, 118), thickness=1)
+
+    result = detector.detect(crop)
+
+    assert result.radar_ring_score < 0.45
     assert result.present is False
 
 

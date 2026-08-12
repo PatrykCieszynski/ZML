@@ -11,8 +11,18 @@ class OcrPosition:
 
 
 @dataclass(frozen=True, slots=True)
+class CoordinateRois:
+    lon: RoiRect
+    lat: RoiRect
+    extract_numeric_tokens: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class PositionRois:
     # All coords are relative to the compass ROI (not the full screen).
     planet: RoiRect
     lon: RoiRect
     lat: RoiRect
+
+    def coordinates(self) -> CoordinateRois:
+        return CoordinateRois(lon=self.lon, lat=self.lat)

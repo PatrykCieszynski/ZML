@@ -19,10 +19,11 @@ from zml_ocr_worker.runtime.paths import get_app_data_dir
 
 logger = logging.getLogger(__name__)
 
-FinderRecordingMode = Literal["manual", "interval"]
+FinderRecordingMode = Literal["manual", "interval", "accepted"]
 _VALID_MODES: set[FinderRecordingMode] = {
     "manual",
     "interval",
+    "accepted",
 }
 
 
@@ -53,6 +54,37 @@ class FinderCropRecorder:
         if config.enabled:
             config.root_dir.mkdir(parents=True, exist_ok=True)
 
+    def record_accepted_frame(
+        self,
+        finder_roi: np.ndarray,
+        *,
+        ts_ms: int,
+    ) -> None:
+        """Persist a Finder crop immediately before expensive feature OCR.
+
+        The runtime has already located the panel and passed the visual presence guard
+        at this point. Recording here guarantees that false-positive evidence survives
+        even if the later Finder OCR is slow or raises an exception.
+        """
+
+        if not self._config.enabled or "accepted" not in self._config.modes:
+            return
+        if self._sequence >= self._config.max_samples:
+            return
+        try:
+            self._write_sample(
+                finder_roi,
+                ts_ms=ts_ms,
+                reasons=["accepted"],
+                features=None,
+                signals=[],
+                phase="accepted_before_ocr",
+            )
+        except Exception:
+            logger.warning(
+                "finder_crop_record_failed ts_ms=%s phase=accepted", ts_ms, exc_info=True
+            )
+
     def record_frame(
         self,
         finder_roi: np.ndarray,
@@ -61,23 +93,32 @@ class FinderCropRecorder:
         features: FinderFeatures,
         signals: list[MiningFinderSignal],
     ) -> None:
+        """Record interval/manual Finder diagnostics after feature OCR."""
+
         if not self._config.enabled:
             return
         if self._sequence >= self._config.max_samples:
             return
 
         try:
-            reasons = self._recording_reasons(ts_ms=ts_ms)
+            reasons = self._post_ocr_recording_reasons(ts_ms=ts_ms)
             if not reasons:
                 return
 
             self._write_sample(
-                finder_roi, ts_ms=ts_ms, features=features, signals=signals, reasons=reasons
+                finder_roi,
+                ts_ms=ts_ms,
+                features=features,
+                signals=signals,
+                reasons=reasons,
+                phase="after_ocr",
             )
         except Exception:
-            logger.warning("finder_crop_record_failed ts_ms=%s", ts_ms, exc_info=True)
+            logger.warning(
+                "finder_crop_record_failed ts_ms=%s phase=after_ocr", ts_ms, exc_info=True
+            )
 
-    def _recording_reasons(
+    def _post_ocr_recording_reasons(
         self,
         *,
         ts_ms: int,
@@ -113,9 +154,10 @@ class FinderCropRecorder:
         finder_roi: np.ndarray,
         *,
         ts_ms: int,
-        features: FinderFeatures,
-        signals: list[MiningFinderSignal],
         reasons: list[str],
+        features: FinderFeatures | None,
+        signals: list[MiningFinderSignal],
+        phase: str,
     ) -> None:
         self._sequence += 1
         timestamp = datetime.fromtimestamp(ts_ms / 1000, tz=UTC).strftime("%Y%m%dT%H%M%S%fZ")
@@ -137,7 +179,8 @@ class FinderCropRecorder:
                     "image_file": png_path.name,
                     "image_shape": list(finder_roi.shape),
                     "reasons": reasons,
-                    "features": _features_to_json(features),
+                    "phase": phase,
+                    "features": None if features is None else _features_to_json(features),
                     "signals": [_signal_to_json(signal) for signal in signals],
                 },
                 ensure_ascii=False,
@@ -146,7 +189,12 @@ class FinderCropRecorder:
             + "\n",
             encoding="utf-8",
         )
-        logger.debug("finder_crop_recorded path=%s reasons=%s", png_path, ",".join(reasons))
+        logger.debug(
+            "finder_crop_recorded path=%s reasons=%s phase=%s",
+            png_path,
+            ",".join(reasons),
+            phase,
+        )
 
 
 def finder_recording_config_from_env(
@@ -156,8 +204,15 @@ def finder_recording_config_from_env(
     interval_s: float | None = None,
     max_samples: int | None = None,
 ) -> FinderRecordingConfig:
-    return FinderRecordingConfig(
-        modes=_parse_modes(modes if modes is not None else os.getenv("ZML_FINDER_RECORDING")),
+    # Config sync is authoritative, but in development the child process also inherits
+    # the parent environment. If an older/empty bridge config reaches the worker while
+    # the explicit debug env flag is present, prefer that non-empty env value rather
+    # than silently disabling recording.
+    raw_modes = modes if modes is not None and modes.strip() else os.getenv("ZML_FINDER_RECORDING")
+    parsed_modes = _parse_modes(raw_modes)
+    default_max_samples = 500 if "accepted" in parsed_modes else 1
+    config = FinderRecordingConfig(
+        modes=parsed_modes,
         root_dir=root_dir
         or _env_path("ZML_FINDER_RECORDING_DIR")
         or default_finder_recording_dir(),
@@ -168,8 +223,16 @@ def finder_recording_config_from_env(
         ),
         max_samples=max_samples
         if max_samples is not None
-        else _env_int("ZML_FINDER_RECORDING_MAX_SAMPLES", default=1),
+        else _env_int("ZML_FINDER_RECORDING_MAX_SAMPLES", default=default_max_samples),
     )
+    logger.info(
+        "finder_recording_config_resolved modes=%s enabled=%s dir=%s max_samples=%s",
+        ",".join(sorted(config.modes)) or "<off>",
+        config.enabled,
+        config.root_dir,
+        config.max_samples,
+    )
+    return config
 
 
 def _parse_modes(raw: str | None) -> frozenset[FinderRecordingMode]:
@@ -186,10 +249,14 @@ def _parse_modes(raw: str | None) -> frozenset[FinderRecordingMode]:
             continue
         if normalized in {"every", "timer", "every-n-seconds"}:
             normalized = "interval"
+        if normalized in {"found", "detected", "located", "present"}:
+            normalized = "accepted"
         if normalized == "manual":
             modes.add("manual")
         elif normalized == "interval":
             modes.add("interval")
+        elif normalized == "accepted":
+            modes.add("accepted")
         else:
             logger.warning("finder_recording_mode_ignored mode=%r", item)
 

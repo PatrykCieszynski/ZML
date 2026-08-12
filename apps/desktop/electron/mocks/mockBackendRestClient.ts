@@ -8,12 +8,15 @@ import type {
     MiningLootTotalDto,
     MiningToolKind,
     MiningToolProfileDto,
+    MoveRunSegmentRequest,
     RunDto,
     RunSegmentDto,
     SetActiveMiningToolsRequest,
+    SplitRunSegmentRequest,
     StartRunRequest,
     StopRunRequest,
     UpdateRunRequest,
+    UpdateRunSegmentSetupRequest,
 } from "@desktop/shared";
 
 import type {
@@ -213,6 +216,83 @@ export class MockBackendRestClient implements BackendClient {
         return [...this.runSegments];
     }
 
+    async updateRunSegmentSetup(
+        runId: number,
+        segmentId: string,
+        request: UpdateRunSegmentSetupRequest,
+    ): Promise<RunSegmentDto> {
+        const segment = this.requireSegment(runId, segmentId);
+        const setupSnapshot = { ...segment.setupSnapshot };
+        if (request.finderToolId !== undefined) {
+            const finder = this.miningTools.find((tool) => tool.toolId === request.finderToolId && tool.kind === "finder");
+            if (!finder) throw new Error("Mock finder not found");
+            setupSnapshot.finder = mockToolSnapshot(finder);
+        }
+        if (request.ampToolId !== undefined) {
+            const amp = request.ampToolId === null
+                ? null
+                : this.miningTools.find((tool) => tool.toolId === request.ampToolId && tool.kind === "amp");
+            if (request.ampToolId !== null && !amp) throw new Error("Mock amp not found");
+            setupSnapshot.amp = amp ? mockToolSnapshot(amp) : null;
+        }
+        const updated = { ...segment, setupSnapshot, updatedTsMs: Date.now() };
+        this.replaceSegment(updated);
+        return updated;
+    }
+
+    async splitRunSegment(
+        runId: number,
+        segmentId: string,
+        request: SplitRunSegmentRequest,
+    ): Promise<RunSegmentDto> {
+        const source = this.requireSegment(runId, segmentId);
+        const corrected = await this.updateRunSegmentSetup(runId, segmentId, {
+            ...(request.finderToolId === undefined ? {} : { finderToolId: request.finderToolId }),
+            ...(request.ampToolId === undefined ? {} : { ampToolId: request.ampToolId }),
+        }).catch(() => source);
+        const created: RunSegmentDto = {
+            ...corrected,
+            segmentId: `mock-split-${Date.now()}`,
+            segmentIndex: source.segmentIndex + (request.selection === "last" ? 1 : 0),
+            notes: `Split ${request.selection} ${request.dropCount} drops`,
+            createdTsMs: Date.now(),
+            updatedTsMs: Date.now(),
+        };
+        this.runSegments = [...this.runSegments, created]
+            .sort((a, b) => a.segmentIndex - b.segmentIndex)
+            .map((segment, index) => ({ ...segment, segmentIndex: index + 1 }));
+        return created;
+    }
+
+    async moveRunSegment(
+        runId: number,
+        segmentId: string,
+        request: MoveRunSegmentRequest,
+    ): Promise<RunSegmentDto> {
+        const source = this.requireSegment(runId, segmentId);
+        let targetRunId = request.targetRunId ?? null;
+        if (targetRunId === null) {
+            const name = request.newRunName?.trim();
+            if (!name) throw new Error("Mock new run name is required");
+            const now = Date.now();
+            targetRunId = this.nextRunId++;
+            const newRun: RunDto = {
+                runId: targetRunId,
+                name,
+                status: this.activeRun?.runId === runId ? "running" : "stopped",
+                notes: null,
+                createdTsMs: now,
+                updatedTsMs: now,
+            };
+            this.runs = [newRun, ...this.runs];
+            if (this.activeRun?.runId === runId) this.activeRun = newRun;
+        }
+        const moved = { ...source, runId: targetRunId, updatedTsMs: Date.now() };
+        this.runSegments = this.runSegments.filter((segment) => segment.segmentId !== segmentId);
+        if (this.activeRun?.runId === targetRunId) this.runSegments = [...this.runSegments, moved];
+        return moved;
+    }
+
     async listMiningClaims(request: ListMiningClaimsRequest = {}): Promise<MiningClaimDto[]> {
         if (request.activeRun && this.activeRun === null) return [];
         const runId = request.activeRun ? this.activeRun?.runId ?? null : request.runId ?? null;
@@ -340,6 +420,29 @@ export class MockBackendRestClient implements BackendClient {
         };
         return this.activeMiningTools;
     }
+
+    private requireSegment(runId: number, segmentId: string): RunSegmentDto {
+        const segment = this.runSegments.find(
+            (item) => item.runId === runId && item.segmentId === segmentId,
+        );
+        if (!segment) throw new Error(`Mock segment not found: ${segmentId}`);
+        return segment;
+    }
+
+    private replaceSegment(updated: RunSegmentDto): void {
+        this.runSegments = this.runSegments.map((segment) =>
+            segment.segmentId === updated.segmentId ? updated : segment,
+        );
+    }
+}
+
+function mockToolSnapshot(tool: MiningToolProfileDto): Record<string, unknown> {
+    return {
+        name: tool.name,
+        decay_mpec: tool.decayMpec,
+        markup_ppm: Number.parseFloat(tool.markupPercent) * 10_000,
+        radius_m: tool.radiusM,
+    };
 }
 
 function createMockMiningTool(
@@ -370,12 +473,12 @@ function createMockMiningDrop(
     const isHit = result === "hit";
     const isFinished = result !== "pending";
 
-        return {
-            dropId,
-            dropEventId: -1,
-            runId: null,
-            segmentId: null,
-            observedTsMs,
+    return {
+        dropId,
+        dropEventId: -1,
+        runId: null,
+        segmentId: null,
+        observedTsMs,
         position: {
             planetName: "Calypso",
             x,

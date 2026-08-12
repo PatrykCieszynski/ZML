@@ -90,6 +90,7 @@ class VisionFinderFeatureDetector:
         self._text_engine = self._build_text_engine(text_engine, enable_text_ocr)
 
     def detect(self, finder_roi: np.ndarray) -> FinderFeatures:
+        self._increment("finder.frames")
         with self._measure("finder.detect"):
             with self._measure("finder.crop"):
                 radar = crop_relative(finder_roi, self._layout.radar)
@@ -101,6 +102,18 @@ class VisionFinderFeatureDetector:
                 )
                 modes_mask, mode_detections = self._detect_modes(modes)
             text_features = self._detect_text_features(finder_roi)
+            if text_features.status_kind is None:
+                self._increment("finder.status_unknown")
+            else:
+                self._increment("finder.status_recognized")
+            if text_features.probes_per_drop is not None or text_features.ammo_per_drop is not None:
+                self._increment("finder.units_recognized")
+            if (
+                text_features.status_kind == "found"
+                and text_features.resource_name is not None
+                and text_features.depth_m is not None
+            ):
+                self._increment("finder.hit_details_recognized")
 
             debug = {
                 "radar_blue_score": radar_score,
@@ -248,6 +261,10 @@ class VisionFinderFeatureDetector:
         if self._profiler is None:
             return _NullMeasure()
         return self._profiler.measure(name)
+
+    def _increment(self, name: str) -> None:
+        if self._profiler is not None:
+            self._profiler.increment(name)
 
 
 def _blue_mask(img: np.ndarray) -> np.ndarray:

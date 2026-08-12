@@ -184,11 +184,13 @@ def _parse_finder_recording_modes(raw: str) -> list[FinderRecordingMode]:
         if normalized in {"", "0", "false", "off", "none"}:
             continue
         if normalized == "all":
-            modes.update({"manual", "interval"})
+            modes.update({"accepted", "manual", "interval"})
         elif normalized == "manual":
             modes.add("manual")
         elif normalized in {"interval", "every", "timer", "every-n-seconds"}:
             modes.add("interval")
+        elif normalized in {"accepted", "found", "detected", "located", "present"}:
+            modes.add("accepted")
         else:
             logger.warning("finder_recording_mode_ignored mode=%r", item)
     return sorted(modes)

@@ -57,9 +57,30 @@ export type UpdateRunRequest = {
     notes?: string | null;
 };
 
+export type UpdateRunSegmentSetupRequest = {
+    finderToolId?: string | null;
+    ampToolId?: string | null;
+};
+
+export type SplitRunSegmentRequest = {
+    selection: "first" | "last";
+    dropCount: number;
+    finderToolId?: string | null;
+    ampToolId?: string | null;
+};
+
+export type MoveRunSegmentRequest = {
+    targetRunId?: number | null;
+    newRunName?: string | null;
+};
+
 export type StartRunRequestWire = components["schemas"]["StartRunRequestDto"];
 export type StopRunRequestWire = components["schemas"]["StopRunRequestDto"];
 export type UpdateRunRequestWire = components["schemas"]["UpdateRunRequestDto"];
+export type UpdateRunSegmentSetupRequestWire =
+    components["schemas"]["UpdateRunSegmentSetupRequestDto"];
+export type SplitRunSegmentRequestWire = components["schemas"]["SplitRunSegmentRequestDto"];
+export type MoveRunSegmentRequestWire = components["schemas"]["MoveRunSegmentRequestDto"];
 
 export function isStartRunRequest(value: unknown): value is StartRunRequest {
     if (!isRecord(value)) return false;
@@ -78,6 +99,38 @@ export function isUpdateRunRequest(value: unknown): value is UpdateRunRequest {
         (value.name === undefined || (typeof value.name === "string" && value.name.trim().length > 0)) &&
         (value.notes === undefined || isNullableString(value.notes))
     );
+}
+
+export function isUpdateRunSegmentSetupRequest(
+    value: unknown,
+): value is UpdateRunSegmentSetupRequest {
+    if (!isRecord(value)) return false;
+    const finderSet = "finderToolId" in value;
+    const ampSet = "ampToolId" in value;
+    return (
+        (finderSet || ampSet) &&
+        (!finderSet || isNullableString(value.finderToolId)) &&
+        (!ampSet || isNullableString(value.ampToolId))
+    );
+}
+
+export function isSplitRunSegmentRequest(value: unknown): value is SplitRunSegmentRequest {
+    if (!isRecord(value)) return false;
+    const finderSet = "finderToolId" in value;
+    const ampSet = "ampToolId" in value;
+    return (
+        (value.selection === "first" || value.selection === "last") &&
+        isPositiveInteger(value.dropCount) &&
+        (!finderSet || isNullableString(value.finderToolId)) &&
+        (!ampSet || isNullableString(value.ampToolId))
+    );
+}
+
+export function isMoveRunSegmentRequest(value: unknown): value is MoveRunSegmentRequest {
+    if (!isRecord(value)) return false;
+    const hasTarget = isPositiveInteger(value.targetRunId);
+    const hasNewRun = typeof value.newRunName === "string" && value.newRunName.trim().length > 0;
+    return hasTarget !== hasNewRun;
 }
 
 export function isRunWire(value: unknown): value is RunWire {
@@ -214,12 +267,43 @@ export function updateRunRequestToWire(request: UpdateRunRequest): UpdateRunRequ
     };
 }
 
+export function updateRunSegmentSetupRequestToWire(
+    request: UpdateRunSegmentSetupRequest,
+): UpdateRunSegmentSetupRequestWire {
+    return {
+        ...(request.finderToolId === undefined ? {} : { finder_tool_id: request.finderToolId }),
+        ...(request.ampToolId === undefined ? {} : { amp_tool_id: request.ampToolId }),
+    };
+}
+
+export function splitRunSegmentRequestToWire(
+    request: SplitRunSegmentRequest,
+): SplitRunSegmentRequestWire {
+    return {
+        selection: request.selection,
+        drop_count: request.dropCount,
+        ...(request.finderToolId === undefined ? {} : { finder_tool_id: request.finderToolId }),
+        ...(request.ampToolId === undefined ? {} : { amp_tool_id: request.ampToolId }),
+    };
+}
+
+export function moveRunSegmentRequestToWire(request: MoveRunSegmentRequest): MoveRunSegmentRequestWire {
+    return {
+        ...(request.targetRunId === undefined ? {} : { target_run_id: request.targetRunId }),
+        ...(request.newRunName === undefined ? {} : { new_run_name: request.newRunName?.trim() ?? null }),
+    };
+}
+
 function isNullableNumber(value: unknown): value is number | null {
     return value === null || isFiniteNumber(value);
 }
 
 function isFiniteNumber(value: unknown): value is number {
     return typeof value === "number" && Number.isFinite(value);
+}
+
+function isPositiveInteger(value: unknown): value is number {
+    return isFiniteNumber(value) && Number.isInteger(value) && value > 0;
 }
 
 function isNullableString(value: unknown): value is string | null {

@@ -1,0 +1,249 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+import cv2
+import numpy as np
+
+from zml_ocr_worker.pipelines.image import to_gray_u8
+
+
+@dataclass(frozen=True, slots=True)
+class NumericTokenExtractorConfig:
+    tophat_kernel_height_ratio: float = 0.5
+    min_component_height_ratio: float = 0.25
+    max_component_height_ratio: float = 0.95
+    max_component_width_height_ratio: float = 1.5
+    # Real Entropia text can leave ~5 px gaps between narrow glyphs such as "1"
+    # at a 21 px line height. Keep those inside one numeric token; the label/value
+    # gap is usually larger, but some community screenshots render it too tightly
+    # to depend on that separator alone.
+    separator_gap_height_ratio: float = 0.30
+    min_token_width_height_ratio: float = 1.0
+    min_label_width_height_ratio: float = 0.75
+    min_suffix_cluster_width_height_ratio: float = 1.10
+    max_numeric_suffix_width_height_ratio: float = 3.20
+    horizontal_padding_height_ratio: float = 0.06
+
+
+@dataclass(frozen=True, slots=True)
+class NumericTokenAnalysis:
+    mask: np.ndarray
+    token: np.ndarray | None
+    x1: int | None
+    x2: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class _TextCluster:
+    x1: int
+    x2: int
+    run_count: int
+
+    @property
+    def width(self) -> int:
+        return self.x2 - self.x1
+
+
+class NumericTokenExtractor:
+    """Extract the right-side numeric value from a Lon/Lat horizontal strip.
+
+    Entropia renders the coordinate strings right-aligned, but their whole text
+    block can move horizontally between observed UI variants. The caller therefore
+    supplies a wider strip. When the label/value gap is clear, this extractor keeps
+    the precise value cluster. When compression or scaling visually merges the label
+    and value into one cluster, it falls back to a bounded right-side suffix. The
+    existing digits-only Tesseract path then ignores any small label tail that may
+    remain in that fallback crop.
+    """
+
+    def __init__(self, *, config: NumericTokenExtractorConfig | None = None) -> None:
+        self._config = config or NumericTokenExtractorConfig()
+
+    def extract(self, line_roi: np.ndarray) -> np.ndarray | None:
+        return self.analyze(line_roi).token
+
+    def analyze(self, line_roi: np.ndarray) -> NumericTokenAnalysis:
+        if line_roi.size == 0:
+            return _empty_analysis()
+
+        gray = to_gray_u8(line_roi)
+        height, width = gray.shape
+        if height < 4 or width < 8:
+            return NumericTokenAnalysis(
+                mask=np.zeros_like(gray),
+                token=None,
+                x1=None,
+                x2=None,
+            )
+
+        mask = self._text_mask(gray)
+        runs = _occupied_runs(np.any(mask > 0, axis=0))
+        if len(runs) < 2:
+            return NumericTokenAnalysis(mask=mask, token=None, x1=None, x2=None)
+
+        clusters = self._clusters(runs, line_height=height)
+        token = self._rightmost_token(clusters, line_height=height)
+        if token is not None:
+            return self._crop_cluster(
+                line_roi,
+                mask=mask,
+                cluster=token,
+                line_height=height,
+                max_width=None,
+            )
+
+        # Some community screenshots have so little visual whitespace between
+        # ``Lat:`` and the digits that morphology produces one merged text cluster.
+        # The coordinate value is still the right-aligned suffix of that cluster.
+        suffix_cluster = self._rightmost_suffix_cluster(clusters, line_height=height)
+        if suffix_cluster is None:
+            return NumericTokenAnalysis(mask=mask, token=None, x1=None, x2=None)
+        return self._crop_cluster(
+            line_roi,
+            mask=mask,
+            cluster=suffix_cluster,
+            line_height=height,
+            max_width=max(
+                3,
+                round(height * self._config.max_numeric_suffix_width_height_ratio),
+            ),
+        )
+
+    def _crop_cluster(
+        self,
+        line_roi: np.ndarray,
+        *,
+        mask: np.ndarray,
+        cluster: _TextCluster,
+        line_height: int,
+        max_width: int | None,
+    ) -> NumericTokenAnalysis:
+        width = int(line_roi.shape[1])
+        padding = max(1, round(line_height * self._config.horizontal_padding_height_ratio))
+        x2 = min(width, cluster.x2 + padding)
+        x1 = max(0, cluster.x1 - padding)
+        if max_width is not None:
+            x1 = max(x1, x2 - max_width)
+        if x2 <= x1:
+            return NumericTokenAnalysis(mask=mask, token=None, x1=None, x2=None)
+        return NumericTokenAnalysis(
+            mask=mask,
+            token=line_roi[:, x1:x2],
+            x1=x1,
+            x2=x2,
+        )
+
+    def _text_mask(self, gray: np.ndarray) -> np.ndarray:
+        height = gray.shape[0]
+        kernel_size = max(3, round(height * self._config.tophat_kernel_height_ratio))
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_size, kernel_size))
+        top = cv2.morphologyEx(gray, cv2.MORPH_TOPHAT, kernel)
+        _, binary = cv2.threshold(top, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+        min_height = max(2, round(height * self._config.min_component_height_ratio))
+        max_height = max(min_height, round(height * self._config.max_component_height_ratio))
+        max_width = max(2, round(height * self._config.max_component_width_height_ratio))
+
+        component_count, labels, stats, _ = cv2.connectedComponentsWithStats(
+            (binary > 0).astype(np.uint8),
+            connectivity=8,
+        )
+        clean = np.zeros_like(binary)
+        for label in range(1, component_count):
+            component_width = int(stats[label, cv2.CC_STAT_WIDTH])
+            component_height = int(stats[label, cv2.CC_STAT_HEIGHT])
+            if not (min_height <= component_height <= max_height):
+                continue
+            if component_width > max_width:
+                continue
+            clean[labels == label] = 255
+        return clean
+
+    def _clusters(
+        self,
+        runs: tuple[tuple[int, int], ...],
+        *,
+        line_height: int,
+    ) -> tuple[_TextCluster, ...]:
+        separator_gap = max(2, round(line_height * self._config.separator_gap_height_ratio))
+        groups: list[list[tuple[int, int]]] = [[runs[0]]]
+        for run in runs[1:]:
+            previous = groups[-1][-1]
+            gap = run[0] - previous[1]
+            if gap > separator_gap:
+                groups.append([run])
+            else:
+                groups[-1].append(run)
+
+        return tuple(
+            _TextCluster(
+                x1=group[0][0],
+                x2=group[-1][1],
+                run_count=len(group),
+            )
+            for group in groups
+        )
+
+    def _rightmost_token(
+        self,
+        clusters: tuple[_TextCluster, ...],
+        *,
+        line_height: int,
+    ) -> _TextCluster | None:
+        min_token_width = max(3, round(line_height * self._config.min_token_width_height_ratio))
+        min_label_width = max(3, round(line_height * self._config.min_label_width_height_ratio))
+
+        for index in range(len(clusters) - 1, 0, -1):
+            candidate = clusters[index]
+            if candidate.width < min_token_width or candidate.run_count < 2:
+                continue
+            if not any(
+                cluster.width >= min_label_width and cluster.run_count >= 2
+                for cluster in clusters[:index]
+            ):
+                continue
+            return candidate
+        return None
+
+    def _rightmost_suffix_cluster(
+        self,
+        clusters: tuple[_TextCluster, ...],
+        *,
+        line_height: int,
+    ) -> _TextCluster | None:
+        min_width = max(
+            3,
+            round(line_height * self._config.min_suffix_cluster_width_height_ratio),
+        )
+        for cluster in reversed(clusters):
+            # A lone compass cardinal such as S/N must not become the numeric crop.
+            if cluster.width < min_width or cluster.run_count < 2:
+                continue
+            return cluster
+        return None
+
+
+def _empty_analysis() -> NumericTokenAnalysis:
+    return NumericTokenAnalysis(
+        mask=np.zeros((1, 1), dtype=np.uint8),
+        token=None,
+        x1=None,
+        x2=None,
+    )
+
+
+def _occupied_runs(occupied: np.ndarray) -> tuple[tuple[int, int], ...]:
+    runs: list[tuple[int, int]] = []
+    index = 0
+    width = int(occupied.shape[0])
+    while index < width:
+        if not bool(occupied[index]):
+            index += 1
+            continue
+        end = index + 1
+        while end < width and bool(occupied[end]):
+            end += 1
+        runs.append((index, end))
+        index = end
+    return tuple(runs)

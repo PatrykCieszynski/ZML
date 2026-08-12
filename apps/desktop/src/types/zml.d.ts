@@ -6,14 +6,17 @@ import type {
   CreateMiningToolProfileRequest,
   MiningClaimDto,
   MiningToolProfileDto,
+  MoveRunSegmentRequest,
   OcrPositionEvent,
   RuntimeStatePatch,
   RunDto,
   RunSegmentDto,
   SetActiveMiningToolsRequest,
+  SplitRunSegmentRequest,
   StartRunRequest,
   StopRunRequest,
   UpdateRunRequest,
+  UpdateRunSegmentSetupRequest,
   WindowType,
 } from "@desktop/shared";
 
@@ -30,6 +33,21 @@ declare global {
       deleteRun: (runId: number) => Promise<RunDto>;
       listActiveRunSegments: () => Promise<RunSegmentDto[]>;
       listRunSegments: (runId: number) => Promise<RunSegmentDto[]>;
+      updateRunSegmentSetup: (
+        runId: number,
+        segmentId: string,
+        request: UpdateRunSegmentSetupRequest,
+      ) => Promise<RunSegmentDto>;
+      splitRunSegment: (
+        runId: number,
+        segmentId: string,
+        request: SplitRunSegmentRequest,
+      ) => Promise<RunSegmentDto>;
+      moveRunSegment: (
+        runId: number,
+        segmentId: string,
+        request: MoveRunSegmentRequest,
+      ) => Promise<RunSegmentDto>;
       toggleMapWindow: () => Promise<boolean>;
       toggleOverlayWindow: () => Promise<boolean>;
       startRun: (request: StartRunRequest) => Promise<RunDto>;

@@ -32,6 +32,7 @@ def _claim(claim_id: str) -> PendingCloudClaim:
         y=80_000,
         resource_name="Belkar Stone",
         size_index=12,
+        depth_m=812.5,
         observed_ts_ms=1_700_000_000_000,
     )
 
@@ -75,6 +76,7 @@ def test_cloud_sync_client_posts_existing_zml_claim_shape(monkeypatch) -> None:
                     "y": 80_000,
                     "resourceName": "Belkar Stone",
                     "sizeIndex": 12,
+                    "depthM": 812.5,
                     "observedTsMs": 1_700_000_000_000,
                 }
             ]

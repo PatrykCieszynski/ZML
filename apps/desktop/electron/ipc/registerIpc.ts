@@ -4,10 +4,13 @@ import {
     IPC_VERSION,
     assertWindowType,
     isCreateMiningToolProfileRequest,
+    isMoveRunSegmentRequest,
     isSetActiveMiningToolsRequest,
+    isSplitRunSegmentRequest,
     isStartRunRequest,
     isStopRunRequest,
     isUpdateRunRequest,
+    isUpdateRunSegmentSetupRequest,
     type BootstrapState,
     type GetBootstrapStateReq,
 } from "@desktop/shared";
@@ -192,6 +195,60 @@ export function registerIpc({
         return backendRestClient.listRunSegments(runId);
     });
 
+    ipcMain.handle(
+        IPC_CMD.UPDATE_RUN_SEGMENT_SETUP,
+        async (_evt, runId: unknown, segmentId: unknown, req: unknown) => {
+            if (
+                typeof runId !== "number" ||
+                !Number.isFinite(runId) ||
+                typeof segmentId !== "string" ||
+                segmentId.trim() === "" ||
+                !isUpdateRunSegmentSetupRequest(req)
+            ) {
+                throw new Error("Invalid update run segment setup request");
+            }
+            const result = await backendRestClient.updateRunSegmentSetup(runId, segmentId, req);
+            await refreshActiveRunMiningState(backendRestClient);
+            return result;
+        },
+    );
+
+    ipcMain.handle(
+        IPC_CMD.SPLIT_RUN_SEGMENT,
+        async (_evt, runId: unknown, segmentId: unknown, req: unknown) => {
+            if (
+                typeof runId !== "number" ||
+                !Number.isFinite(runId) ||
+                typeof segmentId !== "string" ||
+                segmentId.trim() === "" ||
+                !isSplitRunSegmentRequest(req)
+            ) {
+                throw new Error("Invalid split run segment request");
+            }
+            const result = await backendRestClient.splitRunSegment(runId, segmentId, req);
+            await refreshActiveRunMiningState(backendRestClient);
+            return result;
+        },
+    );
+
+    ipcMain.handle(
+        IPC_CMD.MOVE_RUN_SEGMENT,
+        async (_evt, runId: unknown, segmentId: unknown, req: unknown) => {
+            if (
+                typeof runId !== "number" ||
+                !Number.isFinite(runId) ||
+                typeof segmentId !== "string" ||
+                segmentId.trim() === "" ||
+                !isMoveRunSegmentRequest(req)
+            ) {
+                throw new Error("Invalid move run segment request");
+            }
+            const result = await backendRestClient.moveRunSegment(runId, segmentId, req);
+            await refreshActiveRunMiningState(backendRestClient);
+            return result;
+        },
+    );
+
     ipcMain.handle(IPC_CMD.TOGGLE_MAP_WINDOW, async () => toggleMapWindow());
 
     ipcMain.handle(IPC_CMD.TOGGLE_OVERLAY_WINDOW, async () => toggleOverlayWindow());
@@ -320,4 +377,55 @@ export function registerIpc({
 
     ipcMain.handle(IPC_CMD.CONNECT_CLOUD, async () => cloudConnectionService.connect());
     ipcMain.handle(IPC_CMD.DISCONNECT_CLOUD, async () => cloudConnectionService.disconnect());
+}
+
+async function refreshActiveRunMiningState(backendRestClient: BackendClient): Promise<void> {
+    const [activeRun, runs] = await Promise.all([
+        backendRestClient.getActiveRun(),
+        backendRestClient.listRuns(),
+    ]);
+    runtime.runs = runs;
+
+    if (activeRun === null) {
+        runtime.activeRun = null;
+        runtime.runSegments = [];
+        runtime.miningClaims = [];
+        runtime.miningDrops = [];
+        runtime.miningLoot = [];
+        runtime.miningLootTotals = [];
+        pushStatePatch({
+            activeRun: null,
+            runs,
+            runSegments: [],
+            miningClaims: [],
+            miningDrops: [],
+            miningLoot: [],
+            miningLootTotals: [],
+        });
+        return;
+    }
+
+    const runId = activeRun.runId;
+    const [runSegments, miningClaims, miningDrops, miningLoot, miningLootTotals] = await Promise.all([
+        backendRestClient.listRunSegments(runId),
+        backendRestClient.listMiningClaims({ active: false, runId }),
+        backendRestClient.listMiningDrops({ runId }),
+        backendRestClient.listMiningLoot({ runId }),
+        backendRestClient.listMiningLootTotals({ runId }),
+    ]);
+    runtime.activeRun = activeRun;
+    runtime.runSegments = runSegments;
+    runtime.miningClaims = miningClaims;
+    runtime.miningDrops = miningDrops;
+    runtime.miningLoot = miningLoot;
+    runtime.miningLootTotals = miningLootTotals;
+    pushStatePatch({
+        activeRun,
+        runs,
+        runSegments,
+        miningClaims,
+        miningDrops,
+        miningLoot,
+        miningLootTotals,
+    });
 }

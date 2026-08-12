@@ -19,6 +19,7 @@ class TesserDigitsEngine:
             psm=tesserocr.PSM.SINGLE_LINE,
             oem=tesserocr.OEM.LSTM_ONLY,
         )
+        self._last_confidence: float | None = None
 
         # Digits-only configuration.
         self._api.SetVariable("tessedit_char_whitelist", "0123456789")
@@ -31,6 +32,10 @@ class TesserDigitsEngine:
 
         # Optional safety against polarity flips; enable if you see weird inversions in live feed.
         # self._api.SetVariable("tessedit_do_invert", "0")
+
+    @property
+    def last_confidence(self) -> float | None:
+        return self._last_confidence
 
     def recognize_digits(self, img_u8: np.ndarray) -> str:
         """
@@ -45,7 +50,10 @@ class TesserDigitsEngine:
         img = np.ascontiguousarray(img_u8)
         h, w = img.shape
         self._api.SetImageBytes(img.tobytes(), w, h, 1, w)  # type: ignore[arg-type]
-        return self._api.GetUTF8Text() or ""
+        text = self._api.GetUTF8Text() or ""
+        confidence = float(self._api.MeanTextConf()) / 100.0
+        self._last_confidence = min(max(confidence, 0.0), 1.0)
+        return text
 
     def close(self) -> None:
         self._api.End()

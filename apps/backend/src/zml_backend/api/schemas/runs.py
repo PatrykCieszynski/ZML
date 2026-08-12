@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from zml_backend.persistence.runs import RunRow, RunSegmentRow
 
@@ -79,3 +79,26 @@ class UpdateRunRequestDto(BaseModel):
 
     name: str | None = None
     notes: str | None = None
+
+
+class UpdateRunSegmentSetupRequestDto(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    finder_tool_id: str | None = None
+    amp_tool_id: str | None = None
+
+
+class SplitRunSegmentRequestDto(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    selection: Literal["first", "last"]
+    drop_count: int = Field(ge=1)
+    finder_tool_id: str | None = None
+    amp_tool_id: str | None = None
+
+
+class MoveRunSegmentRequestDto(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    target_run_id: int | None = Field(default=None, ge=1)
+    new_run_name: str | None = None

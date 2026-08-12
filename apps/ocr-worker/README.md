@@ -32,6 +32,7 @@ The runtime is pinned to Python 3.13 because the Windows `tesserocr` dependency 
 
 ```text
 src/zml_ocr_worker/
+  calibration/  Compass/Finder location, coordinate layout, and recovery
   capture/      screen/window capture
   pipelines/    finder and position recognition pipelines
   runtime/      protocol runner, lifecycle, profiling, native runtime setup
@@ -85,6 +86,38 @@ just ocr package
 ```
 
 Useful direct CLI behavior is also exposed by `zml-ocr-worker --version`, `doctor`, and `stdio` inside the uv workspace.
+
+### UI locator debug command
+
+The calibration tooling can evaluate a recorded **full Entropia client frame**:
+
+```powershell
+uv run --package zml-ocr-worker zml-ocr-worker locate-ui .\entropia.png
+uv run --package zml-ocr-worker zml-ocr-worker locate-ui .\entropia.png --annotated .\located.png
+```
+
+It prints the detected Finder/Compass rectangles, confidence, Compass radar radius/scale, and a coordinate read produced by the normal `PositionPipeline` using scale-aware Lon/Lat layouts.
+
+### Live auto-calibration test
+
+The integration branch can run the same locators in the normal capture loop. It is intentionally opt-in while live validation is in progress:
+
+```powershell
+$env:ZML_OCR_AUTO_CALIBRATION = "1"
+```
+
+With the flag enabled:
+
+- Finder is located from the full client frame and its locked crop is reused while the panel remains present;
+- Compass is located by radar geometry and its detected center/radius derive dynamic Lon/Lat digit strips;
+- the existing `PositionPipeline` still owns preprocessing, OCR, parsing, and coordinate sanity checks;
+- transient invalid position reads are tolerated;
+- after several consecutive invalid reads, nearby Lon/Lat vertical offsets are tried;
+- after all line-layout variants fail, the whole Compass is reacquired;
+- a successful unchanged position is healthy OCR and does not trigger recalibration;
+- full-frame Compass searches are throttled while the panel cannot be found.
+
+The flag defaults to off until the locator has been validated live across enough UI layouts. The legacy fixed ROI path remains unchanged when the flag is disabled.
 
 ## Health behavior
 

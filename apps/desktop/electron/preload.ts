@@ -8,6 +8,7 @@ import type {
   GetBootstrapStateReq,
   MiningClaimDto,
   MiningToolProfileDto,
+  MoveRunSegmentRequest,
   OcrPositionEvent,
   PushPosition,
   PushStatePatch,
@@ -15,9 +16,11 @@ import type {
   RunDto,
   RunSegmentDto,
   SetActiveMiningToolsRequest,
+  SplitRunSegmentRequest,
   StartRunRequest,
   StopRunRequest,
   UpdateRunRequest,
+  UpdateRunSegmentSetupRequest,
   WindowType,
 } from "@desktop/shared";
 import { IPC_CMD, IPC_PUSH } from "@desktop/shared";
@@ -35,6 +38,21 @@ type ZmlApi = {
   deleteRun: (runId: number) => Promise<RunDto>;
   listActiveRunSegments: () => Promise<RunSegmentDto[]>;
   listRunSegments: (runId: number) => Promise<RunSegmentDto[]>;
+  updateRunSegmentSetup: (
+    runId: number,
+    segmentId: string,
+    request: UpdateRunSegmentSetupRequest,
+  ) => Promise<RunSegmentDto>;
+  splitRunSegment: (
+    runId: number,
+    segmentId: string,
+    request: SplitRunSegmentRequest,
+  ) => Promise<RunSegmentDto>;
+  moveRunSegment: (
+    runId: number,
+    segmentId: string,
+    request: MoveRunSegmentRequest,
+  ) => Promise<RunSegmentDto>;
   toggleMapWindow: () => Promise<boolean>;
   toggleOverlayWindow: () => Promise<boolean>;
   startRun: (request: StartRunRequest) => Promise<RunDto>;
@@ -92,6 +110,33 @@ const api: ZmlApi = {
 
   async listRunSegments(runId) {
     return ipcRenderer.invoke(IPC_CMD.LIST_RUN_SEGMENTS, runId) as Promise<RunSegmentDto[]>;
+  },
+
+  async updateRunSegmentSetup(runId, segmentId, request) {
+    return ipcRenderer.invoke(
+      IPC_CMD.UPDATE_RUN_SEGMENT_SETUP,
+      runId,
+      segmentId,
+      request,
+    ) as Promise<RunSegmentDto>;
+  },
+
+  async splitRunSegment(runId, segmentId, request) {
+    return ipcRenderer.invoke(
+      IPC_CMD.SPLIT_RUN_SEGMENT,
+      runId,
+      segmentId,
+      request,
+    ) as Promise<RunSegmentDto>;
+  },
+
+  async moveRunSegment(runId, segmentId, request) {
+    return ipcRenderer.invoke(
+      IPC_CMD.MOVE_RUN_SEGMENT,
+      runId,
+      segmentId,
+      request,
+    ) as Promise<RunSegmentDto>;
   },
 
   async toggleMapWindow() {

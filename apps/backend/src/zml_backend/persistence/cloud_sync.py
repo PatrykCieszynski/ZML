@@ -16,6 +16,7 @@ class PendingCloudClaim:
     y: int
     resource_name: str
     size_index: int
+    depth_m: float
     observed_ts_ms: int
 
 
@@ -40,6 +41,7 @@ class CloudClaimSyncStore:
                 c.y,
                 c.resource_name,
                 c.size_index,
+                c.depth_m,
                 c.observed_ts_ms
             FROM mining_claims AS c
             LEFT JOIN cloud_claim_sync AS s ON s.claim_id = c.claim_id
@@ -51,6 +53,7 @@ class CloudClaimSyncStore:
               AND c.resource_name IS NOT NULL
               AND TRIM(c.resource_name) <> ''
               AND c.size_index IS NOT NULL
+              AND c.depth_m IS NOT NULL
             ORDER BY c.observed_ts_ms ASC, c.created_event_id ASC
             LIMIT ?
             """,
@@ -64,6 +67,7 @@ class CloudClaimSyncStore:
                 y=int(row["y"]),
                 resource_name=str(row["resource_name"]),
                 size_index=int(row["size_index"]),
+                depth_m=float(row["depth_m"]),
                 observed_ts_ms=int(row["observed_ts_ms"]),
             )
             for row in cur.fetchall()
