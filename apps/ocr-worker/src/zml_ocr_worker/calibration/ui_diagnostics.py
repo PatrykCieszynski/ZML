@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -31,10 +32,8 @@ class CalibrationUiDiagnosticsRecorder:
         for region in ("finder", "compass"):
             for suffix in ("png", "json"):
                 path = self._config.root_dir / f"{region}.{suffix}"
-                try:
+                with suppress(OSError):
                     path.unlink(missing_ok=True)
-                except OSError:
-                    pass
 
     def record_finder(
         self,
