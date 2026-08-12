@@ -30,8 +30,6 @@ class CoordinateTextEngine(Protocol):
 @dataclass(frozen=True, slots=True)
 class CoordinateCalibration:
     rois: CoordinateRois
-    longitude_digits: int
-    latitude_digits: int
 
 
 class TesserocrCoordinateTextEngine:
@@ -98,7 +96,12 @@ class TesserocrCoordinateTextEngine:
 
 
 class CoordinateTextCalibrator:
-    """Find numeric value boxes after Lon:/Lat: using occasional text OCR."""
+    """Find value boxes after approximate Lon/Lat labels using occasional text OCR.
+
+    The text OCR is deliberately not trusted for the numeric value itself. It only
+    provides word geometry. The existing digits-only OCR verifies the cropped value
+    afterwards and becomes the source of truth for both digits and digit count.
+    """
 
     def __init__(self, *, engine: CoordinateTextEngine | None = None) -> None:
         self._engine = engine or TesserocrCoordinateTextEngine()
@@ -109,29 +112,25 @@ class CoordinateTextCalibrator:
         *,
         search_rois: CoordinateRois,
     ) -> CoordinateCalibration | None:
-        lon = self._calibrate_line(
+        lon_roi = self._calibrate_line(
             compass_roi,
             line_roi=search_rois.lon,
             expected_label="lon",
         )
-        lat = self._calibrate_line(
+        lat_roi = self._calibrate_line(
             compass_roi,
             line_roi=search_rois.lat,
             expected_label="lat",
         )
-        if lon is None or lat is None:
+        if lon_roi is None or lat_roi is None:
             return None
 
-        lon_roi, lon_digits = lon
-        lat_roi, lat_digits = lat
         return CoordinateCalibration(
             rois=CoordinateRois(
                 lon=lon_roi,
                 lat=lat_roi,
                 extract_numeric_tokens=False,
-            ),
-            longitude_digits=lon_digits,
-            latitude_digits=lat_digits,
+            )
         )
 
     def close(self) -> None:
@@ -143,15 +142,14 @@ class CoordinateTextCalibrator:
         *,
         line_roi: RoiRect,
         expected_label: str,
-    ) -> tuple[RoiRect, int] | None:
+    ) -> RoiRect | None:
         line = line_roi.crop(compass_roi)
         if line is None:
             return None
         words = self._engine.recognize_words(line)
-        value = _find_value_word(words, expected_label=expected_label)
-        if value is None:
+        value_word = _find_value_word(words, expected_label=expected_label)
+        if value_word is None:
             return None
-        value_word, digits = value
 
         line_height = max(1, line_roi.y2 - line_roi.y1)
         horizontal_pad = max(2, round(line_height * 0.18))
@@ -164,33 +162,44 @@ class CoordinateTextCalibrator:
         )
         if rect.x2 <= rect.x1 or rect.y2 <= rect.y1:
             return None
-        return rect, len(digits)
+        return rect
 
 
 def _find_value_word(
     words: tuple[OcrWord, ...],
     *,
     expected_label: str,
-) -> tuple[OcrWord, str] | None:
+) -> OcrWord | None:
     label_index: int | None = None
     for index, word in enumerate(words):
-        normalized = re.sub(r"[^a-z:]", "", word.text.lower())
-        if expected_label in normalized:
+        normalized = re.sub(r"[^a-z]", "", word.text.lower())
+        if _label_matches(normalized, expected_label):
             label_index = index
-            combined_digits = "".join(char for char in word.text if char.isdigit())
-            if combined_digits:
-                # A combined "Lon:12345" word has no reliable per-token bbox. Let
-                # calibration fail cleanly; template matching is the planned fallback.
+            # A combined "Lon:12345" word has no reliable per-value bbox. Fail
+            # cleanly so a future template/symbol fallback can handle it.
+            if any(char.isdigit() for char in word.text):
                 return None
             break
     if label_index is None:
         return None
 
     for word in words[label_index + 1 :]:
-        digits = "".join(char for char in word.text if char.isdigit())
-        if 3 <= len(digits) <= 7:
-            return word, digits
+        # Full OCR is allowed to confuse some digits with letters (e.g. 83952 ->
+        # os952). We only need a plausible value word bbox; digits-only OCR verifies
+        # its contents immediately after calibration.
+        digit_count = sum(char.isdigit() for char in word.text)
+        if digit_count >= 2:
+            return word
     return None
+
+
+def _label_matches(observed: str, expected: str) -> bool:
+    if observed == expected:
+        return True
+    if len(observed) != len(expected):
+        return False
+    differences = sum(left != right for left, right in zip(observed, expected, strict=True))
+    return differences <= 1
 
 
 def _prepare_text_line(img: np.ndarray, *, upscale: int) -> np.ndarray:
