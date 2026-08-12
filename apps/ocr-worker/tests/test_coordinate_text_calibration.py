@@ -102,8 +102,8 @@ def test_coordinate_text_calibrator_returns_tight_digit_rois_clear_of_labels() -
     calibrator = CoordinateTextCalibrator(engine=engine)
     compass_roi = np.zeros((100, 180, 3), dtype=np.uint8)
     search = CoordinateRois(
-        lon=RoiRect(x1=20, x2=160, y1=20, y2=40),
-        lat=RoiRect(x1=20, x2=160, y1=50, y2=70),
+        lon=RoiRect(x1=20, x2=160, y1=20, y2=37),
+        lat=RoiRect(x1=20, x2=160, y1=50, y2=67),
         extract_numeric_tokens=True,
     )
 
@@ -115,6 +115,10 @@ def test_coordinate_text_calibrator_returns_tight_digit_rois_clear_of_labels() -
     assert calibration.rois.lon.x2 == 20 + 94 + 4
     assert calibration.rois.lat.x1 == 20 + 60 - 4
     assert calibration.rois.lat.x2 == 20 + 94 + 4
+    assert calibration.rois.lon.y1 == 20
+    assert calibration.rois.lon.y2 == 37
+    assert calibration.rois.lat.y1 == 50
+    assert calibration.rois.lat.y2 == 67
     assert calibration.rois.lon.x1 > 20 + 40
     assert calibration.rois.lat.x1 > 20 + 44
     assert engine.calls == 2
