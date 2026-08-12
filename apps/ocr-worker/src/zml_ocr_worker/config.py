@@ -259,11 +259,11 @@ def default_ocr_roi_profile() -> OcrRoiProfile:
             lat=RoiRect(x1=90, x2=145, y1=375, y2=395),
         ),
         finder_panel=FinderPanelLayoutConfig(
-            radar=(0.02, 0.03, 0.48, 0.70),
-            modes=(0.02, 0.72, 0.48, 0.98),
-            details=(0.50, 0.03, 0.98, 0.35),
-            units=(0.50, 0.72, 0.98, 0.98),
-            status=(0.50, 0.36, 0.98, 0.70),
+            radar=(0.02, 0.03, 0.464, 0.70),
+            modes=(0.02, 0.72, 0.464, 0.98),
+            details=(0.484, 0.03, 1.0, 0.35),
+            units=(0.484, 0.72, 1.0, 0.98),
+            status=(0.484, 0.36, 1.0, 0.70),
         ),
     )
 
@@ -371,12 +371,37 @@ def _finder_panel_from_json(
     if raw is None:
         return fallback
 
+    radar = _relative_rect_from_json(raw.get("radar"), fallback=fallback.radar)
+    modes = _relative_rect_from_json(raw.get("modes"), fallback=fallback.modes)
+    details = _relative_rect_from_json(raw.get("details"), fallback=fallback.details)
+    units = _relative_rect_from_json(raw.get("units"), fallback=fallback.units)
+    status = _relative_rect_from_json(raw.get("status"), fallback=fallback.status)
     return FinderPanelLayoutConfig(
-        radar=_relative_rect_from_json(raw.get("radar"), fallback=fallback.radar),
-        modes=_relative_rect_from_json(raw.get("modes"), fallback=fallback.modes),
-        details=_relative_rect_from_json(raw.get("details"), fallback=fallback.details),
-        units=_relative_rect_from_json(raw.get("units"), fallback=fallback.units),
-        status=_relative_rect_from_json(raw.get("status"), fallback=fallback.status),
+        radar=_migrate_legacy_finder_rect(
+            radar,
+            legacy=(0.02, 0.03, 0.48, 0.70),
+            replacement=fallback.radar,
+        ),
+        modes=_migrate_legacy_finder_rect(
+            modes,
+            legacy=(0.02, 0.72, 0.48, 0.98),
+            replacement=fallback.modes,
+        ),
+        details=_migrate_legacy_finder_rect(
+            details,
+            legacy=(0.50, 0.03, 0.98, 0.35),
+            replacement=fallback.details,
+        ),
+        units=_migrate_legacy_finder_rect(
+            units,
+            legacy=(0.50, 0.72, 0.98, 0.98),
+            replacement=fallback.units,
+        ),
+        status=_migrate_legacy_finder_rect(
+            status,
+            legacy=(0.50, 0.36, 0.98, 0.70),
+            replacement=fallback.status,
+        ),
     )
 
 
@@ -405,6 +430,15 @@ def _relative_rect_from_json(value: object, *, fallback: RelativeRect) -> Relati
         values.append(max(0.0, min(1.0, float(item))))
 
     return values[0], values[1], values[2], values[3]
+
+
+def _migrate_legacy_finder_rect(
+    value: RelativeRect,
+    *,
+    legacy: RelativeRect,
+    replacement: RelativeRect,
+) -> RelativeRect:
+    return replacement if value == legacy else value
 
 
 def _profile_to_json(profile: OcrRoiProfile) -> dict[str, object]:
