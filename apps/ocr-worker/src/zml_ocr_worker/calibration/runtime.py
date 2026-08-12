@@ -12,6 +12,7 @@ from zml_ocr_worker.calibration.coordinate_ocr import (
 )
 from zml_ocr_worker.calibration.coordinates import CompassCoordinateLayout
 from zml_ocr_worker.calibration.model import LocatedCompass
+from zml_ocr_worker.calibration.multiframe_compass import MultiFrameCompassLocator
 from zml_ocr_worker.calibration.persistence import (
     CompassCalibrationStore,
     PersistedCompassCalibration,
@@ -26,6 +27,7 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True, slots=True)
 class CompassCalibrationRuntimeConfig:
     search_interval_ms: int = 1000
+    acquisition_sample_interval_ms: int = 100
     reacquire_delay_ms: int = 250
     locked_validation_interval_ms: int = 1000
     coordinate_recalibration_cooldown_ms: int = 2000
@@ -61,7 +63,7 @@ class CompassCalibrationRuntime:
         config: CompassCalibrationRuntimeConfig | None = None,
     ) -> None:
         self._position_pipeline = position_pipeline
-        self._locator = locator or CompassLocator()
+        self._locator = locator or MultiFrameCompassLocator()
         self._layout = layout or CompassCoordinateLayout()
         self._coordinate_calibrator = coordinate_calibrator or CoordinateTextCalibrator()
         self._state_store = state_store
@@ -119,8 +121,14 @@ class CompassCalibrationRuntime:
         if self._compass is None:
             if ts_ms < self._next_search_ts_ms:
                 return _empty_step()
-            self._next_search_ts_ms = ts_ms + max(1, self._config.search_interval_ms)
             if not self._locate(frame):
+                acquisition_in_progress = bool(getattr(self._locator, "acquiring", False))
+                delay_ms = (
+                    self._config.acquisition_sample_interval_ms
+                    if acquisition_in_progress
+                    else self._config.search_interval_ms
+                )
+                self._next_search_ts_ms = ts_ms + max(1, delay_ms)
                 return _empty_step()
 
         compass = self._compass
