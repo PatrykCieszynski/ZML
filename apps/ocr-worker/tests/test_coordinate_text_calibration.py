@@ -69,7 +69,7 @@ def test_find_value_word_rejects_combined_label_and_value_for_clean_fallback() -
     assert _find_value_word(words, expected_label="lon") is None
 
 
-def test_coordinate_text_calibrator_returns_exact_digit_rois() -> None:
+def test_coordinate_text_calibrator_returns_tight_digit_rois_clear_of_labels() -> None:
     engine = _FakeTextEngine(
         (_word("Lon:", 12, 40), _word("31167", 52, 94)),
         (_word("Lat", 18, 44), _word("os952", 60, 94)),
@@ -86,8 +86,10 @@ def test_coordinate_text_calibrator_returns_exact_digit_rois() -> None:
 
     assert calibration is not None
     assert not calibration.rois.extract_numeric_tokens
+    assert calibration.rois.lon.x1 > 20 + 40
     assert calibration.rois.lon.x1 < 20 + 52
     assert calibration.rois.lon.x2 > 20 + 94
+    assert calibration.rois.lat.x1 > 20 + 44
     assert calibration.rois.lat.x1 < 20 + 60
     assert calibration.rois.lat.x2 > 20 + 94
     assert engine.calls == 2
