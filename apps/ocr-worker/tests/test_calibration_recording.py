@@ -59,9 +59,20 @@ def test_calibration_snapshot_records_only_suspicious_digit_count_change(tmp_pat
     assert (sample_dir / "overview.png").exists()
     assert (sample_dir / "lon-line.png").exists()
     assert (sample_dir / "lat-line.png").exists()
+    assert (sample_dir / "lon-line-pre.png").exists()
+    assert (sample_dir / "lat-line-pre.png").exists()
     assert (sample_dir / "meta.txt").exists()
     assert not (sample_dir / "lon-mask.png").exists()
     assert not (sample_dir / "lat-mask.png").exists()
+
+    lon_line = cv2.imread(str(sample_dir / "lon-line.png"), cv2.IMREAD_UNCHANGED)
+    lon_pre = cv2.imread(str(sample_dir / "lon-line-pre.png"), cv2.IMREAD_GRAYSCALE)
+    assert lon_line is not None
+    assert lon_pre is not None
+    assert lon_pre.ndim == 2
+    assert lon_pre.shape[0] == lon_line.shape[0] * 2
+    assert lon_pre.shape[1] == lon_line.shape[1] * 2
+    assert set(np.unique(lon_pre)).issubset({0, 255})
 
     metadata = (sample_dir / "meta.txt").read_text(encoding="utf-8")
     assert "reason=digit-count-changed" in metadata
