@@ -14,7 +14,13 @@ class FinderPresenceConfig:
     min_panel_dark_score: float = 0.55
     min_grid_score: float = 0.20
     min_blue_score: float = 0.15
+    min_radar_ring_score: float = 0.45
     panel_dark_threshold: int = 70
+    radar_center_x: float = 0.26
+    radar_center_y: float = 0.36
+    radar_radii: tuple[float, ...] = (0.085, 0.145, 0.215)
+    radar_band_fraction: float = 0.018
+    radar_sector_count: int = 48
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,6 +31,7 @@ class FinderPresenceResult:
     grid_score: float
     blue_score: float
     green_score: float
+    radar_ring_score: float
 
 
 class FinderPresenceDetector:
@@ -42,19 +49,29 @@ class FinderPresenceDetector:
                 grid_score=0.0,
                 blue_score=0.0,
                 green_score=0.0,
+                radar_ring_score=0.0,
             )
 
         gray = to_gray_u8(finder_roi)
         bgr = to_bgr_u8(finder_roi)
         panel_dark_score = self._panel_dark_score(gray)
         grid_score = self._grid_score(gray)
-        blue_score, green_score = self._color_scores(bgr)
-        score = panel_dark_score * 0.45 + grid_score * 0.35 + blue_score * 0.15 + green_score * 0.05
+        blue, green = self._color_masks(bgr)
+        blue_score, green_score = self._color_scores(blue, green)
+        radar_ring_score = self._radar_ring_score(blue)
+        score = (
+            panel_dark_score * 0.35
+            + grid_score * 0.25
+            + blue_score * 0.15
+            + green_score * 0.05
+            + radar_ring_score * 0.20
+        )
         present = (
             score >= self._config.min_score
             and panel_dark_score >= self._config.min_panel_dark_score
             and grid_score >= self._config.min_grid_score
             and blue_score >= self._config.min_blue_score
+            and radar_ring_score >= self._config.min_radar_ring_score
         )
         return FinderPresenceResult(
             present=present,
@@ -63,6 +80,7 @@ class FinderPresenceDetector:
             grid_score=grid_score,
             blue_score=blue_score,
             green_score=green_score,
+            radar_ring_score=radar_ring_score,
         )
 
     def _panel_dark_score(self, gray: np.ndarray) -> float:
@@ -112,16 +130,64 @@ class FinderPresenceDetector:
             normalized.append(min(max(line_density - neighbor_density, 0.0) / 0.08, 1.0))
         return float(sum(normalized) / len(normalized))
 
-    def _color_scores(self, bgr: np.ndarray) -> tuple[float, float]:
+    def _color_masks(self, bgr: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
         hue = hsv[:, :, 0]
         sat = hsv[:, :, 1]
         val = hsv[:, :, 2]
         blue = (hue >= 85) & (hue <= 130) & (sat >= 60) & (val >= 50)
         green = (hue >= 45) & (hue <= 80) & (sat >= 70) & (val >= 70)
+        return blue, green
+
+    def _color_scores(self, blue: np.ndarray, green: np.ndarray) -> tuple[float, float]:
         blue_score = min(float(np.count_nonzero(blue)) / float(blue.size) / 0.025, 1.0)
         green_score = min(float(np.count_nonzero(green)) / float(green.size) / 0.035, 1.0)
         return blue_score, green_score
+
+    def _radar_ring_score(self, blue: np.ndarray) -> float:
+        """Score the three blue concentric radar rings in the Finders upper-left panel.
+
+        Generic Entropia windows can look dark and contain blue/green UI pixels, but
+        the Finder has a much stronger invariant: three large blue rings at fixed
+        normalized positions. Measure angular coverage rather than raw blue density
+        so isolated inventory icons cannot satisfy the guard accidentally.
+        """
+
+        height = int(blue.shape[0])
+        width = int(blue.shape[1])
+        scale = float(min(width, height))
+        center_x = self._config.radar_center_x * width
+        center_y = self._config.radar_center_y * height
+        band = max(1.0, self._config.radar_band_fraction * scale)
+        sector_count = max(12, int(self._config.radar_sector_count))
+        angles = np.linspace(0.0, 2.0 * np.pi, sector_count, endpoint=False)
+
+        ring_scores: list[float] = []
+        for radius_fraction in self._config.radar_radii:
+            radius = max(1.0, radius_fraction * scale)
+            hits = 0
+            for angle in angles:
+                found = False
+                for radial_offset in (-band, 0.0, band):
+                    sample_radius = radius + radial_offset
+                    x = round(center_x + np.cos(angle) * sample_radius)
+                    y = round(center_y + np.sin(angle) * sample_radius)
+                    if x < 0 or x >= width or y < 0 or y >= height:
+                        continue
+                    x1 = max(0, x - 1)
+                    x2 = min(width, x + 2)
+                    y1 = max(0, y - 1)
+                    y2 = min(height, y + 2)
+                    if np.any(blue[y1:y2, x1:x2]):
+                        found = True
+                        break
+                if found:
+                    hits += 1
+            ring_scores.append(float(hits) / float(sector_count))
+
+        if not ring_scores:
+            return 0.0
+        return float(sum(ring_scores) / len(ring_scores))
 
 
 def _crop_relative(img: np.ndarray, rect: RelativeRect) -> np.ndarray:
