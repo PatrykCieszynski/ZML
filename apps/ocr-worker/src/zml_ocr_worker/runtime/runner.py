@@ -14,6 +14,7 @@ from zml_ocr_protocol.messages import AgentToBridgeMessage
 
 from zml_ocr_worker.calibration.finder import FinderLocator
 from zml_ocr_worker.calibration.model import LocatedRegion
+from zml_ocr_worker.calibration.persistence import CompassCalibrationStore
 from zml_ocr_worker.calibration.recording import (
     CalibrationSnapshotRecorder,
     calibration_snapshot_config_from_env,
@@ -94,7 +95,15 @@ def start_ocr_input(
         position_rois,
         profiler=profiler,
     )
-    compass_calibration = CompassCalibrationRuntime(position_pipeline=position_pipeline)
+    compass_calibration_store = CompassCalibrationStore()
+    logger.info(
+        "compass_calibration_persistence_enabled path=%s",
+        compass_calibration_store.path,
+    )
+    compass_calibration = CompassCalibrationRuntime(
+        position_pipeline=position_pipeline,
+        state_store=compass_calibration_store,
+    )
     last_compass_rect: tuple[int, int, int, int] | None = None
 
     calibration_snapshot_config = calibration_snapshot_config_from_env()
