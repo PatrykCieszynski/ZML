@@ -6,7 +6,7 @@ import os
 import signal
 import subprocess
 from pathlib import Path
-from typing import Any
+from typing import cast
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -56,19 +56,18 @@ def get_ocr_calibration(request: Request) -> dict[str, object]:
 @router.post("/recalibrate")
 def recalibrate_ocr(request: Request) -> dict[str, object]:
     runtime = _runtime(request)
-    health = runtime.health()
-    workers = health.get("workers")
-    if not isinstance(workers, dict):
+    workers = _object_dict(runtime.health().get("workers"))
+    if workers is None:
         raise HTTPException(status_code=409, detail="OCR worker health is unavailable")
-    worker = workers.get("ocr_worker")
-    if not isinstance(worker, dict):
+    worker = _object_dict(workers.get("ocr_worker"))
+    if worker is None:
         raise HTTPException(status_code=409, detail="OCR worker is unavailable")
-    details = worker.get("details")
-    if not isinstance(details, dict):
+    details = _object_dict(worker.get("details"))
+    if details is None:
         raise HTTPException(status_code=409, detail="OCR worker process details are unavailable")
 
     raw_pid = details.get("pid") or details.get("agent_pid")
-    if not isinstance(raw_pid, int) or raw_pid <= 0:
+    if not isinstance(raw_pid, int) or isinstance(raw_pid, bool) or raw_pid <= 0:
         raise HTTPException(status_code=409, detail="OCR worker process is not running")
 
     try:
@@ -87,15 +86,14 @@ def _snapshot_command(settings: Settings, *, output_dir: Path) -> list[str]:
     executable = (
         str(settings.ocr_worker_path) if settings.ocr_worker_path is not None else "zml-ocr-worker"
     )
-    command = [
+    return [
         executable,
         "calibration-snapshot",
         "--output-dir",
         str(output_dir),
+        "--profile",
+        str(settings.ocr_profile_path),
     ]
-    if settings.ocr_profile_path is not None:
-        command.extend(["--profile", str(settings.ocr_profile_path)])
-    return command
 
 
 def _read_region(output_dir: Path, region: str) -> dict[str, object]:
@@ -117,29 +115,42 @@ def _read_region(output_dir: Path, region: str) -> dict[str, object]:
         "confidence": _optional_float(metadata.get("confidence")),
         "scale": _optional_float(metadata.get("scale")),
         "innerRects": metadata.get("innerRects")
-        if isinstance(metadata.get("innerRects"), dict)
+        if _object_dict(metadata.get("innerRects")) is not None
         else {},
     }
 
 
-def _read_json(path: Path) -> dict[str, Any]:
+def _read_json(path: Path) -> dict[str, object]:
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
+        value: object = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
-    return value if isinstance(value, dict) else {}
+    parsed = _object_dict(value)
+    return parsed or {}
+
+
+def _object_dict(value: object) -> dict[str, object] | None:
+    if not isinstance(value, dict):
+        return None
+    return cast(dict[str, object], value)
 
 
 def _rect(value: object) -> list[int] | None:
-    if not isinstance(value, list) or len(value) != 4:
+    if not isinstance(value, list):
         return None
-    if not all(isinstance(item, int) for item in value):
+    items = cast(list[object], value)
+    if len(items) != 4:
         return None
-    return value
+    result: list[int] = []
+    for item in items:
+        if not isinstance(item, int) or isinstance(item, bool):
+            return None
+        result.append(item)
+    return result
 
 
 def _optional_int(value: object) -> int | None:
-    return value if isinstance(value, int) else None
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
 def _optional_float(value: object) -> float | None:
