@@ -147,7 +147,7 @@ class CoordinateTextCalibrator:
         # showed both a clipped leading 2 and a spurious leading 9 at this edge.
         left_padding = max(2, round(line_height * 0.08)) + 2
         right_padding = max(4, round(line_height * 0.18))
-        vertical_padding = max(1, round(line_height * 0.08))
+        vertical_padding = max(2, round(line_height * 0.08))
         rect = RoiRect(
             x1=max(
                 line_roi.x1,
