@@ -96,11 +96,12 @@ class TesserocrCoordinateTextEngine:
 
 
 class CoordinateTextCalibrator:
-    """Find value boxes after approximate Lon/Lat labels using occasional text OCR.
+    """Find the region after Lon:/Lat: using occasional text OCR.
 
     The text OCR is deliberately not trusted for the numeric value itself. It only
-    provides word geometry. The existing digits-only OCR verifies the cropped value
-    afterwards and becomes the source of truth for both digits and digit count.
+    provides word geometry. The cached fast ROI starts at the end of the label and
+    extends through the value word, matching the UI semantics of "take the part
+    after the colon". Digits-only OCR then verifies the crop and owns the value.
     """
 
     def __init__(self, *, engine: CoordinateTextEngine | None = None) -> None:
@@ -147,40 +148,46 @@ class CoordinateTextCalibrator:
         if line is None:
             return None
         words = self._engine.recognize_words(line)
-        value_word = _find_value_word(words, expected_label=expected_label)
-        if value_word is None:
+        match = _find_label_value_words(words, expected_label=expected_label)
+        if match is None:
             return None
+        label_word, value_word = match
 
         line_height = max(1, line_roi.y2 - line_roi.y1)
-        horizontal_pad = max(2, round(line_height * 0.18))
-        vertical_pad = max(1, round(line_height * 0.08))
+        right_padding = max(2, round(line_height * 0.18))
+        vertical_padding = max(1, round(line_height * 0.08))
+        # Start immediately after the current label bbox rather than at the current
+        # value bbox. This retains the inter-word gap and gives the fast crop useful
+        # left-side slack if a right-aligned coordinate grows by one digit.
         rect = RoiRect(
-            x1=max(line_roi.x1, line_roi.x1 + value_word.rect.x1 - horizontal_pad),
-            x2=min(line_roi.x2, line_roi.x1 + value_word.rect.x2 + horizontal_pad),
-            y1=max(line_roi.y1, line_roi.y1 + value_word.rect.y1 - vertical_pad),
-            y2=min(line_roi.y2, line_roi.y1 + value_word.rect.y2 + vertical_pad),
+            x1=max(line_roi.x1, line_roi.x1 + label_word.rect.x2),
+            x2=min(line_roi.x2, line_roi.x1 + value_word.rect.x2 + right_padding),
+            y1=max(line_roi.y1, line_roi.y1 + value_word.rect.y1 - vertical_padding),
+            y2=min(line_roi.y2, line_roi.y1 + value_word.rect.y2 + vertical_padding),
         )
         if rect.x2 <= rect.x1 or rect.y2 <= rect.y1:
             return None
         return rect
 
 
-def _find_value_word(
+def _find_label_value_words(
     words: tuple[OcrWord, ...],
     *,
     expected_label: str,
-) -> OcrWord | None:
+) -> tuple[OcrWord, OcrWord] | None:
     label_index: int | None = None
+    label_word: OcrWord | None = None
     for index, word in enumerate(words):
         normalized = re.sub(r"[^a-z]", "", word.text.lower())
         if _label_matches(normalized, expected_label):
             label_index = index
+            label_word = word
             # A combined "Lon:12345" word has no reliable per-value bbox. Fail
             # cleanly so a future template/symbol fallback can handle it.
             if any(char.isdigit() for char in word.text):
                 return None
             break
-    if label_index is None:
+    if label_index is None or label_word is None:
         return None
 
     for word in words[label_index + 1 :]:
@@ -189,8 +196,17 @@ def _find_value_word(
         # its contents immediately after calibration.
         digit_count = sum(char.isdigit() for char in word.text)
         if digit_count >= 2:
-            return word
+            return label_word, word
     return None
+
+
+def _find_value_word(
+    words: tuple[OcrWord, ...],
+    *,
+    expected_label: str,
+) -> OcrWord | None:
+    match = _find_label_value_words(words, expected_label=expected_label)
+    return None if match is None else match[1]
 
 
 def _label_matches(observed: str, expected: str) -> bool:
