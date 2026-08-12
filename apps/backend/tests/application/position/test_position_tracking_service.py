@@ -69,6 +69,32 @@ def test_position_tracking_service_rejects_single_ocr_outlier() -> None:
     assert published == [stable]
 
 
+def test_low_confidence_tightens_distance_check_without_automatic_rejection() -> None:
+    service = PositionTrackingService(
+        config=PositionTrackingConfig(
+            max_jump_m=150.0,
+            max_speed_mps=120.0,
+            low_confidence_threshold=0.4,
+            low_confidence_max_distance_m=20.0,
+        )
+    )
+    stable = _position(ts_ms=1_000, x=30_681, y=9_622, confidence=0.92)
+    noisy_jump = _position(ts_ms=1_100, x=30_683, y=9_671, confidence=0.14)
+    nearby_low_confidence = _position(ts_ms=1_200, x=30_683, y=9_621, confidence=0.20)
+
+    assert service.ingest_snapshot(stable).kind == "accepted"
+    rejected = service.ingest_snapshot(noisy_jump)
+    accepted = service.ingest_snapshot(nearby_low_confidence)
+
+    assert rejected.kind == "rejected_outlier"
+    assert rejected.allowed_m == 20.0
+    assert not rejected.accepted
+    assert accepted.kind == "accepted"
+    assert accepted.allowed_m == 20.0
+    assert accepted.accepted
+    assert service.get_latest() == nearby_low_confidence
+
+
 def test_position_tracking_service_accepts_relocation_after_confirmed_cluster() -> None:
     published: list[PositionSnapshot] = []
     service = PositionTrackingService(
@@ -197,10 +223,12 @@ def _position(
     y: int,
     planet: str = "",
     source: PositionSource = "ocr",
+    confidence: float | None = None,
 ) -> PositionSnapshot:
     return PositionSnapshot(
         observed_ts_ms=ts_ms,
         received_ts_ms=ts_ms + 10,
         position=WorldPos(planet_name=planet, x=x, y=y, z=None),
         source=source,
+        confidence=confidence,
     )
