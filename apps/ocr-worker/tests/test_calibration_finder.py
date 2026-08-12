@@ -8,7 +8,7 @@ from zml_ocr_worker.calibration.finder import FinderLocator
 
 def test_finder_locator_finds_movable_panel_at_resolution_derived_size() -> None:
     frame = np.full((720, 1280, 3), (110, 120, 100), dtype=np.uint8)
-    panel = _finder_panel(width=174, height=120)
+    panel = _finder_panel(width=177, height=120)
     x = 500
     y = 400
     frame[y : y + panel.shape[0], x : x + panel.shape[1]] = panel

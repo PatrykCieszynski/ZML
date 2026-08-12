@@ -11,10 +11,12 @@ from typing import Literal
 import cv2
 import numpy as np
 
+from zml_ocr_worker.pipelines.image import to_bgr_u8
 from zml_ocr_worker.pipelines.mining_finder.model import (
     FinderFeatures,
     MiningFinderSignal,
 )
+from zml_ocr_worker.pipelines.mining_finder.vision import FinderPanelLayout
 from zml_ocr_worker.runtime.paths import get_app_data_dir
 
 logger = logging.getLogger(__name__)
@@ -46,11 +48,14 @@ class FinderCropRecorder:
         *,
         config: FinderRecordingConfig,
         roi_name: str,
+        layout: FinderPanelLayout | None = None,
     ) -> None:
         self._config = config
         self._roi_name = roi_name
+        self._layout = layout or FinderPanelLayout()
         self._last_interval_ts_ms: int | None = None
         self._sequence = 0
+        self._annotated_hit_sequence = 0
         if config.enabled:
             config.root_dir.mkdir(parents=True, exist_ok=True)
 
@@ -93,14 +98,28 @@ class FinderCropRecorder:
         features: FinderFeatures,
         signals: list[MiningFinderSignal],
     ) -> None:
-        """Record interval/manual Finder diagnostics after feature OCR."""
+        """Record post-OCR Finder diagnostics and annotated emitted hits."""
 
         if not self._config.enabled:
             return
-        if self._sequence >= self._config.max_samples:
-            return
 
         try:
+            if "accepted" in self._config.modes:
+                hit_signal = next(
+                    (signal for signal in signals if signal.kind == "finder_hit_hint"),
+                    None,
+                )
+                if hit_signal is not None:
+                    self._write_annotated_hit(
+                        finder_roi,
+                        ts_ms=ts_ms,
+                        features=features,
+                        signal=hit_signal,
+                    )
+
+            if self._sequence >= self._config.max_samples:
+                return
+
             reasons = self._post_ocr_recording_reasons(ts_ms=ts_ms)
             if not reasons:
                 return
@@ -196,6 +215,60 @@ class FinderCropRecorder:
             phase,
         )
 
+    def _write_annotated_hit(
+        self,
+        finder_roi: np.ndarray,
+        *,
+        ts_ms: int,
+        features: FinderFeatures,
+        signal: MiningFinderSignal,
+    ) -> None:
+        if self._annotated_hit_sequence >= self._config.max_samples:
+            return
+        self._annotated_hit_sequence += 1
+
+        timestamp = datetime.fromtimestamp(ts_ms / 1000, tz=UTC).strftime("%Y%m%dT%H%M%S%fZ")
+        stem = f"{timestamp}_hit_{self._annotated_hit_sequence:06d}_annotated"
+        png_path = self._config.root_dir / f"{stem}.png"
+        json_path = self._config.root_dir / f"{stem}.json"
+        annotated = _annotate_hit(
+            finder_roi,
+            layout=self._layout,
+            resource_name=features.resource_name,
+            size_label=features.hit_size_label,
+            size_index=features.hit_size_index,
+        )
+
+        if not cv2.imwrite(str(png_path), annotated):
+            raise RuntimeError(f"Failed to write annotated finder hit: {png_path}")
+
+        json_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "created_at": datetime.now(tz=UTC).isoformat(),
+                    "ts_ms": ts_ms,
+                    "roi_name": self._roi_name,
+                    "image_file": png_path.name,
+                    "image_shape": list(annotated.shape),
+                    "reasons": ["finder_hit_hint"],
+                    "phase": "hit_annotated",
+                    "features": _features_to_json(features),
+                    "signals": [_signal_to_json(signal)],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        logger.info(
+            "finder_hit_capture_recorded path=%s resource=%r size=%r",
+            png_path,
+            features.resource_name,
+            _size_text(features.hit_size_label, features.hit_size_index),
+        )
+
 
 def finder_recording_config_from_env(
     *,
@@ -261,6 +334,123 @@ def _parse_modes(raw: str | None) -> frozenset[FinderRecordingMode]:
             logger.warning("finder_recording_mode_ignored mode=%r", item)
 
     return frozenset(modes)
+
+
+def _annotate_hit(
+    finder_roi: np.ndarray,
+    *,
+    layout: FinderPanelLayout,
+    resource_name: str | None,
+    size_label: str | None,
+    size_index: int | None,
+) -> np.ndarray:
+    image = to_bgr_u8(finder_roi).copy()
+    height, width = image.shape[:2]
+    header_height = max(52, round(height * 0.22))
+    canvas = np.full((height + header_height, width, 3), 20, dtype=np.uint8)
+    canvas[header_height:, :] = image
+
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = max(0.34, min(0.55, width / 720.0))
+    thickness = 1
+    resource_text = _fit_label(f"RESOURCE: {resource_name or '?'}", width, font, font_scale)
+    size_text = _fit_label(
+        f"SIZE: {_size_text(size_label, size_index)}",
+        width,
+        font,
+        font_scale,
+    )
+    cv2.putText(
+        canvas,
+        resource_text,
+        (6, max(17, round(header_height * 0.38))),
+        font,
+        font_scale,
+        (235, 235, 235),
+        thickness,
+        cv2.LINE_AA,
+    )
+    cv2.putText(
+        canvas,
+        size_text,
+        (6, max(35, round(header_height * 0.78))),
+        font,
+        font_scale,
+        (235, 235, 235),
+        thickness,
+        cv2.LINE_AA,
+    )
+
+    _draw_relative_box(
+        canvas,
+        layout.details,
+        image_width=width,
+        image_height=height,
+        y_offset=header_height,
+        label="RESOURCE / DETAILS",
+        color=(80, 210, 255),
+    )
+    _draw_relative_box(
+        canvas,
+        layout.status,
+        image_width=width,
+        image_height=height,
+        y_offset=header_height,
+        label="SIZE / STATUS",
+        color=(120, 255, 120),
+    )
+    return canvas
+
+
+def _draw_relative_box(
+    image: np.ndarray,
+    rect: tuple[float, float, float, float],
+    *,
+    image_width: int,
+    image_height: int,
+    y_offset: int,
+    label: str,
+    color: tuple[int, int, int],
+) -> None:
+    x1 = max(0, min(image_width - 1, round(rect[0] * image_width)))
+    y1 = max(0, min(image_height - 1, round(rect[1] * image_height))) + y_offset
+    x2 = max(x1 + 1, min(image_width - 1, round(rect[2] * image_width)))
+    y2 = max(y1 + 1, min(image_height - 1, round(rect[3] * image_height) + y_offset))
+    cv2.rectangle(image, (x1, y1), (x2, y2), color, 1, cv2.LINE_AA)
+    cv2.putText(
+        image,
+        label,
+        (min(image_width - 1, x1 + 3), min(image.shape[0] - 4, y1 + 13)),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.32,
+        color,
+        1,
+        cv2.LINE_AA,
+    )
+
+
+def _fit_label(text: str, width: int, font: int, font_scale: float) -> str:
+    if width <= 0:
+        return ""
+    result = text
+    while result:
+        (text_width, _), _ = cv2.getTextSize(result, font, font_scale, 1)
+        if text_width <= max(1, width - 12):
+            return result
+        if len(result) <= 4:
+            break
+        result = result[:-4].rstrip() + "..."
+    return result
+
+
+def _size_text(label: str | None, index: int | None) -> str:
+    if label is None and index is None:
+        return "?"
+    if index is None:
+        return label or "?"
+    if label is None:
+        return f"? ({index})"
+    return f"{label} ({index})"
 
 
 def _features_to_json(features: FinderFeatures) -> dict[str, object]:
