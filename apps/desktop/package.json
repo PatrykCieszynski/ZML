@@ -1,7 +1,7 @@
 {
   "name": "@zml/desktop",
   "private": true,
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Local-first Entropia Universe mining tracker",
   "type": "module",
   "scripts": {
@@ -19,7 +19,7 @@
     "@deck.gl/core": "^9.3.2",
     "@deck.gl/geo-layers": "^9.3.2",
     "@deck.gl/layers": "^9.3.2",
-    "@deck.gl/react": "^9.3.2",
+    "@deck.gl/react": "^18.2.0",
     "@types/ws": "^8.18.1",
     "@zml/api-contract": "workspace:*",
     "react": "^18.2.0",
