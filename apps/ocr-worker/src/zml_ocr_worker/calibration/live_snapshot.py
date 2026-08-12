@@ -68,9 +68,8 @@ def run_live_calibration_snapshot(
         deadline = time.monotonic() + _COMPASS_SNAPSHOT_TIMEOUT_S
         calibrated = compass_runtime.step(frame, ts_ms=ts_ms)
         while (
-            (calibrated.compass is None or compass_runtime.active_rois is None)
-            and time.monotonic() < deadline
-        ):
+            calibrated.compass is None or compass_runtime.active_rois is None
+        ) and time.monotonic() < deadline:
             time.sleep(_COMPASS_SAMPLE_INTERVAL_S)
             frame = capturer.grab()
             ts_ms = time.time_ns() // 1_000_000
