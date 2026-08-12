@@ -185,13 +185,16 @@ def build_ocr_input_source(
         position_sink=position_sink,
         signal_sink=signal_sink,
     )
+    compass_calibration_path = settings.ocr_profile_path.with_name("compass_calibration.json")
     return OcrWorkerSupervisor(
         config=OcrWorkerSupervisorConfig(
             enabled=settings.ocr_enabled,
             desired_config=build_desired_ocr_config(settings),
             process=OcrWorkerProcessConfig(
                 command=command,
-                environment={},
+                environment={
+                    "ZML_COMPASS_CALIBRATION_PATH": str(compass_calibration_path),
+                },
             ),
         ),
         supervisor=supervisor,
@@ -212,7 +215,6 @@ def build_cloud_sync_worker(
         if base_url is not None and token is not None
         else None
     )
-
     return CloudSyncWorker(
         db_path=settings.db_path,
         pending_db_commands=pending_db_commands,
