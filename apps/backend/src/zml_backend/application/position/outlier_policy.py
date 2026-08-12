@@ -139,7 +139,16 @@ class PositionOutlierPolicy:
 
     def _allowed_distance_m(self, previous: PositionSnapshot, current: PositionSnapshot) -> float:
         elapsed_s = max(0.0, (current.observed_ts_ms - previous.observed_ts_ms) / 1000.0)
-        return self._config.max_jump_m + self._config.max_speed_mps * elapsed_s
+        normal_allowed_m = self._config.max_jump_m + self._config.max_speed_mps * elapsed_s
+        confidence = current.confidence
+        if confidence is None or confidence >= self._config.low_confidence_threshold:
+            return normal_allowed_m
+
+        # Low confidence is not an automatic rejection. It only tightens the distance
+        # envelope so a nearby, physically plausible reading still passes, while a
+        # suspicious jump is routed through the existing relocation confirmation flow.
+        low_confidence_cap_m = max(0.0, self._config.low_confidence_max_distance_m)
+        return min(normal_allowed_m, low_confidence_cap_m)
 
 
 def _planet_changed(previous: PositionSnapshot, current: PositionSnapshot) -> bool:
