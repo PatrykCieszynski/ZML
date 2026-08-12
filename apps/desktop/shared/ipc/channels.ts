@@ -3,6 +3,8 @@ export const IPC_NAMESPACE = "zml" as const;
 export const IPC_CMD = {
     GET_BOOTSTRAP_STATE: `${IPC_NAMESPACE}:cmd:get_bootstrap_state`,
     GET_AGENT_HEALTH: `${IPC_NAMESPACE}:cmd:get_agent_health`,
+    GET_OCR_CALIBRATION: `${IPC_NAMESPACE}:cmd:get_ocr_calibration`,
+    RECALIBRATE_OCR: `${IPC_NAMESPACE}:cmd:recalibrate_ocr`,
     COPY_TEXT: `${IPC_NAMESPACE}:cmd:copy_text`,
     GET_ACTIVE_RUN: `${IPC_NAMESPACE}:cmd:get_active_run`,
     LIST_RUNS: `${IPC_NAMESPACE}:cmd:list_runs`,
