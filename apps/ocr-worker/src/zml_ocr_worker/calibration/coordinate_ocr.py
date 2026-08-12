@@ -96,12 +96,12 @@ class TesserocrCoordinateTextEngine:
 
 
 class CoordinateTextCalibrator:
-    """Find the region after Lon:/Lat: using occasional text OCR.
+    """Locate the numeric Lon/Lat value boxes with occasional full-text OCR.
 
     The text OCR is deliberately not trusted for the numeric value itself. It only
-    provides word geometry. The cached fast ROI starts at the end of the label and
-    extends through the value word, matching the UI semantics of "take the part
-    after the colon". Digits-only OCR then verifies the crop and owns the value.
+    supplies word geometry. The cached fast ROI is kept tight around the value word
+    so punctuation or antialiasing from the Lon:/Lat: label cannot be interpreted as
+    an extra digit by the digits-only OCR. The fast OCR remains the source of truth.
     """
 
     def __init__(self, *, engine: CoordinateTextEngine | None = None) -> None:
@@ -151,17 +151,20 @@ class CoordinateTextCalibrator:
         match = _find_label_value_words(words, expected_label=expected_label)
         if match is None:
             return None
-        label_word, value_word = match
+        _, value_word = match
 
         line_height = max(1, line_roi.y2 - line_roi.y1)
-        right_padding = max(2, round(line_height * 0.18))
+        horizontal_padding = max(2, round(line_height * 0.08))
         vertical_padding = max(1, round(line_height * 0.08))
-        # Start immediately after the current label bbox rather than at the current
-        # value bbox. This retains the inter-word gap and gives the fast crop useful
-        # left-side slack if a right-aligned coordinate grows by one digit.
         rect = RoiRect(
-            x1=max(line_roi.x1, line_roi.x1 + label_word.rect.x2),
-            x2=min(line_roi.x2, line_roi.x1 + value_word.rect.x2 + right_padding),
+            x1=max(
+                line_roi.x1,
+                line_roi.x1 + value_word.rect.x1 - horizontal_padding,
+            ),
+            x2=min(
+                line_roi.x2,
+                line_roi.x1 + value_word.rect.x2 + horizontal_padding,
+            ),
             y1=max(line_roi.y1, line_roi.y1 + value_word.rect.y1 - vertical_padding),
             y2=min(line_roi.y2, line_roi.y1 + value_word.rect.y2 + vertical_padding),
         )
