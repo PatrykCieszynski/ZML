@@ -39,7 +39,11 @@ def get_ocr_calibration(request: Request) -> dict[str, object]:
         raise HTTPException(status_code=503, detail=f"Calibration snapshot failed: {exc}") from exc
 
     if completed.returncode != 0:
-        detail = completed.stderr.strip() or completed.stdout.strip() or "OCR snapshot command failed"
+        detail = (
+            completed.stderr.strip()
+            or completed.stdout.strip()
+            or "OCR snapshot command failed"
+        )
         raise HTTPException(status_code=503, detail=detail[-1000:])
 
     snapshot_meta = _read_json(output_dir / "snapshot.json")
@@ -83,9 +87,7 @@ def recalibrate_ocr(request: Request) -> dict[str, object]:
 
 def _snapshot_command(settings: Settings, *, output_dir: Path) -> list[str]:
     executable = (
-        str(settings.ocr_worker_path)
-        if settings.ocr_worker_path is not None
-        else "zml-ocr-worker"
+        str(settings.ocr_worker_path) if settings.ocr_worker_path is not None else "zml-ocr-worker"
     )
     command = [
         executable,
@@ -116,7 +118,9 @@ def _read_region(output_dir: Path, region: str) -> dict[str, object]:
         "rect": _rect(metadata.get("rect")),
         "confidence": _optional_float(metadata.get("confidence")),
         "scale": _optional_float(metadata.get("scale")),
-        "innerRects": metadata.get("innerRects") if isinstance(metadata.get("innerRects"), dict) else {},
+        "innerRects": metadata.get("innerRects")
+        if isinstance(metadata.get("innerRects"), dict)
+        else {},
     }
 
 
