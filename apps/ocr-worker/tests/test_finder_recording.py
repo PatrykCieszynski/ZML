@@ -73,6 +73,38 @@ def test_finder_crop_recorder_writes_manual_sample_and_consumes_trigger(tmp_path
     assert metadata["reasons"] == ["manual"]
 
 
+def test_finder_crop_recorder_records_every_accepted_crop(tmp_path: Path) -> None:
+    recorder = FinderCropRecorder(
+        config=FinderRecordingConfig(
+            modes=frozenset({"accepted"}),
+            root_dir=tmp_path,
+            max_samples=10,
+        ),
+        roi_name="finder_auto",
+    )
+    crop = np.zeros((8, 12, 4), dtype=np.uint8)
+
+    recorder.record_frame(
+        crop,
+        ts_ms=1_000,
+        features=FinderFeatures(status_kind="idle"),
+        signals=[],
+    )
+    recorder.record_frame(
+        crop,
+        ts_ms=1_500,
+        features=FinderFeatures(status_kind="idle"),
+        signals=[],
+    )
+
+    metadata_files = sorted(tmp_path.glob("*.json"))
+    assert len(list(tmp_path.glob("*.png"))) == 2
+    assert len(metadata_files) == 2
+    for path in metadata_files:
+        metadata = json.loads(path.read_text(encoding="utf-8"))
+        assert metadata["reasons"] == ["accepted"]
+
+
 def test_finder_crop_recorder_respects_max_samples(tmp_path: Path) -> None:
     recorder = FinderCropRecorder(
         config=FinderRecordingConfig(
@@ -111,6 +143,16 @@ def test_finder_recording_config_from_env_parses_modes(
     assert config.root_dir == tmp_path
     assert config.interval_ms == 2_500
     assert config.max_samples == 4
+
+
+def test_finder_recording_config_uses_large_default_for_accepted_mode(monkeypatch) -> None:
+    monkeypatch.setenv("ZML_FINDER_RECORDING", "accepted")
+    monkeypatch.delenv("ZML_FINDER_RECORDING_MAX_SAMPLES", raising=False)
+
+    config = finder_recording_config_from_env()
+
+    assert config.modes == frozenset({"accepted"})
+    assert config.max_samples == 500
 
 
 def test_finder_crop_recorder_records_signals_in_metadata(tmp_path: Path) -> None:
