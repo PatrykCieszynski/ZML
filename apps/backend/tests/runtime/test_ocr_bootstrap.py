@@ -36,9 +36,14 @@ def test_ocr_always_uses_external_process_from_path_or_configured_executable(
 
     assert isinstance(default_source, OcrWorkerSupervisor)
     assert default_source.config.process.command == ("zml-ocr-worker", "stdio")
+    assert default_source.config.process.environment == {
+        "ZML_COMPASS_CALIBRATION_PATH": str(tmp_path / "compass_calibration.json"),
+    }
     assert isinstance(configured_source, OcrWorkerSupervisor)
     assert configured_source.config.process.command == ("C:\\ZML\\zml-ocr-worker.exe", "stdio")
-    assert configured_source.config.process.environment == {}
+    assert configured_source.config.process.environment == {
+        "ZML_COMPASS_CALIBRATION_PATH": str(tmp_path / "compass_calibration.json"),
+    }
     assert configured_source.config.desired_config.revision == 1
     assert configured_source.config.desired_config.config.roi_profile.name == "mvp-default"
 
