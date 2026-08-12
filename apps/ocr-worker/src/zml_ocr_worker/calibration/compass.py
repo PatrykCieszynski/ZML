@@ -101,7 +101,7 @@ class CompassLocator:
             return 0.0
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         edges = cv2.Canny(gray, 50, 140) > 0
-        score = _ring_contrast(
+        score = _locked_ring_contrast(
             edges,
             (compass.center_x, compass.center_y, compass.radius),
         )
@@ -168,6 +168,57 @@ def _ring_contrast(
     return float(ring_support - valley_support * 0.55)
 
 
+def _locked_ring_contrast(
+    edge_mask: np.ndarray,
+    circle: tuple[float, float, float],
+    *,
+    sector_count: int = 24,
+) -> float:
+    """Validate locked rings while ignoring localized dynamic radar clutter.
+
+    Player/NPC/zone markers can change color and contrast while the Compass itself
+    stays fixed. Those markers only affect a few angular sectors. Score ring-vs-valley
+    support per sector and use the median so local blips cannot dominate the lock.
+    Initial Hough acquisition intentionally keeps the original global score.
+    """
+
+    center_x, center_y, radius = circle
+    ring_fractions = (0.2, 0.4, 0.6, 0.8, 1.0)
+    valley_fractions = (0.1, 0.3, 0.5, 0.7, 0.9)
+    ring_support = np.mean(
+        np.stack(
+            [
+                _circle_edge_support_by_sector(
+                    edge_mask,
+                    center_x,
+                    center_y,
+                    radius * fraction,
+                    sector_count=sector_count,
+                )
+                for fraction in ring_fractions
+            ]
+        ),
+        axis=0,
+    )
+    valley_support = np.mean(
+        np.stack(
+            [
+                _circle_edge_support_by_sector(
+                    edge_mask,
+                    center_x,
+                    center_y,
+                    radius * fraction,
+                    sector_count=sector_count,
+                )
+                for fraction in valley_fractions
+            ]
+        ),
+        axis=0,
+    )
+    sector_scores = ring_support - valley_support * 0.55
+    return float(np.median(sector_scores))
+
+
 def _circle_edge_support(
     edge_mask: np.ndarray,
     center_x: float,
@@ -196,3 +247,41 @@ def _circle_edge_support(
     if considered == 0:
         return 0.0
     return hits / considered
+
+
+def _circle_edge_support_by_sector(
+    edge_mask: np.ndarray,
+    center_x: float,
+    center_y: float,
+    radius: float,
+    *,
+    sector_count: int,
+    samples: int = 120,
+    tolerance_px: int = 1,
+) -> np.ndarray:
+    sector_count = max(1, min(int(sector_count), samples))
+    hits = np.zeros(sector_count, dtype=np.float64)
+    considered = np.zeros(sector_count, dtype=np.float64)
+    height = int(edge_mask.shape[0])
+    width = int(edge_mask.shape[1])
+
+    for index, angle in enumerate(np.linspace(0.0, np.pi * 2.0, samples, endpoint=False)):
+        sector = min(sector_count - 1, index * sector_count // samples)
+        x = round(center_x + radius * np.cos(angle))
+        y = round(center_y + radius * np.sin(angle))
+        if x < 0 or x >= width or y < 0 or y >= height:
+            continue
+        considered[sector] += 1.0
+        x1 = max(0, x - tolerance_px)
+        x2 = min(width, x + tolerance_px + 1)
+        y1 = max(0, y - tolerance_px)
+        y2 = min(height, y + tolerance_px + 1)
+        if np.any(edge_mask[y1:y2, x1:x2]):
+            hits[sector] += 1.0
+
+    return np.divide(
+        hits,
+        considered,
+        out=np.zeros_like(hits),
+        where=considered > 0,
+    )
