@@ -17,7 +17,7 @@ from zml_ocr_worker.config import load_ocr_roi_profile
 from zml_ocr_worker.pipelines.mining_finder.presence import FinderPresenceDetector
 from zml_ocr_worker.pipelines.position.pipeline import PositionPipeline
 
-_COMPASS_SNAPSHOT_TIMEOUT_S = 3.0
+_COMPASS_SNAPSHOT_TIMEOUT_S = 5.0
 _COMPASS_SAMPLE_INTERVAL_S = 0.11
 
 
