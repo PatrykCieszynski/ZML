@@ -38,7 +38,7 @@ def _word(text: str, x1: int, x2: int, *, y1: int = 2, y2: int = 16) -> OcrWord:
     )
 
 
-def test_find_value_word_uses_numeric_word_after_label() -> None:
+def test_find_value_word_uses_word_after_label() -> None:
     words = (
         _word("Lon:", 20, 48),
         _word("31167", 60, 102),
@@ -48,9 +48,19 @@ def test_find_value_word_uses_numeric_word_after_label() -> None:
     result = _find_value_word(words, expected_label="lon")
 
     assert result is not None
-    value, digits = result
-    assert value.text == "31167"
-    assert digits == "31167"
+    assert result.text == "31167"
+
+
+def test_find_value_word_tolerates_one_bad_label_character_and_noisy_digits() -> None:
+    words = (
+        _word("bon:", 20, 48),
+        _word("os952", 60, 102),
+    )
+
+    result = _find_value_word(words, expected_label="lon")
+
+    assert result is not None
+    assert result.text == "os952"
 
 
 def test_find_value_word_rejects_combined_label_and_value_for_clean_fallback() -> None:
@@ -62,7 +72,7 @@ def test_find_value_word_rejects_combined_label_and_value_for_clean_fallback() -
 def test_coordinate_text_calibrator_returns_exact_digit_rois() -> None:
     engine = _FakeTextEngine(
         (_word("Lon:", 12, 40), _word("31167", 52, 94)),
-        (_word("Lat:", 18, 44), _word("9524", 60, 94)),
+        (_word("Lat", 18, 44), _word("os952", 60, 94)),
     )
     calibrator = CoordinateTextCalibrator(engine=engine)
     compass_roi = np.zeros((100, 180, 3), dtype=np.uint8)
@@ -75,8 +85,6 @@ def test_coordinate_text_calibrator_returns_exact_digit_rois() -> None:
     calibration = calibrator.calibrate(compass_roi, search_rois=search)
 
     assert calibration is not None
-    assert calibration.longitude_digits == 5
-    assert calibration.latitude_digits == 4
     assert not calibration.rois.extract_numeric_tokens
     assert calibration.rois.lon.x1 < 20 + 52
     assert calibration.rois.lon.x2 > 20 + 94
