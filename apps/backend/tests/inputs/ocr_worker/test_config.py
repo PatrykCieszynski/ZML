@@ -16,7 +16,7 @@ def test_desired_config_contains_complete_settings_snapshot(tmp_path: Path) -> N
         ocr_capture_hz=8.0,
         ocr_capture_artifacts_dir=tmp_path / "captures",
         finder_debug_logging=True,
-        finder_recording_modes="manual,interval",
+        finder_recording_modes="manual,interval,accepted",
         finder_recording_dir=tmp_path / "finder",
         finder_recording_interval_s=2.5,
         finder_recording_max_samples=3,
@@ -36,7 +36,7 @@ def test_desired_config_contains_complete_settings_snapshot(tmp_path: Path) -> N
     assert desired.config.capture_artifacts_dir == str(tmp_path / "captures")
     assert desired.config.finder.debug_logging is True
     assert desired.config.finder.presence_check_enabled is False
-    assert desired.config.finder.recording.modes == ["interval", "manual"]
+    assert desired.config.finder.recording.modes == ["accepted", "interval", "manual"]
     assert desired.config.finder.recording.interval_ms == 2_500
     assert desired.config.position.snapshot_recording.enabled is True
     assert desired.config.position.snapshot_recording.interval_ms == 4_500
