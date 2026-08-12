@@ -13,6 +13,7 @@ from zml_ocr_worker.calibration.coordinate_ocr import (
 from zml_ocr_worker.calibration.coordinates import CompassCoordinateLayout
 from zml_ocr_worker.calibration.model import LocatedCompass
 from zml_ocr_worker.calibration.multiframe_compass import MultiFrameCompassLocator
+from zml_ocr_worker.calibration.multiframe_coordinate import MultiFrameCoordinateTextCalibrator
 from zml_ocr_worker.calibration.persistence import (
     CompassCalibrationStore,
     PersistedCompassCalibration,
@@ -30,6 +31,7 @@ class CompassCalibrationRuntimeConfig:
     acquisition_sample_interval_ms: int = 100
     reacquire_delay_ms: int = 250
     locked_validation_interval_ms: int = 1000
+    coordinate_acquisition_sample_interval_ms: int = 100
     coordinate_recalibration_cooldown_ms: int = 2000
     consecutive_failures_before_recalibrate: int = 5
     verified_reads_before_persist: int = 10
@@ -65,7 +67,7 @@ class CompassCalibrationRuntime:
         self._position_pipeline = position_pipeline
         self._locator = locator or MultiFrameCompassLocator()
         self._layout = layout or CompassCoordinateLayout()
-        self._coordinate_calibrator = coordinate_calibrator or CoordinateTextCalibrator()
+        self._coordinate_calibrator = coordinate_calibrator or MultiFrameCoordinateTextCalibrator()
         self._state_store = state_store
         self._config = config or CompassCalibrationRuntimeConfig()
 
@@ -110,6 +112,7 @@ class CompassCalibrationRuntime:
         self._calibration_persisted = False
         self._calibration_verified = self._state_store is None
         self._verified_read_streak = 0
+        self._reset_coordinate_calibration_acquisition()
         self._reset_coordinate_health()
         self._next_search_ts_ms = max(0, next_search_ts_ms)
         self._next_locked_validation_ts_ms = 0
@@ -354,6 +357,7 @@ class CompassCalibrationRuntime:
         if not variants:
             return False
 
+        self._reset_coordinate_calibration_acquisition()
         self._compass = compass
         self._search_rois = variants[0].rois
         self._coordinate_rois = None
@@ -378,25 +382,39 @@ class CompassCalibrationRuntime:
         search_rois = self._search_rois
         if search_rois is None:
             return False
-        self._next_coordinate_calibration_ts_ms = ts_ms + max(
-            1, self._config.coordinate_recalibration_cooldown_ms
-        )
         try:
             calibration = self._coordinate_calibrator.calibrate(
                 compass_roi,
                 search_rois=search_rois,
             )
         except Exception:
+            self._next_coordinate_calibration_ts_ms = ts_ms + max(
+                1, self._config.coordinate_recalibration_cooldown_ms
+            )
             logger.warning(
                 "coordinate_text_calibration_failed reason=%s error=exception",
                 reason,
                 exc_info=True,
             )
             return False
+
+        acquisition_in_progress = bool(getattr(self._coordinate_calibrator, "acquiring", False))
         if calibration is None:
-            logger.info("coordinate_text_calibration_failed reason=%s", reason)
+            delay_ms = (
+                self._config.coordinate_acquisition_sample_interval_ms
+                if acquisition_in_progress
+                else self._config.coordinate_recalibration_cooldown_ms
+            )
+            self._next_coordinate_calibration_ts_ms = ts_ms + max(1, delay_ms)
+            if acquisition_in_progress:
+                logger.debug("coordinate_text_calibration_acquiring reason=%s", reason)
+            else:
+                logger.info("coordinate_text_calibration_failed reason=%s", reason)
             return False
 
+        self._next_coordinate_calibration_ts_ms = ts_ms + max(
+            1, self._config.coordinate_recalibration_cooldown_ms
+        )
         self._apply_coordinate_calibration(calibration, reason=reason)
         return True
 
@@ -497,6 +515,11 @@ class CompassCalibrationRuntime:
             return
         self._pending_digit_counts = counts
         self._pending_digit_count_streak = 1
+
+    def _reset_coordinate_calibration_acquisition(self) -> None:
+        reset = getattr(self._coordinate_calibrator, "reset", None)
+        if callable(reset):
+            reset()
 
     def _reset_coordinate_health(self) -> None:
         self._coordinate_failure_streak = 0
