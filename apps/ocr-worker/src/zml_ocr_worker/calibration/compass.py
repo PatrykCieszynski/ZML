@@ -174,12 +174,13 @@ def _locked_ring_contrast(
     *,
     sector_count: int = 24,
 ) -> float:
-    """Validate locked rings while ignoring localized dynamic radar clutter.
+    """Validate locked rings while ignoring localized dynamic Compass UI clutter.
 
-    Player/NPC/zone markers can change color and contrast while the Compass itself
-    stays fixed. Those markers only affect a few angular sectors. Score ring-vs-valley
-    support per sector and use the median so local blips cannot dominate the lock.
-    Initial Hough acquisition intentionally keeps the original global score.
+    The status icons beside the lower-right radar edge can change appearance/color
+    between zones while the Compass itself stays fixed. They affect only a localized
+    angular region. Score ring-vs-valley support per sector and use the median so that
+    changing status icons cannot dominate the lock. Initial Hough acquisition keeps
+    the original global score.
     """
 
     center_x, center_y, radius = circle
