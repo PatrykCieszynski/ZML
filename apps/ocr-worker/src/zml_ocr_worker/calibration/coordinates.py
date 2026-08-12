@@ -12,8 +12,8 @@ class CompassCoordinateLayoutConfig:
     # Ratios are relative to the detected radar center/radius, not the outer crop.
     # Community screenshots show that the Lon/Lat block can move horizontally
     # relative to the radar while its vertical rows remain stable. Cover the full
-    # useful X range and let NumericTokenExtractor find the right-side value inside
-    # each short strip instead of trying to predict the block's X coordinate.
+    # useful X range and let occasional text OCR locate the value word inside each
+    # strip instead of predicting the coordinate block's X position.
     line_left_radius: float = -1.22
     line_right_radius: float = 0.15
 
@@ -32,13 +32,13 @@ class CompassCoordinateLayoutVariant:
 
 
 class CompassCoordinateLayout:
-    """Derive one scale-aware Lon/Lat strip pair from a located Compass.
+    """Derive one scale-aware Lon/Lat text-search strip pair from a Compass.
 
-    The radar center/radius determines Y and scale. X is intentionally a wider
-    search strip because the coordinate block is not at one stable radar-relative
-    horizontal offset across observed Entropia UI variants. PositionPipeline keeps
-    using digits-only OCR after NumericTokenExtractor reduces each strip to the
-    right-side numeric suffix.
+    The radar center/radius determines Y and scale. X is intentionally wider
+    because the coordinate block is not at one stable radar-relative horizontal
+    offset across observed Entropia UI variants. CoordinateTextCalibrator uses the
+    strips only when calibration/recovery is needed; normal position OCR uses the
+    exact cached digit boxes produced by that calibration.
     """
 
     def __init__(self, *, config: CompassCoordinateLayoutConfig | None = None) -> None:
@@ -71,7 +71,7 @@ class CompassCoordinateLayout:
                 top_radius=self._config.latitude_center_radius - half_height,
                 bottom_radius=self._config.latitude_center_radius + half_height,
             ),
-            extract_numeric_tokens=True,
+            extract_numeric_tokens=False,
         )
 
 
