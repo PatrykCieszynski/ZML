@@ -40,9 +40,7 @@ def get_ocr_calibration(request: Request) -> dict[str, object]:
 
     if completed.returncode != 0:
         detail = (
-            completed.stderr.strip()
-            or completed.stdout.strip()
-            or "OCR snapshot command failed"
+            completed.stderr.strip() or completed.stdout.strip() or "OCR snapshot command failed"
         )
         raise HTTPException(status_code=503, detail=detail[-1000:])
 
