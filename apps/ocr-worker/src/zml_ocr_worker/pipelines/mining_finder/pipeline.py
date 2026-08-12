@@ -31,6 +31,13 @@ class MiningFinderPipelineConfig:
 
 
 class FinderFrameObserver(Protocol):
+    def record_accepted_frame(
+        self,
+        finder_roi: np.ndarray,
+        *,
+        ts_ms: int,
+    ) -> None: ...
+
     def record_frame(
         self,
         finder_roi: np.ndarray,
@@ -72,6 +79,12 @@ class MiningFinderPipeline:
         self._detector.close()
 
     def step(self, finder_roi: np.ndarray, ts_ms: int) -> list[MiningFinderSignal]:
+        # The runtime has already accepted this crop through Finder presence. Persist
+        # debug evidence before any expensive OCR so false positives are not lost if
+        # feature extraction is slow or raises.
+        if self._frame_observer is not None:
+            self._frame_observer.record_accepted_frame(finder_roi, ts_ms=ts_ms)
+
         features = self._detector.detect(finder_roi)
         signals: list[MiningFinderSignal] = []
 
