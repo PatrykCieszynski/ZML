@@ -18,6 +18,7 @@ class FinderLocatorConfig:
     baseline_client_height: int = 1440
     baseline_finder_width: int = 354
     baseline_finder_height: int = 239
+    baseline_finder_x_offset: int = 7
     scale_tolerance: tuple[float, ...] = (0.98, 1.0, 1.02)
     coarse_stride_fraction: float = 0.09
     coarse_candidate_count: int = 8
@@ -106,10 +107,12 @@ class FinderLocator:
             return None
 
         confidence, candidate = best
+        x_offset = round(self._config.baseline_finder_x_offset * candidate.scale)
+        x1 = min(max(0, candidate.x + x_offset), frame_width - candidate.width)
         return LocatedRegion(
             rect=RoiRect(
-                x1=candidate.x,
-                x2=candidate.x + candidate.width,
+                x1=x1,
+                x2=x1 + candidate.width,
                 y1=candidate.y,
                 y2=candidate.y + candidate.height,
             ),
