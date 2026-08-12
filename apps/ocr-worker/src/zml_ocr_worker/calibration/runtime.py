@@ -16,6 +16,7 @@ from zml_ocr_worker.calibration.persistence import (
     CompassCalibrationStore,
     PersistedCompassCalibration,
 )
+from zml_ocr_worker.capture.model import RoiRect
 from zml_ocr_worker.pipelines.position.model import CoordinateRois
 from zml_ocr_worker.pipelines.position.pipeline import PositionPipeline, PositionReadResult
 
@@ -314,9 +315,9 @@ class CompassCalibrationRuntime:
         # A locked locator intentionally tolerates one failed validation. Require
         # two successful checks here so stale persisted geometry cannot consume
         # that grace period during startup.
-        if not self._locator.locked_is_valid(frame, state.compass) or not self._locator.locked_is_valid(
+        if not self._locator.locked_is_valid(
             frame, state.compass
-        ):
+        ) or not self._locator.locked_is_valid(frame, state.compass):
             logger.info("compass_calibration_state_ignored reason=locked_validation")
             return False
 
@@ -490,9 +491,8 @@ def _digit_counts(read: PositionReadResult) -> tuple[int, int] | None:
     )
 
 
-def _rect_tuple(rect: object) -> tuple[int, int, int, int]:
-    typed = rect
-    return typed.x1, typed.y1, typed.x2, typed.y2  # type: ignore[attr-defined, no-any-return]
+def _rect_tuple(rect: RoiRect) -> tuple[int, int, int, int]:
+    return rect.x1, rect.y1, rect.x2, rect.y2
 
 
 def _empty_step(*, reacquire_requested: bool = False) -> CalibratedPositionStep:
